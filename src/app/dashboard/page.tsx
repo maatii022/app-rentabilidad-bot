@@ -84,7 +84,7 @@ const MONTH_OPTIONS = [
   { value: 12, label: "Diciembre" },
 ];
 
-const LIVE_STATUS_URL = "http://5.134.118.153:5050/live-status";
+const LIVE_STATUS_URL = "/api/live-status";
 
 export default function DashboardPage() {
   const [packs, setPacks] = useState<Pack[]>([]);
@@ -158,20 +158,29 @@ export default function DashboardPage() {
   }
 
   async function recargarEstado() {
-    setLoadingLive(true);
+  setLoadingLive(true);
 
-    try {
-      const res = await fetch(LIVE_STATUS_URL);
-      const data = await res.json();
-      console.log("Estado en vivo:", data);
-      setLiveStatus(data || {});
-    } catch (error) {
-      console.error("Error recargando estado en vivo:", error);
-      alert("No se pudo recargar el estado en vivo");
-    } finally {
-      setLoadingLive(false);
+  try {
+    const res = await fetch(LIVE_STATUS_URL, {
+      cache: "no-store",
+    });
+
+    const json = await res.json();
+
+    if (!res.ok || !json?.ok) {
+      alert(`No se pudo recargar el estado en vivo: ${json?.error || "Error desconocido"}`);
+      return;
     }
+
+    console.log("Estado en vivo:", json.data);
+    setLiveStatus(json.data || {});
+  } catch (error) {
+    console.error("Error recargando estado en vivo:", error);
+    alert("No se pudo recargar el estado en vivo");
+  } finally {
+    setLoadingLive(false);
   }
+}
 
   async function ejecutarRevisionDiaria() {
     setLoading(true);
