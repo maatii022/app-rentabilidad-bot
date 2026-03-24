@@ -60,6 +60,15 @@ type ActiveAccountOption = {
   label: string;
 };
 
+type LiveStatusItem = {
+  preset?: string;
+  pnl_actual?: number;
+  trades_abiertos?: number;
+  error?: string;
+};
+
+type LiveStatusMap = Record<string, LiveStatusItem>;
+
 const MONTH_OPTIONS = [
   { value: 1, label: "Enero" },
   { value: 2, label: "Febrero" },
@@ -75,10 +84,13 @@ const MONTH_OPTIONS = [
   { value: 12, label: "Diciembre" },
 ];
 
+const LIVE_STATUS_URL = "http://5.134.118.153:5050/live-status";
+
 export default function DashboardPage() {
   const [packs, setPacks] = useState<Pack[]>([]);
   const [events, setEvents] = useState<AccountEvent[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingLive, setLoadingLive] = useState(false);
 
   const [selectedPendingSlotId, setSelectedPendingSlotId] = useState("");
   const [numeroCuenta, setNumeroCuenta] = useState("");
@@ -99,6 +111,7 @@ export default function DashboardPage() {
   });
 
   const [resultadosRevision, setResultadosRevision] = useState<ResultadoRevisionDiaria[]>([]);
+  const [liveStatus, setLiveStatus] = useState<LiveStatusMap>({});
 
   const [dailyAccountId, setDailyAccountId] = useState("");
   const [dailyFecha, setDailyFecha] = useState(new Date().toISOString().split("T")[0]);
@@ -144,34 +157,50 @@ export default function DashboardPage() {
     });
   }
 
-  async function ejecutarRevisionDiaria() {
-  setLoading(true);
+  async function recargarEstado() {
+    setLoadingLive(true);
 
-  try {
-    const res = await fetch("/api/sord/revision-diaria", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({}),
-    });
-
-    const data = await res.json();
-    console.log("Respuesta revisión diaria:", data);
-
-    if (!res.ok) {
-      alert(`Error en revisión diaria: ${data?.error || "Error desconocido"}`);
-      return;
+    try {
+      const res = await fetch(LIVE_STATUS_URL);
+      const data = await res.json();
+      console.log("Estado en vivo:", data);
+      setLiveStatus(data || {});
+    } catch (error) {
+      console.error("Error recargando estado en vivo:", error);
+      alert("No se pudo recargar el estado en vivo");
+    } finally {
+      setLoadingLive(false);
     }
-
-    setResultadosRevision(data.resultados || []);
-    await cargarDatos();
-    await cargarResumenHistorico();
-    alert(`Revisión diaria ejecutada para fecha de negocio ${data?.fecha}`);
-  } finally {
-    setLoading(false);
   }
-}
+
+  async function ejecutarRevisionDiaria() {
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/sord/revision-diaria", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}),
+      });
+
+      const data = await res.json();
+      console.log("Respuesta revisión diaria:", data);
+
+      if (!res.ok) {
+        alert(`Error en revisión diaria: ${data?.error || "Error desconocido"}`);
+        return;
+      }
+
+      setResultadosRevision(data.resultados || []);
+      await cargarDatos();
+      await cargarResumenHistorico();
+      alert(`Revisión diaria ejecutada para fecha de negocio ${data?.fecha}`);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function rotarPack(packId: number, packNombre: string) {
     setLoading(true);
@@ -186,7 +215,6 @@ export default function DashboardPage() {
       });
 
       const data = await res.json();
-      console.log(`Respuesta rotar ${packNombre}:`, data);
 
       if (!res.ok) {
         alert(
@@ -218,7 +246,6 @@ export default function DashboardPage() {
       });
 
       const data = await res.json();
-      console.log(`Respuesta evaluar ${packNombre}:`, data);
 
       if (!res.ok) {
         alert(
@@ -258,7 +285,6 @@ export default function DashboardPage() {
       });
 
       const data = await res.json();
-      console.log("Respuesta perder:", data);
 
       if (!res.ok) {
         alert(
@@ -292,7 +318,6 @@ export default function DashboardPage() {
       });
 
       const data = await res.json();
-      console.log("Respuesta fondear:", data);
 
       if (!res.ok) {
         alert(
@@ -328,7 +353,6 @@ export default function DashboardPage() {
       });
 
       const data = await res.json();
-      console.log("Respuesta reemplazo:", data);
 
       if (!res.ok) {
         alert(
@@ -371,7 +395,6 @@ export default function DashboardPage() {
       });
 
       const data = await res.json();
-      console.log("Respuesta crear daily result:", data);
 
       if (!res.ok) {
         alert(`Error al crear daily result: ${data?.error || "Error desconocido"}`);
@@ -526,8 +549,16 @@ export default function DashboardPage() {
     }, 50);
   }
 
+  function getLivePnlClass(value?: number) {
+    if (typeof value !== "number") return "text-gray-400";
+    if (value > 0) return "text-green-400";
+    if (value < 0) return "text-red-400";
+    return "text-gray-300";
+  }
+
   useEffect(() => {
     cargarDatos();
+    cargarResumenHistorico();
   }, []);
 
   useEffect(() => {
@@ -539,13 +570,23 @@ export default function DashboardPage() {
       <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h1 className="text-2xl font-semibold">Dashboard</h1>
 
-        <button
-          onClick={ejecutarRevisionDiaria}
-          disabled={loading}
-          className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
-        >
-          {loading ? "Procesando..." : "Ejecutar revisión diaria"}
-        </button>
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={recargarEstado}
+            disabled={loadingLive}
+            className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-50"
+          >
+            {loadingLive ? "Recargando..." : "Recargar estado"}
+          </button>
+
+          <button
+            onClick={ejecutarRevisionDiaria}
+            disabled={loading}
+            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+          >
+            {loading ? "Procesando..." : "Ejecutar revisión diaria"}
+          </button>
+        </div>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -857,6 +898,9 @@ export default function DashboardPage() {
                     estadoCuenta !== "fondeada" &&
                     estadoCuenta !== "perdida";
 
+                  const numeroCuenta = slot.accounts?.numero_cuenta ?? "";
+                  const live = numeroCuenta ? liveStatus[numeroCuenta] : undefined;
+
                   return (
                     <div
                       key={slot.id}
@@ -874,6 +918,18 @@ export default function DashboardPage() {
                       <p>Tipo: {slot.accounts?.tipo_cuenta ?? "-"}</p>
 
                       <p className="mt-3">Activa: {slot.es_activa ? "Sí" : "No"}</p>
+
+                      {slot.es_activa && (
+  <p className="mt-2">
+    PnL actual:{" "}
+    <span className={getLivePnlClass(live?.pnl_actual)}>
+      {typeof live?.pnl_actual === "number"
+        ? live.pnl_actual.toFixed(2)
+        : "-"}
+    </span>
+  </p>
+)}
+
                       <p>
                         Pendiente reemplazo:{" "}
                         <span
