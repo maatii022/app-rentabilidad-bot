@@ -161,18 +161,20 @@ export default function DashboardPage() {
   setLoadingLive(true);
 
   try {
-    const res = await fetch(LIVE_STATUS_URL, {
+    const res = await fetch("/api/live-status", {
+      method: "GET",
       cache: "no-store",
     });
 
     const json = await res.json();
+
+    console.log("Respuesta /api/live-status:", json);
 
     if (!res.ok || !json?.ok) {
       alert(`No se pudo recargar el estado en vivo: ${json?.error || "Error desconocido"}`);
       return;
     }
 
-    console.log("Estado en vivo:", json.data);
     setLiveStatus(json.data || {});
   } catch (error) {
     console.error("Error recargando estado en vivo:", error);
