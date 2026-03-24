@@ -205,11 +205,19 @@ export async function evaluarTodosLosPacksDelDia(
         mensaje,
       });
     } else {
+      const mensaje =
+        typeof resultado === "object" &&
+        resultado !== null &&
+        "mensaje" in resultado &&
+        typeof resultado.mensaje === "string"
+          ? resultado.mensaje
+          : "Evaluación completada";
+
       resultados.push({
         packId: pack.id,
         packNombre: pack.nombre,
         ok: true,
-        mensaje: resultado.mensaje ?? "Evaluación completada",
+        mensaje,
       });
     }
   }
