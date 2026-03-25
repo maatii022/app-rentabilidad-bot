@@ -1377,7 +1377,7 @@ function PackCard({
                     disabled={loading}
                     variant="secondary"
                   >
-                    Reemplazo
+                    Reemplazo.
                   </ActionButton>
                 )}
               </div>
