@@ -96,9 +96,9 @@ function SectionCard({
   right?: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:p-5">
-      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <h2 className="text-base font-medium text-white">{title}</h2>
+    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <h2 className="text-sm font-medium text-white">{title}</h2>
         {right ? <div className="flex flex-wrap gap-2">{right}</div> : null}
       </div>
       {children}
@@ -125,9 +125,9 @@ function StatCard({
   };
 
   return (
-    <div className={`rounded-2xl border p-3.5 ${toneClasses[tone]}`}>
-      <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-400">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-white">{value}</p>
+    <div className={`rounded-xl border p-3 ${toneClasses[tone]}`}>
+      <p className="text-[10px] uppercase tracking-[0.12em] text-zinc-400">{label}</p>
+      <p className="mt-1.5 text-xl font-semibold text-white">{value}</p>
     </div>
   );
 }
@@ -158,7 +158,7 @@ function ActionButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-xl px-3.5 py-2 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${styles[variant]}`}
+      className={`rounded-lg px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${styles[variant]}`}
     >
       {children}
     </button>
@@ -166,14 +166,14 @@ function ActionButton({
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <label className="mb-1.5 block text-xs text-zinc-400">{children}</label>;
+  return <label className="mb-1 block text-[11px] text-zinc-400">{children}</label>;
 }
 
 function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-white/20 focus:bg-black/30 ${props.className || ""}`}
+      className={`w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-white/20 focus:bg-black/30 ${props.className || ""}`}
     />
   );
 }
@@ -182,7 +182,7 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none transition focus:border-white/20 focus:bg-black/30 ${props.className || ""}`}
+      className={`w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none transition focus:border-white/20 focus:bg-black/30 ${props.className || ""}`}
     />
   );
 }
@@ -211,6 +211,20 @@ function getEventTone(tipo: string) {
 function formatPercent(value?: number | null) {
   if (typeof value !== "number" || Number.isNaN(value)) return "-";
   return `${value.toFixed(2)}%`;
+}
+
+function getPackFlags(pack: Pack) {
+  const hasPendingReplacement =
+    pack.pack_slots?.some((slot) => slot.pendiente_reemplazo) ?? false;
+
+  const hasMissingAccount =
+    pack.pack_slots?.some((slot) => !slot.accounts?.id) ?? false;
+
+  return {
+    hasPendingReplacement,
+    hasMissingAccount,
+    isIncomplete: hasMissingAccount,
+  };
 }
 
 export default function DashboardPage() {
@@ -626,12 +640,11 @@ export default function DashboardPage() {
   const packsFiltrados = useMemo(() => {
     const base = packs.filter((pack) => {
       const presetNombre = pack.presets?.nombre ?? "";
+      const flags = getPackFlags(pack);
 
       const cumplePreset = presetFilter === "todos" || presetNombre === presetFilter;
       const cumpleTipo = tipoFilter === "todos" || pack.tipo_pack === tipoFilter;
-      const tieneIncidencia =
-        pack.pack_slots?.some((slot) => slot.pendiente_reemplazo) ?? false;
-      const cumpleIncidencia = !soloIncidencias || tieneIncidencia;
+      const cumpleIncidencia = !soloIncidencias || flags.hasPendingReplacement || flags.isIncomplete;
 
       return cumplePreset && cumpleTipo && cumpleIncidencia;
     });
@@ -639,16 +652,23 @@ export default function DashboardPage() {
     if (!priorizarIncidencias) return base;
 
     return [...base].sort((a, b) => {
-      const aInc = a.pack_slots?.some((slot) => slot.pendiente_reemplazo) ? 1 : 0;
-      const bInc = b.pack_slots?.some((slot) => slot.pendiente_reemplazo) ? 1 : 0;
-      return bInc - aInc;
+      const aFlags = getPackFlags(a);
+      const bFlags = getPackFlags(b);
+
+      const aScore =
+        (aFlags.hasPendingReplacement ? 2 : 0) + (aFlags.isIncomplete ? 1 : 0);
+      const bScore =
+        (bFlags.hasPendingReplacement ? 2 : 0) + (bFlags.isIncomplete ? 1 : 0);
+
+      return bScore - aScore;
     });
   }, [packs, presetFilter, tipoFilter, soloIncidencias, priorizarIncidencias]);
 
   const resumen = useMemo(() => {
-    const packsConIncidencias = packsFiltrados.filter((pack) =>
-      pack.pack_slots?.some((slot) => slot.pendiente_reemplazo)
-    ).length;
+    const packsConIncidencias = packsFiltrados.filter((pack) => {
+      const flags = getPackFlags(pack);
+      return flags.hasPendingReplacement || flags.isIncomplete;
+    }).length;
 
     const slotsPendientes = packsFiltrados.reduce((acc, pack) => {
       return acc + (pack.pack_slots?.filter((slot) => slot.pendiente_reemplazo).length ?? 0);
@@ -705,14 +725,14 @@ export default function DashboardPage() {
   }, [historicoModo, historicoAnio, historicoMes, presetFilter, tipoFilter]);
 
   return (
-    <div className="space-y-6 text-white">
-      <section className="rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-white/[0.02] p-5 md:p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+    <div className="space-y-5 text-white">
+      <section className="rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-white/[0.02] p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
             <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
               App Rentabilidad Bot
             </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white md:text-4xl">
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white">
               Dashboard
             </h1>
           </div>
@@ -736,13 +756,13 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <div className="mt-5 grid grid-cols-2 gap-2.5 xl:grid-cols-6">
           <StatCard label="Packs visibles" value={resumen.packsVisibles} tone="blue" />
-          <StatCard label="Con incidencias" value={resumen.packsConIncidencias} tone="amber" />
+          <StatCard label="Con alertas" value={resumen.packsConIncidencias} tone="amber" />
           <StatCard label="Slots pendientes" value={resumen.slotsPendientes} tone="amber" />
           <StatCard label="Cuentas activas" value={resumen.cuentasActivas} tone="green" />
-          <StatCard label="Fondeadas históricas" value={summary.fondeadasHistoricas} tone="violet" />
-          <StatCard label="Perdidas históricas" value={summary.perdidasHistoricas} tone="red" />
+          <StatCard label="Fondeadas" value={summary.fondeadasHistoricas} tone="violet" />
+          <StatCard label="Perdidas" value={summary.perdidasHistoricas} tone="red" />
         </div>
       </section>
 
@@ -774,7 +794,7 @@ export default function DashboardPage() {
           </div>
         }
       >
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
+        <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-6">
           <div>
             <FieldLabel>Período</FieldLabel>
             <Select
@@ -847,14 +867,14 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-end xl:col-span-2">
-            <label className="inline-flex min-h-[40px] items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-2 text-sm text-zinc-300">
+            <label className="inline-flex min-h-[36px] items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-zinc-300">
               <input
                 type="checkbox"
                 checked={soloIncidencias}
                 onChange={(e) => setSoloIncidencias(e.target.checked)}
                 className="h-4 w-4 rounded border-white/20 bg-transparent"
               />
-              Solo incidencias
+              Solo alertas
             </label>
           </div>
         </div>
@@ -863,7 +883,7 @@ export default function DashboardPage() {
       <SectionCard title="Packs activos">
         <div className="space-y-3">
           {packsFiltrados.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-center text-sm text-zinc-500">
+            <div className="rounded-xl border border-dashed border-white/10 bg-black/20 p-5 text-center text-sm text-zinc-500">
               No hay packs que coincidan con los filtros actuales.
             </div>
           )}
@@ -890,16 +910,16 @@ export default function DashboardPage() {
         <SectionCard title="Incidencias y reemplazos">
           <div
             ref={reemplazoRef}
-            className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_1fr]"
+            className="grid grid-cols-1 gap-3 xl:grid-cols-[1.1fr_1fr]"
           >
-            <div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.07] p-4">
+            <div className="rounded-xl border border-amber-300/20 bg-amber-300/[0.07] p-3">
               <p className="text-sm text-amber-50/90">
                 Hay {pendingSlotOptions.length} slots pendientes de reemplazo.
               </p>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-              <div className="grid grid-cols-1 gap-3">
+            <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+              <div className="grid grid-cols-1 gap-2.5">
                 <div>
                   <FieldLabel>Slot pendiente</FieldLabel>
                   <Select
@@ -950,11 +970,11 @@ export default function DashboardPage() {
 
       {resultadosRevision.length > 0 && (
         <SectionCard title="Resultado de la revisión diaria">
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {resultadosRevision.map((resultado) => (
               <div
                 key={`${resultado.packId}-${resultado.packNombre}`}
-                className="rounded-2xl border border-white/10 bg-black/20 p-3.5"
+                className="rounded-xl border border-white/10 bg-black/20 p-3"
               >
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <p className="text-sm font-medium text-white">{resultado.packNombre}</p>
@@ -975,11 +995,11 @@ export default function DashboardPage() {
         </SectionCard>
       )}
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.15fr_0.85fr]">
         <SectionCard title="Eventos recientes">
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {events.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-sm text-zinc-500">
+              <div className="rounded-xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-zinc-500">
                 No hay eventos recientes.
               </div>
             )}
@@ -987,9 +1007,9 @@ export default function DashboardPage() {
             {events.map((event) => (
               <div
                 key={event.id}
-                className="rounded-2xl border border-white/10 bg-black/20 p-3.5"
+                className="rounded-xl border border-white/10 bg-black/20 p-3"
               >
-                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div className="flex flex-col gap-1.5 md:flex-row md:items-start md:justify-between">
                   <div className="space-y-1">
                     <p className={`text-sm font-medium ${getEventTone(event.tipo_evento)}`}>
                       {event.tipo_evento}
@@ -1009,9 +1029,9 @@ export default function DashboardPage() {
           </div>
         </SectionCard>
 
-        <div className="space-y-6">
+        <div className="space-y-5">
           <SectionCard title="Carga manual">
-            <div ref={dailyResultRef} className="grid grid-cols-1 gap-3">
+            <div ref={dailyResultRef} className="grid grid-cols-1 gap-2.5">
               <div>
                 <FieldLabel>Cuenta activa</FieldLabel>
                 <Select
@@ -1027,7 +1047,7 @@ export default function DashboardPage() {
                 </Select>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
                 <div>
                   <FieldLabel>Fecha</FieldLabel>
                   <Input
@@ -1047,7 +1067,7 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
                 <div>
                   <FieldLabel>PnL USD</FieldLabel>
                   <Input
@@ -1122,44 +1142,46 @@ function PackCard({
   onSelectReplace: (slotId: number) => void;
   getLivePnlClass: (value?: number | null) => string;
 }) {
-  const tieneIncidencia =
-    pack.pack_slots?.some((slot) => slot.pendiente_reemplazo) ?? false;
+  const flags = getPackFlags(pack);
 
   return (
-    <div
-      className={`rounded-2xl border p-4 ${
-        tieneIncidencia
-          ? "border-amber-300/20 bg-amber-300/[0.04]"
-          : "border-white/10 bg-black/20"
-      }`}
-    >
+    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
       <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-base font-medium text-white">{pack.nombre}</h3>
-            {tieneIncidencia ? (
-              <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.10] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-amber-100">
+            <h3 className="text-sm font-medium text-white">{pack.nombre}</h3>
+
+            {flags.hasPendingReplacement && (
+              <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.10] px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-amber-100">
                 Incidencia
               </span>
-            ) : (
-              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+            )}
+
+            {!flags.hasPendingReplacement && flags.isIncomplete && (
+              <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.10] px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-amber-100">
+                Incompleto
+              </span>
+            )}
+
+            {!flags.hasPendingReplacement && !flags.isIncomplete && (
+              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
                 Estable
               </span>
             )}
           </div>
 
-          <p className="mt-1.5 text-sm text-zinc-400">
+          <p className="mt-1 text-xs text-zinc-400">
             Preset: {pack.presets?.nombre ?? "-"} · Tipo: {pack.tipo_pack}
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           <ActionButton
             onClick={() => onRotar(pack.id, pack.nombre)}
             disabled={loading}
             variant="secondary"
           >
-            Rotar pack
+            Rotar
           </ActionButton>
 
           <ActionButton
@@ -1172,7 +1194,7 @@ function PackCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-2.5 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {pack.pack_slots
           ?.sort((a, b) => a.orden - b.orden)
           .map((slot) => {
@@ -1189,50 +1211,67 @@ function PackCard({
 
             const numeroCuenta = slot.accounts?.numero_cuenta ?? "";
             const live = numeroCuenta ? liveStatus[numeroCuenta] : undefined;
+            const missingAccount = !slot.accounts?.id;
 
             return (
               <div
                 key={slot.id}
-                className={`rounded-xl border p-3 ${
+                className={`rounded-lg border p-2.5 ${
                   slot.es_activa
                     ? "border-sky-300/25 bg-sky-300/[0.07] shadow-[0_0_0_1px_rgba(125,211,252,0.08)]"
                     : slot.pendiente_reemplazo
                     ? "border-amber-300/20 bg-amber-300/[0.08]"
+                    : missingAccount
+                    ? "border-amber-300/20 bg-amber-300/[0.06]"
                     : "border-white/10 bg-black/20"
                 }`}
               >
-                <div className="mb-2.5 flex items-start justify-between gap-2">
+                <div className="mb-2 flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
                       Slot {slot.slot}
                     </p>
-                    <p className="mt-1 truncate text-sm font-medium text-white">
+                    <p className="mt-0.5 truncate text-sm font-medium text-white">
                       {slot.accounts?.alias ?? "Sin cuenta"}
                     </p>
                   </div>
 
-                  <span
-                    className={`rounded-full border px-2 py-1 text-[10px] ${
-                      slot.es_activa
-                        ? "border-sky-300/20 bg-sky-300/[0.12] text-sky-100"
-                        : "border-white/10 bg-white/5 text-zinc-400"
-                    }`}
-                  >
-                    {slot.es_activa ? "Activa" : "Inactiva"}
-                  </span>
+                  <div className="flex flex-col items-end gap-1">
+                    <span
+                      className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                        slot.es_activa
+                          ? "border-sky-300/20 bg-sky-300/[0.12] text-sky-100"
+                          : "border-white/10 bg-white/5 text-zinc-400"
+                      }`}
+                    >
+                      {slot.es_activa ? "Activa" : "Inactiva"}
+                    </span>
+
+                    {slot.pendiente_reemplazo && (
+                      <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.10] px-2 py-0.5 text-[10px] text-amber-100">
+                        Reemplazo
+                      </span>
+                    )}
+
+                    {missingAccount && !slot.pendiente_reemplazo && (
+                      <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.10] px-2 py-0.5 text-[10px] text-amber-100">
+                        Falta cuenta
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                <div className="space-y-1 text-[12px] text-zinc-400">
+                <div className="space-y-1 text-[11px] text-zinc-400">
                   <p>Número: {slot.accounts?.numero_cuenta ?? "-"}</p>
                   <p>Estado: {slot.accounts?.estado ?? "-"}</p>
                   <p>Tipo: {slot.accounts?.tipo_cuenta ?? "-"}</p>
 
-                  <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-white/5 bg-black/20 p-2">
+                  <div className="mt-1.5 grid grid-cols-2 gap-1.5 rounded-md border border-white/5 bg-black/20 p-2">
                     <div>
-                      <p className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                      <p className="text-[9px] uppercase tracking-[0.12em] text-zinc-500">
                         PnL USD
                       </p>
-                      <p className={`mt-1 text-sm font-medium ${getLivePnlClass(live?.pnl_actual)}`}>
+                      <p className={`mt-0.5 text-xs font-medium ${getLivePnlClass(live?.pnl_actual)}`}>
                         {typeof live?.pnl_actual === "number"
                           ? live.pnl_actual.toFixed(2)
                           : "-"}
@@ -1240,11 +1279,11 @@ function PackCard({
                     </div>
 
                     <div>
-                      <p className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                      <p className="text-[9px] uppercase tracking-[0.12em] text-zinc-500">
                         PnL %
                       </p>
                       <p
-                        className={`mt-1 text-sm font-medium ${getLivePnlClass(
+                        className={`mt-0.5 text-xs font-medium ${getLivePnlClass(
                           live?.pnl_pct_actual
                         )}`}
                       >
@@ -1252,20 +1291,9 @@ function PackCard({
                       </p>
                     </div>
                   </div>
-
-                  <p className="pt-1">
-                    Pendiente reemplazo:{" "}
-                    <span
-                      className={
-                        slot.pendiente_reemplazo ? "text-amber-200" : "text-zinc-500"
-                      }
-                    >
-                      {slot.pendiente_reemplazo ? "Sí" : "No"}
-                    </span>
-                  </p>
                 </div>
 
-                <div className="mt-3 flex flex-wrap gap-1.5">
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
                   <ActionButton
                     onClick={() => slot.accounts?.id && onPerder(slot.accounts.id)}
                     disabled={loading || !puedePerder}
