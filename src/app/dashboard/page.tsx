@@ -64,6 +64,9 @@ type LiveStatusItem = {
   preset?: string;
   pnl_actual?: number | null;
   pnl_pct_actual?: number | null;
+  pnl_hoy_usd?: number | null;
+  pnl_hoy_pct?: number | null;
+  profit_total_pct?: number | null;
   trades_abiertos?: number | null;
   balance?: number | null;
   error?: string;
@@ -216,11 +219,6 @@ function formatPercent(value?: number | null) {
   return `${value.toFixed(2)}%`;
 }
 
-function formatMoney(value?: number | null) {
-  if (typeof value !== "number" || Number.isNaN(value)) return "-";
-  return value.toFixed(2);
-}
-
 function normalizeSlotName(slot: string | undefined) {
   return String(slot || "").trim().toUpperCase();
 }
@@ -241,13 +239,23 @@ function getPackFlags(pack: Pack) {
   };
 }
 
-function getPackGridClass(pack: Pack) {
-  const count = pack.pack_slots?.length ?? 0;
+function buildDisplaySlots(pack: Pack): PackSlot[] {
+  const original = [...(pack.pack_slots ?? [])];
+  const existing = new Set(original.map((slot) => normalizeSlotName(slot.slot)));
 
-  if (count <= 1) return "grid-cols-1";
-  if (count === 2) return "grid-cols-1 md:grid-cols-2";
-  if (count === 3) return "grid-cols-1 md:grid-cols-2 xl:grid-cols-3";
-  return "grid-cols-1 md:grid-cols-2 xl:grid-cols-4";
+  for (const requiredSlot of REQUIRED_SLOTS) {
+    if (!existing.has(requiredSlot)) {
+      original.push({
+        id: -Math.floor(Math.random() * 1000000) - requiredSlot.charCodeAt(0),
+        slot: requiredSlot,
+        es_activa: false,
+        pendiente_reemplazo: false,
+        orden: requiredSlot === "A" ? 1 : requiredSlot === "B" ? 2 : 3,
+      });
+    }
+  }
+
+  return original.sort((a, b) => a.orden - b.orden);
 }
 
 function readLiveStatusCache(): LiveStatusMap {
@@ -1201,6 +1209,7 @@ function PackCard({
   getLivePnlClass: (value?: number | null) => string;
 }) {
   const flags = getPackFlags(pack);
+  const displaySlots = buildDisplaySlots(pack);
 
   return (
     <div className="rounded-xl border border-white/10 bg-black/20 p-3">
@@ -1252,152 +1261,145 @@ function PackCard({
         </div>
       </div>
 
-      <div className={`grid gap-2 ${getPackGridClass(pack)}`}>
-        {pack.pack_slots
-          ?.sort((a, b) => a.orden - b.orden)
-          .map((slot) => {
-            const estadoCuenta = slot.accounts?.estado ?? "";
-            const puedePerder =
-              slot.accounts?.id &&
-              estadoCuenta !== "perdida" &&
-              estadoCuenta !== "fondeada";
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+        {displaySlots.map((slot) => {
+          const estadoCuenta = slot.accounts?.estado ?? "";
+          const puedePerder =
+            slot.accounts?.id &&
+            estadoCuenta !== "perdida" &&
+            estadoCuenta !== "fondeada";
 
-            const puedeFondear =
-              slot.accounts?.id &&
-              estadoCuenta !== "fondeada" &&
-              estadoCuenta !== "perdida";
+          const puedeFondear =
+            slot.accounts?.id &&
+            estadoCuenta !== "fondeada" &&
+            estadoCuenta !== "perdida";
 
-            const numeroCuenta = slot.accounts?.numero_cuenta ?? "";
-            const live = numeroCuenta ? liveStatus[numeroCuenta] : undefined;
-            const missingAccount = !slot.accounts?.id;
+          const numeroCuenta = slot.accounts?.numero_cuenta ?? "";
+          const live = numeroCuenta ? liveStatus[numeroCuenta] : undefined;
+          const missingAccount = !slot.accounts?.id;
 
-            return (
-              <div
-                key={slot.id}
-                className={`rounded-lg border p-2.5 ${
-                  slot.es_activa
-                    ? "border-sky-300/25 bg-sky-300/[0.07] shadow-[0_0_0_1px_rgba(125,211,252,0.08)]"
-                    : slot.pendiente_reemplazo
-                    ? "border-amber-300/20 bg-amber-300/[0.08]"
-                    : missingAccount
-                    ? "border-amber-300/20 bg-amber-300/[0.06]"
-                    : "border-white/10 bg-black/20"
-                }`}
-              >
-                <div className="mb-2 flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
-                      Slot {slot.slot}
-                    </p>
-                    <p className="mt-0.5 truncate text-sm font-medium text-white">
-                      {slot.accounts?.alias ?? "Sin cuenta"}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-col items-end gap-1">
-                    <span
-                      className={`rounded-full border px-2 py-0.5 text-[10px] ${
-                        slot.es_activa
-                          ? "border-sky-300/20 bg-sky-300/[0.12] text-sky-100"
-                          : "border-white/10 bg-white/5 text-zinc-400"
-                      }`}
-                    >
-                      {slot.es_activa ? "Activa" : "Inactiva"}
-                    </span>
-
-                    {slot.pendiente_reemplazo && (
-                      <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.10] px-2 py-0.5 text-[10px] text-amber-100">
-                        Reemplazo
-                      </span>
-                    )}
-
-                    {missingAccount && !slot.pendiente_reemplazo && (
-                      <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.10] px-2 py-0.5 text-[10px] text-amber-100">
-                        Falta cuenta
-                      </span>
-                    )}
-                  </div>
+          return (
+            <div
+              key={`${slot.id}-${slot.slot}`}
+              className={`rounded-lg border p-2.5 ${
+                slot.es_activa
+                  ? "border-sky-300/25 bg-sky-300/[0.07] shadow-[0_0_0_1px_rgba(125,211,252,0.08)]"
+                  : slot.pendiente_reemplazo
+                  ? "border-amber-300/20 bg-amber-300/[0.08]"
+                  : missingAccount
+                  ? "border-white/10 bg-black/10"
+                  : "border-white/10 bg-black/20"
+              }`}
+            >
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
+                    Slot {slot.slot}
+                  </p>
+                  <p className="mt-0.5 truncate text-sm font-medium text-white">
+                    {slot.accounts?.alias ?? "Vacío"}
+                  </p>
                 </div>
 
-                <div className="space-y-1 text-[11px] text-zinc-400">
-                  <p>Número: {slot.accounts?.numero_cuenta ?? "-"}</p>
-                  <p>Estado: {slot.accounts?.estado ?? "-"}</p>
-                  <p>Tipo: {slot.accounts?.tipo_cuenta ?? "-"}</p>
-
-                  <div className="mt-1.5 grid grid-cols-3 gap-1.5 rounded-md border border-white/5 bg-black/20 p-2">
-                    <div>
-                      <p className="text-[9px] uppercase tracking-[0.12em] text-zinc-500">
-                        Balance
-                      </p>
-                      <p className="mt-0.5 text-xs font-medium text-zinc-200">
-                        {formatMoney(live?.balance)}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-[9px] uppercase tracking-[0.12em] text-zinc-500">
-                        PnL USD
-                      </p>
-                      <p className={`mt-0.5 text-xs font-medium ${getLivePnlClass(live?.pnl_actual)}`}>
-                        {formatMoney(live?.pnl_actual)}
-                      </p>
-                    </div>
-
-                    <div>
-                      <p className="text-[9px] uppercase tracking-[0.12em] text-zinc-500">
-                        PnL %
-                      </p>
-                      <p
-                        className={`mt-0.5 text-xs font-medium ${getLivePnlClass(
-                          live?.pnl_pct_actual
-                        )}`}
-                      >
-                        {formatPercent(live?.pnl_pct_actual)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-2.5 flex flex-wrap gap-1.5">
-                  <ActionButton
-                    onClick={() => slot.accounts?.id && onPerder(slot.accounts.id)}
-                    disabled={loading || !puedePerder}
-                    variant="ghost"
+                <div className="flex flex-col items-end gap-1">
+                  <span
+                    className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                      slot.es_activa
+                        ? "border-sky-300/20 bg-sky-300/[0.12] text-sky-100"
+                        : "border-white/10 bg-white/5 text-zinc-400"
+                    }`}
                   >
-                    Perder
-                  </ActionButton>
-
-                  <ActionButton
-                    onClick={() => slot.accounts?.id && onFondear(slot.accounts.id)}
-                    disabled={loading || !puedeFondear}
-                    variant="ghost"
-                  >
-                    Fondear
-                  </ActionButton>
-
-                  {slot.accounts?.id && slot.accounts?.estado === "activa" && (
-                    <ActionButton
-                      onClick={() => onSelectDaily(slot.accounts!.id)}
-                      disabled={loading}
-                      variant="ghost"
-                    >
-                      Daily
-                    </ActionButton>
-                  )}
+                    {slot.es_activa ? "Activa" : "Inactiva"}
+                  </span>
 
                   {slot.pendiente_reemplazo && (
-                    <ActionButton
-                      onClick={() => onSelectReplace(slot.id)}
-                      disabled={loading}
-                      variant="secondary"
-                    >
+                    <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.10] px-2 py-0.5 text-[10px] text-amber-100">
                       Reemplazo
-                    </ActionButton>
+                    </span>
+                  )}
+
+                  {missingAccount && !slot.pendiente_reemplazo && (
+                    <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-zinc-400">
+                      Sin cuenta
+                    </span>
                   )}
                 </div>
               </div>
-            );
-          })}
+
+              <div className="space-y-1 text-[11px] text-zinc-400">
+                <p>Número: {slot.accounts?.numero_cuenta ?? "-"}</p>
+                <p>Estado: {slot.accounts?.estado ?? "-"}</p>
+                <p>Tipo: {slot.accounts?.tipo_cuenta ?? "-"}</p>
+
+                <div className="mt-1.5 grid grid-cols-2 gap-1.5 rounded-md border border-white/5 bg-black/20 p-2">
+                  <div>
+                    <p className="text-[9px] uppercase tracking-[0.12em] text-zinc-500">
+                      Total %
+                    </p>
+                    <p
+                      className={`mt-0.5 text-xs font-medium ${getLivePnlClass(
+                        live?.profit_total_pct
+                      )}`}
+                    >
+                      {formatPercent(live?.profit_total_pct)}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-[9px] uppercase tracking-[0.12em] text-zinc-500">
+                      Hoy %
+                    </p>
+                    <p
+                      className={`mt-0.5 text-xs font-medium ${getLivePnlClass(
+                        live?.pnl_hoy_pct ?? live?.pnl_pct_actual
+                      )}`}
+                    >
+                      {formatPercent(live?.pnl_hoy_pct ?? live?.pnl_pct_actual)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                <ActionButton
+                  onClick={() => slot.accounts?.id && onPerder(slot.accounts.id)}
+                  disabled={loading || !puedePerder}
+                  variant="ghost"
+                >
+                  Perder
+                </ActionButton>
+
+                <ActionButton
+                  onClick={() => slot.accounts?.id && onFondear(slot.accounts.id)}
+                  disabled={loading || !puedeFondear}
+                  variant="ghost"
+                >
+                  Fondear
+                </ActionButton>
+
+                {slot.accounts?.id && slot.accounts?.estado === "activa" && (
+                  <ActionButton
+                    onClick={() => onSelectDaily(slot.accounts!.id)}
+                    disabled={loading}
+                    variant="ghost"
+                  >
+                    Daily
+                  </ActionButton>
+                )}
+
+                {slot.pendiente_reemplazo && (
+                  <ActionButton
+                    onClick={() => onSelectReplace(slot.id)}
+                    disabled={loading}
+                    variant="secondary"
+                  >
+                    Reemplazo
+                  </ActionButton>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
