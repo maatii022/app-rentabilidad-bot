@@ -5,10 +5,7 @@ export async function POST() {
   try {
     const result = await syncDailySnapshots();
 
-    return NextResponse.json({
-      ok: true,
-      ...result,
-    });
+    return NextResponse.json(result);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Error inesperado";
