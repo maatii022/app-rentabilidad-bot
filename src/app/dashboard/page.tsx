@@ -84,7 +84,6 @@ type DayPnlCacheMap = Record<
     date: string;
     pct: number | null;
     usd: number | null;
-    totalPct: number | null;
   }
 >;
 
@@ -376,6 +375,34 @@ function writeLiveDayPnlCache(data: DayPnlCacheMap) {
   } catch {}
 }
 
+function getIncomingDayPct(live: LiveStatusItem | undefined) {
+  if (!live) return null;
+
+  if (typeof live.pnl_hoy_pct === "number" && !Number.isNaN(live.pnl_hoy_pct)) {
+    return live.pnl_hoy_pct;
+  }
+
+  if (
+    (live.trades_abiertos ?? 0) > 0 &&
+    typeof live.pnl_pct_actual === "number" &&
+    !Number.isNaN(live.pnl_pct_actual)
+  ) {
+    return live.pnl_pct_actual;
+  }
+
+  return null;
+}
+
+function getIncomingDayUsd(live: LiveStatusItem | undefined) {
+  if (!live) return null;
+
+  if (typeof live.pnl_hoy_usd === "number" && !Number.isNaN(live.pnl_hoy_usd)) {
+    return live.pnl_hoy_usd;
+  }
+
+  return null;
+}
+
 function resolveDisplayDayPct(
   numeroCuenta: string,
   live: LiveStatusItem | undefined,
@@ -383,13 +410,7 @@ function resolveDisplayDayPct(
 ) {
   const todayKey = getTodayKey();
   const cached = dayPnlCache[numeroCuenta];
-
-  const incomingPct =
-    typeof live?.pnl_hoy_pct === "number" && !Number.isNaN(live.pnl_hoy_pct)
-      ? live.pnl_hoy_pct
-      : typeof live?.pnl_pct_actual === "number" && !Number.isNaN(live.pnl_pct_actual)
-      ? live.pnl_pct_actual
-      : null;
+  const incomingPct = getIncomingDayPct(live);
 
   if (cached && cached.date === todayKey) {
     if (incomingPct === null || incomingPct === 0) {
@@ -406,29 +427,18 @@ function resolveDisplayTotalPct(
   live: LiveStatusItem | undefined,
   dayPnlCache: DayPnlCacheMap
 ) {
-  const todayKey = getTodayKey();
-  const cached = dayPnlCache[numeroCuenta];
-
-  const incomingTotalPct =
+  const baseTotalPct =
     typeof live?.profit_total_pct === "number" && !Number.isNaN(live.profit_total_pct)
       ? live.profit_total_pct
       : null;
 
-  const displayDayPct = resolveDisplayDayPct(numeroCuenta, live, dayPnlCache);
+  const dayPct = resolveDisplayDayPct(numeroCuenta, live, dayPnlCache);
 
-  if (incomingTotalPct === null) {
-    return null;
-  }
+  if (baseTotalPct === null && dayPct === null) return null;
+  if (baseTotalPct === null) return dayPct;
+  if (dayPct === null) return baseTotalPct;
 
-  if (cached && cached.date === todayKey && cached.totalPct !== null) {
-    if (displayDayPct !== null && cached.pct !== null) {
-      return cached.totalPct + (displayDayPct - cached.pct);
-    }
-
-    return cached.totalPct;
-  }
-
-  return incomingTotalPct;
+  return baseTotalPct + dayPct;
 }
 
 function mergeLiveDayPnlCache(
@@ -447,22 +457,8 @@ function mergeLiveDayPnlCache(
   Object.entries(incoming).forEach(([numeroCuenta, live]) => {
     const existing = next[numeroCuenta];
 
-    const incomingPct =
-      typeof live?.pnl_hoy_pct === "number" && !Number.isNaN(live.pnl_hoy_pct)
-        ? live.pnl_hoy_pct
-        : typeof live?.pnl_pct_actual === "number" && !Number.isNaN(live.pnl_pct_actual)
-        ? live.pnl_pct_actual
-        : null;
-
-    const incomingUsd =
-      typeof live?.pnl_hoy_usd === "number" && !Number.isNaN(live.pnl_hoy_usd)
-        ? live.pnl_hoy_usd
-        : null;
-
-    const incomingTotalPct =
-      typeof live?.profit_total_pct === "number" && !Number.isNaN(live.profit_total_pct)
-        ? live.profit_total_pct
-        : null;
+    const incomingPct = getIncomingDayPct(live);
+    const incomingUsd = getIncomingDayUsd(live);
 
     const nextPct =
       incomingPct !== null && incomingPct !== 0
@@ -478,18 +474,10 @@ function mergeLiveDayPnlCache(
         ? existing.usd
         : null;
 
-    const nextTotalPct =
-      incomingTotalPct !== null
-        ? incomingTotalPct
-        : existing?.date === todayKey
-        ? existing.totalPct
-        : null;
-
     next[numeroCuenta] = {
       date: todayKey,
       pct: nextPct,
       usd: nextUsd,
-      totalPct: nextTotalPct,
     };
   });
 
@@ -959,49 +947,43 @@ export default function DashboardPage() {
             onClick={() => setSoloIncidencias((prev) => !prev)}
             variant={soloIncidencias ? "warning" : "secondary"}
           >
-            {soloIncidencias ? "Alertas: sí" : "Alertas"}
+            Alertas
           </ActionButton>
         }
       >
-        <div className="space-y-3">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-2 shadow-[0_12px_28px_rgba(255,255,255,0.03)]">
-            <div className="flex flex-wrap items-center gap-2">
-              <FilterPill
-                label="Todos los presets"
-                active={presetFilter === "todos"}
-                onClick={() => setPresetFilter("todos")}
-              />
+        <div className="flex flex-wrap items-center gap-2">
+          <FilterPill
+            label="Todos los presets"
+            active={presetFilter === "todos"}
+            onClick={() => setPresetFilter("todos")}
+          />
 
-              {presetOptions.map((preset) => (
-                <FilterPill
-                  key={preset}
-                  label={preset}
-                  active={presetFilter === preset}
-                  onClick={() => setPresetFilter(preset)}
-                />
-              ))}
-            </div>
-          </div>
+          {presetOptions.map((preset) => (
+            <FilterPill
+              key={preset}
+              label={preset}
+              active={presetFilter === preset}
+              onClick={() => setPresetFilter(preset)}
+            />
+          ))}
 
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-2 shadow-[0_12px_28px_rgba(255,255,255,0.03)]">
-            <div className="flex flex-wrap items-center gap-2">
-              <FilterPill
-                label="Todos"
-                active={tipoFilter === "todos"}
-                onClick={() => setTipoFilter("todos")}
-              />
-              <FilterPill
-                label="Prueba"
-                active={tipoFilter === "prueba"}
-                onClick={() => setTipoFilter("prueba")}
-              />
-              <FilterPill
-                label="Fondeada"
-                active={tipoFilter === "fondeada"}
-                onClick={() => setTipoFilter("fondeada")}
-              />
-            </div>
-          </div>
+          <div className="mx-1 hidden h-8 w-px bg-white/10 lg:block" />
+
+          <FilterPill
+            label="Todos"
+            active={tipoFilter === "todos"}
+            onClick={() => setTipoFilter("todos")}
+          />
+          <FilterPill
+            label="Prueba"
+            active={tipoFilter === "prueba"}
+            onClick={() => setTipoFilter("prueba")}
+          />
+          <FilterPill
+            label="Fondeada"
+            active={tipoFilter === "fondeada"}
+            onClick={() => setTipoFilter("fondeada")}
+          />
         </div>
       </SectionCard>
 
@@ -1381,7 +1363,7 @@ function PackCard({
                     disabled={loading}
                     variant="secondary"
                   >
-                    Reemplazo.
+                    Reemplazo
                   </ActionButton>
                 )}
               </div>
