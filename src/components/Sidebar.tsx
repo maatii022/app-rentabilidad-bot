@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
 
 const links = [
   { href: "/dashboard", label: "Dashboard" },
@@ -22,68 +21,46 @@ function isActivePath(pathname: string, href: string) {
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const [open, setOpen] = useState(false);
 
   return (
-    <>
-      <aside className="relative z-40 h-screen shrink-0">
-        <div className="sticky top-0 flex h-screen">
-          <div className="flex w-16 shrink-0 flex-col items-center border-r border-white/10 bg-[linear-gradient(180deg,rgba(7,12,22,0.96),rgba(7,12,22,0.88))] backdrop-blur-xl">
-            <button
-              type="button"
-              onClick={() => setOpen((prev) => !prev)}
-              aria-label={open ? "Cerrar menú" : "Abrir menú"}
-              className="mt-4 flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.03] text-white transition hover:bg-white/[0.07]"
-            >
-              <div className="flex flex-col gap-1">
-                <span className="block h-0.5 w-5 rounded-full bg-white" />
-                <span className="block h-0.5 w-5 rounded-full bg-white" />
-                <span className="block h-0.5 w-5 rounded-full bg-white" />
-              </div>
-            </button>
+    <aside className="min-h-screen w-64 border-r border-white/10 bg-[linear-gradient(180deg,#07101d_0%,#091425_45%,#08101c_100%)] px-3 py-4 text-white">
+      <div className="sticky top-4">
+        <div className="rounded-[24px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.14),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018))] p-3 shadow-[0_18px_40px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+          <div className="mb-4 px-2">
+            <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">
+              App rentabilidad bot
+            </p>
           </div>
 
-          <div
-            className={`absolute left-16 top-0 h-screen w-64 transition-all duration-300 ${
-              open
-                ? "translate-x-0 opacity-100"
-                : "-translate-x-4 opacity-0 pointer-events-none"
-            }`}
-          >
-            <div className="h-full border-r border-white/10 bg-[linear-gradient(180deg,rgba(9,15,28,0.78),rgba(9,15,28,0.68))] px-3 py-4 shadow-[0_18px_40px_rgba(0,0,0,0.22)] backdrop-blur-2xl">
-              <nav className="mt-14 flex flex-col gap-1.5">
-                {links.map((link) => {
-                  const active = isActivePath(pathname, link.href);
+          <nav className="space-y-1.5">
+            {links.map((link) => {
+              const active = isActivePath(pathname, link.href);
 
-                  return (
-                    <Link
-                      key={link.href}
-                      href={link.href}
-                      onClick={() => setOpen(false)}
-                      className={`rounded-xl px-3 py-2.5 text-sm font-medium transition ${
-                        active
-                          ? "bg-white/[0.10] text-white border border-white/10"
-                          : "text-zinc-300 border border-transparent hover:bg-white/[0.05] hover:border-white/10 hover:text-white"
-                      }`}
-                    >
-                      {link.label}
-                    </Link>
-                  );
-                })}
-              </nav>
-            </div>
-          </div>
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`group flex items-center justify-between rounded-2xl border px-3 py-3 text-sm font-medium transition ${
+                    active
+                      ? "border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.13),rgba(56,189,248,0.05))] text-white shadow-[0_0_0_1px_rgba(125,211,252,0.05)]"
+                      : "border-transparent bg-transparent text-zinc-300 hover:border-white/10 hover:bg-white/[0.04] hover:text-white"
+                  }`}
+                >
+                  <span>{link.label}</span>
+
+                  <span
+                    className={`h-2 w-2 rounded-full transition ${
+                      active
+                        ? "bg-sky-300 shadow-[0_0_14px_rgba(125,211,252,0.8)]"
+                        : "bg-white/10 group-hover:bg-white/20"
+                    }`}
+                  />
+                </Link>
+              );
+            })}
+          </nav>
         </div>
-      </aside>
-
-      {open && (
-        <button
-          type="button"
-          aria-label="Cerrar menú"
-          onClick={() => setOpen(false)}
-          className="fixed inset-0 z-30 bg-black/15"
-        />
-      )}
-    </>
+      </div>
+    </aside>
   );
 }
