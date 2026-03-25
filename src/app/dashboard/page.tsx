@@ -86,6 +86,9 @@ const MONTH_OPTIONS = [
   { value: 12, label: "Diciembre" },
 ];
 
+const LIVE_STATUS_CACHE_KEY = "app_rentabilidad_bot_live_status_cache_v1";
+const REQUIRED_SLOTS = ["A", "B", "C"];
+
 function SectionCard({
   title,
   children,
@@ -213,18 +216,60 @@ function formatPercent(value?: number | null) {
   return `${value.toFixed(2)}%`;
 }
 
-function getPackFlags(pack: Pack) {
-  const hasPendingReplacement =
-    pack.pack_slots?.some((slot) => slot.pendiente_reemplazo) ?? false;
+function formatMoney(value?: number | null) {
+  if (typeof value !== "number" || Number.isNaN(value)) return "-";
+  return value.toFixed(2);
+}
 
-  const hasMissingAccount =
-    pack.pack_slots?.some((slot) => !slot.accounts?.id) ?? false;
+function normalizeSlotName(slot: string | undefined) {
+  return String(slot || "").trim().toUpperCase();
+}
+
+function getPackFlags(pack: Pack) {
+  const slots = pack.pack_slots ?? [];
+  const presentSlots = new Set(slots.map((slot) => normalizeSlotName(slot.slot)));
+
+  const hasPendingReplacement = slots.some((slot) => slot.pendiente_reemplazo);
+  const hasMissingAccount = slots.some((slot) => !slot.accounts?.id);
+  const hasMissingRequiredSlot = REQUIRED_SLOTS.some((required) => !presentSlots.has(required));
 
   return {
     hasPendingReplacement,
     hasMissingAccount,
-    isIncomplete: hasMissingAccount,
+    hasMissingRequiredSlot,
+    isIncomplete: hasMissingAccount || hasMissingRequiredSlot,
   };
+}
+
+function getPackGridClass(pack: Pack) {
+  const count = pack.pack_slots?.length ?? 0;
+
+  if (count <= 1) return "grid-cols-1";
+  if (count === 2) return "grid-cols-1 md:grid-cols-2";
+  if (count === 3) return "grid-cols-1 md:grid-cols-2 xl:grid-cols-3";
+  return "grid-cols-1 md:grid-cols-2 xl:grid-cols-4";
+}
+
+function readLiveStatusCache(): LiveStatusMap {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = window.localStorage.getItem(LIVE_STATUS_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return parsed as LiveStatusMap;
+  } catch {
+    return {};
+  }
+}
+
+function writeLiveStatusCache(data: LiveStatusMap) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(LIVE_STATUS_CACHE_KEY, JSON.stringify(data));
+  } catch {}
 }
 
 export default function DashboardPage() {
@@ -264,6 +309,17 @@ export default function DashboardPage() {
 
   const reemplazoRef = useRef<HTMLDivElement | null>(null);
   const dailyResultRef = useRef<HTMLDivElement | null>(null);
+
+  function guardarLiveStatusEnCache(incoming: LiveStatusMap) {
+    setLiveStatus((prev) => {
+      const merged = {
+        ...prev,
+        ...incoming,
+      };
+      writeLiveStatusCache(merged);
+      return merged;
+    });
+  }
 
   async function cargarDatos() {
     const res = await fetch("/api/dashboard-packs");
@@ -315,7 +371,7 @@ export default function DashboardPage() {
         return;
       }
 
-      setLiveStatus(json.data || {});
+      guardarLiveStatusEnCache(json.data || {});
     } catch (error) {
       console.error("Error recargando estado en vivo:", error);
       alert("No se pudo recargar el estado en vivo");
@@ -716,8 +772,10 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
+    setLiveStatus(readLiveStatusCache());
     cargarDatos();
     cargarResumenHistorico();
+    recargarEstado();
   }, []);
 
   useEffect(() => {
@@ -1194,7 +1252,7 @@ function PackCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+      <div className={`grid gap-2 ${getPackGridClass(pack)}`}>
         {pack.pack_slots
           ?.sort((a, b) => a.orden - b.orden)
           .map((slot) => {
@@ -1266,15 +1324,22 @@ function PackCard({
                   <p>Estado: {slot.accounts?.estado ?? "-"}</p>
                   <p>Tipo: {slot.accounts?.tipo_cuenta ?? "-"}</p>
 
-                  <div className="mt-1.5 grid grid-cols-2 gap-1.5 rounded-md border border-white/5 bg-black/20 p-2">
+                  <div className="mt-1.5 grid grid-cols-3 gap-1.5 rounded-md border border-white/5 bg-black/20 p-2">
+                    <div>
+                      <p className="text-[9px] uppercase tracking-[0.12em] text-zinc-500">
+                        Balance
+                      </p>
+                      <p className="mt-0.5 text-xs font-medium text-zinc-200">
+                        {formatMoney(live?.balance)}
+                      </p>
+                    </div>
+
                     <div>
                       <p className="text-[9px] uppercase tracking-[0.12em] text-zinc-500">
                         PnL USD
                       </p>
                       <p className={`mt-0.5 text-xs font-medium ${getLivePnlClass(live?.pnl_actual)}`}>
-                        {typeof live?.pnl_actual === "number"
-                          ? live.pnl_actual.toFixed(2)
-                          : "-"}
+                        {formatMoney(live?.pnl_actual)}
                       </p>
                     </div>
 
