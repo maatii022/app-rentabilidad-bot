@@ -78,23 +78,26 @@ type ReplaceTarget = {
   slot: string;
 };
 
-const MONTH_OPTIONS = [
-  { value: 1, label: "Enero" },
-  { value: 2, label: "Febrero" },
-  { value: 3, label: "Marzo" },
-  { value: 4, label: "Abril" },
-  { value: 5, label: "Mayo" },
-  { value: 6, label: "Junio" },
-  { value: 7, label: "Julio" },
-  { value: 8, label: "Agosto" },
-  { value: 9, label: "Septiembre" },
-  { value: 10, label: "Octubre" },
-  { value: 11, label: "Noviembre" },
-  { value: 12, label: "Diciembre" },
-];
+type DayPnlCacheMap = Record<
+  string,
+  {
+    date: string;
+    pct: number | null;
+    usd: number | null;
+  }
+>;
 
 const LIVE_STATUS_CACHE_KEY = "app_rentabilidad_bot_live_status_cache_v1";
+const LIVE_DAY_PNL_CACHE_KEY = "app_rentabilidad_bot_live_day_pnl_cache_v1";
 const REQUIRED_SLOTS = ["A", "B", "C"];
+
+function getTodayKey() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
 
 function SectionCard({
   title,
@@ -106,8 +109,8 @@ function SectionCard({
   right?: React.ReactNode;
 }) {
   return (
-    <section className="rounded-3xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.015))] p-4 shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
-      <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+    <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h2 className="text-sm font-medium text-white">{title}</h2>
         {right ? <div className="flex flex-wrap gap-2">{right}</div> : null}
       </div>
@@ -126,12 +129,18 @@ function StatCard({
   tone?: "neutral" | "blue" | "amber" | "green" | "violet" | "red";
 }) {
   const toneClasses = {
-    neutral: "border-white/10 bg-black/20",
-    blue: "border-sky-400/20 bg-sky-400/[0.08]",
-    amber: "border-amber-300/20 bg-amber-300/[0.08]",
-    green: "border-emerald-400/20 bg-emerald-400/[0.08]",
-    violet: "border-violet-400/20 bg-violet-400/[0.08]",
-    red: "border-rose-400/20 bg-rose-400/[0.08]",
+    neutral:
+      "border-white/10 bg-white/[0.03] shadow-[0_12px_28px_rgba(255,255,255,0.03)]",
+    blue:
+      "border-sky-400/20 bg-sky-400/[0.08] shadow-[0_14px_30px_rgba(56,189,248,0.08)]",
+    amber:
+      "border-amber-300/20 bg-amber-300/[0.08] shadow-[0_14px_30px_rgba(251,191,36,0.08)]",
+    green:
+      "border-emerald-400/20 bg-emerald-400/[0.08] shadow-[0_14px_30px_rgba(16,185,129,0.08)]",
+    violet:
+      "border-violet-400/20 bg-violet-400/[0.08] shadow-[0_14px_30px_rgba(167,139,250,0.08)]",
+    red:
+      "border-rose-400/20 bg-rose-400/[0.08] shadow-[0_14px_30px_rgba(244,63,94,0.08)]",
   };
 
   return (
@@ -155,22 +164,46 @@ function ActionButton({
 }) {
   const styles = {
     primary:
-      "border border-white/10 bg-white text-black hover:bg-zinc-200",
+      "border border-white/10 bg-white text-black shadow-[0_12px_26px_rgba(255,255,255,0.08)] hover:bg-zinc-200",
     secondary:
-      "border border-white/10 bg-white/5 text-white hover:bg-white/10",
+      "border border-white/10 bg-white/[0.04] text-white shadow-[0_10px_24px_rgba(255,255,255,0.03)] hover:bg-white/[0.08]",
     danger:
-      "border border-white/10 bg-zinc-800 text-white hover:bg-zinc-700",
+      "border border-white/10 bg-zinc-800 text-white shadow-[0_10px_24px_rgba(0,0,0,0.18)] hover:bg-zinc-700",
     ghost:
-      "border border-white/10 bg-transparent text-zinc-300 hover:bg-white/5",
+      "border border-white/10 bg-transparent text-zinc-300 hover:bg-white/[0.05] hover:text-white",
   };
 
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-xl px-3 py-1.5 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${styles[variant]}`}
+      className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${styles[variant]}`}
     >
       {children}
+    </button>
+  );
+}
+
+function FilterPill({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl border px-3 py-2 text-sm font-medium transition-all duration-200 ${
+        active
+          ? "scale-[0.985] border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.16),rgba(56,189,248,0.07))] text-white shadow-[0_12px_28px_rgba(56,189,248,0.14)]"
+          : "border-white/10 bg-white/[0.03] text-zinc-200 shadow-[0_10px_22px_rgba(255,255,255,0.03)] hover:bg-white/[0.06] hover:text-white"
+      }`}
+    >
+      {label}
     </button>
   );
 }
@@ -311,6 +344,128 @@ function writeLiveStatusCache(data: LiveStatusMap) {
   } catch {}
 }
 
+function readLiveDayPnlCache(): DayPnlCacheMap {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = window.localStorage.getItem(LIVE_DAY_PNL_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return parsed as DayPnlCacheMap;
+  } catch {
+    return {};
+  }
+}
+
+function writeLiveDayPnlCache(data: DayPnlCacheMap) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(LIVE_DAY_PNL_CACHE_KEY, JSON.stringify(data));
+  } catch {}
+}
+
+function resolveDisplayDayPct(
+  numeroCuenta: string,
+  live: LiveStatusItem | undefined,
+  dayPnlCache: DayPnlCacheMap
+) {
+  const todayKey = getTodayKey();
+  const cached = dayPnlCache[numeroCuenta];
+
+  const incomingPct =
+    typeof live?.pnl_hoy_pct === "number" && !Number.isNaN(live.pnl_hoy_pct)
+      ? live.pnl_hoy_pct
+      : typeof live?.pnl_pct_actual === "number" && !Number.isNaN(live.pnl_pct_actual)
+      ? live.pnl_pct_actual
+      : null;
+
+  if (cached && cached.date === todayKey) {
+    if (incomingPct === null || incomingPct === 0) {
+      return cached.pct;
+    }
+    return incomingPct;
+  }
+
+  return incomingPct;
+}
+
+function resolveDisplayDayUsd(
+  numeroCuenta: string,
+  live: LiveStatusItem | undefined,
+  dayPnlCache: DayPnlCacheMap
+) {
+  const todayKey = getTodayKey();
+  const cached = dayPnlCache[numeroCuenta];
+
+  const incomingUsd =
+    typeof live?.pnl_hoy_usd === "number" && !Number.isNaN(live.pnl_hoy_usd)
+      ? live.pnl_hoy_usd
+      : null;
+
+  if (cached && cached.date === todayKey) {
+    if (incomingUsd === null || incomingUsd === 0) {
+      return cached.usd;
+    }
+    return incomingUsd;
+  }
+
+  return incomingUsd;
+}
+
+function mergeLiveDayPnlCache(
+  prev: DayPnlCacheMap,
+  incoming: LiveStatusMap
+): DayPnlCacheMap {
+  const todayKey = getTodayKey();
+  const next: DayPnlCacheMap = {};
+
+  Object.entries(prev).forEach(([account, value]) => {
+    if (value?.date === todayKey) {
+      next[account] = value;
+    }
+  });
+
+  Object.entries(incoming).forEach(([numeroCuenta, live]) => {
+    const existing = next[numeroCuenta];
+
+    const incomingPct =
+      typeof live?.pnl_hoy_pct === "number" && !Number.isNaN(live.pnl_hoy_pct)
+        ? live.pnl_hoy_pct
+        : typeof live?.pnl_pct_actual === "number" && !Number.isNaN(live.pnl_pct_actual)
+        ? live.pnl_pct_actual
+        : null;
+
+    const incomingUsd =
+      typeof live?.pnl_hoy_usd === "number" && !Number.isNaN(live.pnl_hoy_usd)
+        ? live.pnl_hoy_usd
+        : null;
+
+    const nextPct =
+      incomingPct !== null && incomingPct !== 0
+        ? incomingPct
+        : existing?.date === todayKey
+        ? existing.pct
+        : null;
+
+    const nextUsd =
+      incomingUsd !== null && incomingUsd !== 0
+        ? incomingUsd
+        : existing?.date === todayKey
+        ? existing.usd
+        : null;
+
+    next[numeroCuenta] = {
+      date: todayKey,
+      pct: nextPct,
+      usd: nextUsd,
+    };
+  });
+
+  return next;
+}
+
 export default function DashboardPage() {
   const [packs, setPacks] = useState<Pack[]>([]);
   const [events, setEvents] = useState<AccountEvent[]>([]);
@@ -324,12 +479,6 @@ export default function DashboardPage() {
   const [presetFilter, setPresetFilter] = useState("todos");
   const [tipoFilter, setTipoFilter] = useState("todos");
   const [soloIncidencias, setSoloIncidencias] = useState(false);
-  const [priorizarIncidencias, setPriorizarIncidencias] = useState(false);
-
-  const currentDate = new Date();
-  const [historicoModo, setHistoricoModo] = useState("todo");
-  const [historicoAnio, setHistoricoAnio] = useState(String(currentDate.getFullYear()));
-  const [historicoMes, setHistoricoMes] = useState(String(currentDate.getMonth() + 1));
 
   const [summary, setSummary] = useState<DashboardSummary>({
     fondeadasHistoricas: 0,
@@ -338,6 +487,7 @@ export default function DashboardPage() {
 
   const [resultadosRevision, setResultadosRevision] = useState<ResultadoRevisionDiaria[]>([]);
   const [liveStatus, setLiveStatus] = useState<LiveStatusMap>({});
+  const [dayPnlCache, setDayPnlCache] = useState<DayPnlCacheMap>({});
 
   const reemplazoRef = useRef<HTMLDivElement | null>(null);
 
@@ -348,6 +498,12 @@ export default function DashboardPage() {
         ...incoming,
       };
       writeLiveStatusCache(merged);
+      return merged;
+    });
+
+    setDayPnlCache((prev) => {
+      const merged = mergeLiveDayPnlCache(prev, incoming);
+      writeLiveDayPnlCache(merged);
       return merged;
     });
   }
@@ -364,18 +520,10 @@ export default function DashboardPage() {
 
   async function cargarResumenHistorico() {
     const params = new URLSearchParams({
-      modo: historicoModo,
+      modo: "todo",
       preset: presetFilter,
       tipo: tipoFilter,
     });
-
-    if (historicoModo === "anio" || historicoModo === "mes") {
-      params.set("anio", historicoAnio);
-    }
-
-    if (historicoModo === "mes") {
-      params.set("mes", historicoMes);
-    }
 
     const res = await fetch(`/api/dashboard-summary?${params.toString()}`);
     const data = await res.json();
@@ -665,47 +813,19 @@ export default function DashboardPage() {
     return nombres.sort((a, b) => a.localeCompare(b));
   }, [packs]);
 
-  const availableYears = useMemo(() => {
-    const years = new Set<number>();
-
-    const currentYear = new Date().getFullYear();
-    years.add(currentYear);
-
-    events.forEach((event) => {
-      if (event.fecha) {
-        years.add(new Date(event.fecha).getFullYear());
-      }
-    });
-
-    return Array.from(years).sort((a, b) => b - a);
-  }, [events]);
-
   const packsFiltrados = useMemo(() => {
-    const base = packs.filter((pack) => {
+    return packs.filter((pack) => {
       const presetNombre = pack.presets?.nombre ?? "";
       const flags = getPackFlags(pack);
 
       const cumplePreset = presetFilter === "todos" || presetNombre === presetFilter;
       const cumpleTipo = tipoFilter === "todos" || pack.tipo_pack === tipoFilter;
-      const cumpleIncidencia = !soloIncidencias || flags.hasPendingReplacement || flags.isIncomplete;
+      const cumpleIncidencia =
+        !soloIncidencias || flags.hasPendingReplacement || flags.isIncomplete;
 
       return cumplePreset && cumpleTipo && cumpleIncidencia;
     });
-
-    if (!priorizarIncidencias) return base;
-
-    return [...base].sort((a, b) => {
-      const aFlags = getPackFlags(a);
-      const bFlags = getPackFlags(b);
-
-      const aScore =
-        (aFlags.hasPendingReplacement ? 2 : 0) + (aFlags.isIncomplete ? 1 : 0);
-      const bScore =
-        (bFlags.hasPendingReplacement ? 2 : 0) + (bFlags.isIncomplete ? 1 : 0);
-
-      return bScore - aScore;
-    });
-  }, [packs, presetFilter, tipoFilter, soloIncidencias, priorizarIncidencias]);
+  }, [packs, presetFilter, tipoFilter, soloIncidencias]);
 
   const resumen = useMemo(() => {
     const packsConIncidencias = packsFiltrados.filter((pack) => {
@@ -757,6 +877,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     setLiveStatus(readLiveStatusCache());
+    setDayPnlCache(readLiveDayPnlCache());
     cargarDatos();
     cargarResumenHistorico();
     recargarEstado();
@@ -764,7 +885,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     cargarResumenHistorico();
-  }, [historicoModo, historicoAnio, historicoMes, presetFilter, tipoFilter]);
+  }, [presetFilter, tipoFilter]);
 
   return (
     <div className="space-y-5 text-white">
@@ -814,114 +935,47 @@ export default function DashboardPage() {
       <SectionCard
         title="Filtros"
         right={
-          <div className="flex flex-wrap gap-2">
-            <ActionButton
-              onClick={() => setPriorizarIncidencias((prev) => !prev)}
-              variant={priorizarIncidencias ? "primary" : "ghost"}
-            >
-              {priorizarIncidencias ? "Incidencias primero: sí" : "Incidencias primero"}
-            </ActionButton>
-
-            <ActionButton
-              onClick={() => {
-                setPresetFilter("todos");
-                setTipoFilter("todos");
-                setSoloIncidencias(false);
-                setPriorizarIncidencias(false);
-                setHistoricoModo("todo");
-                setHistoricoAnio(String(currentDate.getFullYear()));
-                setHistoricoMes(String(currentDate.getMonth() + 1));
-              }}
-              variant="ghost"
-            >
-              Limpiar
-            </ActionButton>
-          </div>
+          <ActionButton
+            onClick={() => setSoloIncidencias((prev) => !prev)}
+            variant={soloIncidencias ? "primary" : "secondary"}
+          >
+            {soloIncidencias ? "Alertas: sí" : "Alertas"}
+          </ActionButton>
         }
       >
-        <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-6">
-          <div>
-            <FieldLabel>Período</FieldLabel>
-            <Select
-              value={historicoModo}
-              onChange={(e) => setHistoricoModo(e.target.value)}
-            >
-              <option value="todo">Todo</option>
-              <option value="anio">Año</option>
-              <option value="mes">Mes</option>
-            </Select>
-          </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <FilterPill
+            label="Todos los presets"
+            active={presetFilter === "todos"}
+            onClick={() => setPresetFilter("todos")}
+          />
 
-          {(historicoModo === "anio" || historicoModo === "mes") && (
-            <div>
-              <FieldLabel>Año</FieldLabel>
-              <Select
-                value={historicoAnio}
-                onChange={(e) => setHistoricoAnio(e.target.value)}
-              >
-                {availableYears.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          )}
+          {presetOptions.map((preset) => (
+            <FilterPill
+              key={preset}
+              label={preset}
+              active={presetFilter === preset}
+              onClick={() => setPresetFilter(preset)}
+            />
+          ))}
 
-          {historicoModo === "mes" && (
-            <div>
-              <FieldLabel>Mes</FieldLabel>
-              <Select
-                value={historicoMes}
-                onChange={(e) => setHistoricoMes(e.target.value)}
-              >
-                {MONTH_OPTIONS.map((month) => (
-                  <option key={month.value} value={month.value}>
-                    {month.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-          )}
+          <div className="mx-1 h-8 w-px bg-white/10" />
 
-          <div>
-            <FieldLabel>Preset</FieldLabel>
-            <Select
-              value={presetFilter}
-              onChange={(e) => setPresetFilter(e.target.value)}
-            >
-              <option value="todos">Todos</option>
-              {presetOptions.map((preset) => (
-                <option key={preset} value={preset}>
-                  {preset}
-                </option>
-              ))}
-            </Select>
-          </div>
-
-          <div>
-            <FieldLabel>Tipo</FieldLabel>
-            <Select
-              value={tipoFilter}
-              onChange={(e) => setTipoFilter(e.target.value)}
-            >
-              <option value="todos">Todos</option>
-              <option value="prueba">Prueba</option>
-              <option value="fondeada">Fondeada</option>
-            </Select>
-          </div>
-
-          <div className="flex items-end xl:col-span-2">
-            <label className="inline-flex min-h-[40px] items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-zinc-300">
-              <input
-                type="checkbox"
-                checked={soloIncidencias}
-                onChange={(e) => setSoloIncidencias(e.target.checked)}
-                className="h-4 w-4 rounded border-white/20 bg-transparent"
-              />
-              Solo alertas
-            </label>
-          </div>
+          <FilterPill
+            label="Todos"
+            active={tipoFilter === "todos"}
+            onClick={() => setTipoFilter("todos")}
+          />
+          <FilterPill
+            label="Prueba"
+            active={tipoFilter === "prueba"}
+            onClick={() => setTipoFilter("prueba")}
+          />
+          <FilterPill
+            label="Fondeada"
+            active={tipoFilter === "fondeada"}
+            onClick={() => setTipoFilter("fondeada")}
+          />
         </div>
       </SectionCard>
 
@@ -938,6 +992,7 @@ export default function DashboardPage() {
               key={pack.id}
               pack={pack}
               liveStatus={liveStatus}
+              dayPnlCache={dayPnlCache}
               loading={loading}
               onRotar={rotarPack}
               onEvaluar={evaluarPack}
@@ -956,7 +1011,7 @@ export default function DashboardPage() {
             ref={reemplazoRef}
             className="grid grid-cols-1 gap-3 xl:grid-cols-[0.85fr_1.15fr]"
           >
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4 shadow-[0_12px_28px_rgba(255,255,255,0.03)]">
               <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
                 Pendientes
               </p>
@@ -968,7 +1023,7 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4 shadow-[0_12px_28px_rgba(255,255,255,0.03)]">
               <div className="grid grid-cols-1 gap-2.5">
                 <div>
                   <FieldLabel>Slot pendiente</FieldLabel>
@@ -1024,12 +1079,12 @@ export default function DashboardPage() {
             {resultadosRevision.map((resultado) => (
               <div
                 key={`${resultado.packId}-${resultado.packNombre}`}
-                className="rounded-2xl border border-white/10 bg-black/20 p-3"
+                className="rounded-2xl border border-white/10 bg-black/20 p-3 shadow-[0_12px_28px_rgba(255,255,255,0.03)]"
               >
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <p className="text-sm font-medium text-white">{resultado.packNombre}</p>
                   <span
-                    className={`rounded-full border px-3 py-1 text-xs ${
+                    className={`rounded-full border px-3 py-1 text-xs shadow-[0_10px_22px_rgba(255,255,255,0.03)] ${
                       resultado.ok
                         ? "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-200"
                         : "border-amber-300/20 bg-amber-300/[0.08] text-amber-200"
@@ -1045,10 +1100,7 @@ export default function DashboardPage() {
         </SectionCard>
       )}
 
-      <SectionCard
-        title="Actividad reciente"
-        right={<ActionButton variant="ghost">Ver todo</ActionButton>}
-      >
+      <SectionCard title="Actividad reciente">
         <div className="space-y-2.5">
           {eventosRecientes.length === 0 && (
             <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-zinc-500">
@@ -1059,7 +1111,7 @@ export default function DashboardPage() {
           {eventosRecientes.map((event) => (
             <div
               key={event.id}
-              className="rounded-2xl border border-white/10 bg-black/20 p-3"
+              className="rounded-2xl border border-white/10 bg-black/20 p-3 shadow-[0_12px_28px_rgba(255,255,255,0.03)]"
             >
               <div className="flex flex-col gap-1.5 md:flex-row md:items-start md:justify-between">
                 <div className="space-y-1">
@@ -1087,6 +1139,7 @@ export default function DashboardPage() {
 function PackCard({
   pack,
   liveStatus,
+  dayPnlCache,
   loading,
   onRotar,
   onEvaluar,
@@ -1097,6 +1150,7 @@ function PackCard({
 }: {
   pack: Pack;
   liveStatus: LiveStatusMap;
+  dayPnlCache: DayPnlCacheMap;
   loading: boolean;
   onRotar: (packId: number, packNombre: string) => void;
   onEvaluar: (packId: number, packNombre: string) => void;
@@ -1109,7 +1163,7 @@ function PackCard({
   const displaySlots = buildDisplaySlots(pack);
 
   return (
-    <div className="overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(255,255,255,0.01))] shadow-[0_10px_28px_rgba(0,0,0,0.18)]">
+    <div className="overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(255,255,255,0.01))] shadow-[0_14px_30px_rgba(0,0,0,0.18)]">
       <div className="border-b border-white/8 px-4 py-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -1117,29 +1171,29 @@ function PackCard({
               <h3 className="text-lg font-medium text-white">{pack.nombre}</h3>
 
               {flags.hasPendingReplacement && (
-                <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.10] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-amber-100">
+                <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.10] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-amber-100 shadow-[0_10px_20px_rgba(251,191,36,0.08)]">
                   Incidencia
                 </span>
               )}
 
               {!flags.hasPendingReplacement && flags.isIncomplete && (
-                <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.10] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-amber-100">
+                <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.10] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-amber-100 shadow-[0_10px_20px_rgba(251,191,36,0.08)]">
                   Incompleto
                 </span>
               )}
 
               {!flags.hasPendingReplacement && !flags.isIncomplete && (
-                <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-400 shadow-[0_10px_20px_rgba(255,255,255,0.03)]">
                   Estable
                 </span>
               )}
             </div>
 
             <div className="mt-2 flex flex-wrap gap-2 text-xs text-zinc-400">
-              <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+              <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 shadow-[0_10px_20px_rgba(255,255,255,0.03)]">
                 Preset: {pack.presets?.nombre ?? "-"}
               </span>
-              <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+              <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 shadow-[0_10px_20px_rgba(255,255,255,0.03)]">
                 Tipo: {pack.tipo_pack}
               </span>
             </div>
@@ -1182,17 +1236,21 @@ function PackCard({
           const live = numeroCuenta ? liveStatus[numeroCuenta] : undefined;
           const missingAccount = !slot.accounts?.id;
 
+          const displayHoyPct = numeroCuenta
+            ? resolveDisplayDayPct(numeroCuenta, live, dayPnlCache)
+            : null;
+
           return (
             <div
               key={`${slot.id}-${slot.slot}`}
-              className={`rounded-2xl border p-3 transition ${
+              className={`rounded-2xl border p-3 transition-all duration-200 ${
                 slot.es_activa
-                  ? "border-sky-300/25 bg-[linear-gradient(180deg,rgba(56,189,248,0.10),rgba(56,189,248,0.05))] shadow-[0_0_0_1px_rgba(125,211,252,0.06)]"
+                  ? "border-sky-300/25 bg-[linear-gradient(180deg,rgba(56,189,248,0.10),rgba(56,189,248,0.05))] shadow-[0_0_0_1px_rgba(125,211,252,0.06),0_14px_30px_rgba(56,189,248,0.08)]"
                   : slot.pendiente_reemplazo
-                  ? "border-amber-300/20 bg-amber-300/[0.08]"
+                  ? "border-amber-300/20 bg-amber-300/[0.08] shadow-[0_14px_30px_rgba(251,191,36,0.06)]"
                   : missingAccount
-                  ? "border-white/10 bg-black/10"
-                  : "border-white/10 bg-black/20"
+                  ? "border-white/10 bg-black/10 shadow-[0_12px_26px_rgba(255,255,255,0.02)]"
+                  : "border-white/10 bg-black/20 shadow-[0_12px_26px_rgba(255,255,255,0.02)]"
               }`}
             >
               <div className="mb-3 flex items-start justify-between gap-2">
@@ -1207,23 +1265,23 @@ function PackCard({
 
                 <div className="flex flex-col items-end gap-1">
                   <span
-                    className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                    className={`rounded-full border px-2 py-0.5 text-[10px] shadow-[0_8px_18px_rgba(255,255,255,0.03)] ${
                       slot.es_activa
                         ? "border-sky-300/20 bg-sky-300/[0.12] text-sky-100"
-                        : "border-white/10 bg-white/5 text-zinc-400"
+                        : "border-white/10 bg-white/[0.05] text-zinc-400"
                     }`}
                   >
                     {slot.es_activa ? "Activa" : "Inactiva"}
                   </span>
 
                   {slot.pendiente_reemplazo && (
-                    <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.10] px-2 py-0.5 text-[10px] text-amber-100">
+                    <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.10] px-2 py-0.5 text-[10px] text-amber-100 shadow-[0_8px_18px_rgba(251,191,36,0.08)]">
                       Reemplazo
                     </span>
                   )}
 
                   {missingAccount && !slot.pendiente_reemplazo && (
-                    <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-zinc-400">
+                    <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[10px] text-zinc-400 shadow-[0_8px_18px_rgba(255,255,255,0.03)]">
                       Sin cuenta
                     </span>
                   )}
@@ -1235,7 +1293,7 @@ function PackCard({
                 <p>Estado: {slot.accounts?.estado ?? "-"}</p>
                 <p>Tipo: {slot.accounts?.tipo_cuenta ?? "-"}</p>
 
-                <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-white/5 bg-black/20 p-2.5">
+                <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-white/5 bg-black/20 p-2.5 shadow-[0_10px_22px_rgba(0,0,0,0.16)]">
                   <div>
                     <p className="text-[9px] uppercase tracking-[0.12em] text-zinc-500">
                       Total %
@@ -1255,10 +1313,10 @@ function PackCard({
                     </p>
                     <p
                       className={`mt-1 text-sm font-medium ${getLivePnlClass(
-                        live?.pnl_hoy_pct ?? live?.pnl_pct_actual
+                        displayHoyPct
                       )}`}
                     >
-                      {formatPercent(live?.pnl_hoy_pct ?? live?.pnl_pct_actual)}
+                      {formatPercent(displayHoyPct)}
                     </p>
                   </div>
                 </div>
