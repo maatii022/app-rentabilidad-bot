@@ -34,9 +34,25 @@ type AccountEvent = {
   accounts?: AccountRelation;
 };
 
+type PresetOption = {
+  id: number;
+  nombre: string;
+};
+
 type AccountOption = {
   id: number;
+  alias: string;
+  numero_cuenta: string;
+  preset_id: number | null;
+  preset_nombre: string;
   label: string;
+};
+
+type CalendarEventItem = {
+  id: string;
+  kind: "sord" | "perdida" | "fondeada" | "reemplazo" | "otro";
+  label: string;
+  count?: number;
 };
 
 type CalendarDayData = {
@@ -46,12 +62,22 @@ type CalendarDayData = {
   resultCount: number;
   redDayCount: number;
   events: CalendarEventItem[];
-};
-
-type CalendarEventItem = {
-  id: string;
-  kind: "sord" | "perdida" | "fondeada" | "reemplazo" | "otro";
-  label: string;
+  resultDetails: {
+    id: number;
+    accountId: number;
+    alias: string;
+    numeroCuenta: string;
+    pnlUsd: number;
+    pnlPct: number;
+    redDay: boolean;
+  }[];
+  eventDetails: {
+    id: number;
+    tipo: string;
+    descripcion: string;
+    alias: string;
+    numeroCuenta: string;
+  }[];
 };
 
 const DAY_LABELS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -62,18 +88,8 @@ function getAccountData(accounts: AccountRelation) {
 }
 
 function formatUsd(value: number) {
-  const abs = Math.abs(value);
-
-  if (abs >= 1000) {
-    return value.toLocaleString("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  }
-
-  return `${value >= 0 ? "$" : "-$"}${Math.abs(value).toFixed(2)}`;
+  const sign = value < 0 ? "-" : "";
+  return `${sign}$${Math.abs(value).toFixed(2)}`;
 }
 
 function formatPct(value: number) {
@@ -206,14 +222,25 @@ function Select({
   );
 }
 
+function getEventPillClasses(kind: CalendarEventItem["kind"]) {
+  if (kind === "sord") return "border-sky-300/20 bg-sky-300/[0.10] text-sky-200";
+  if (kind === "perdida") return "border-amber-300/20 bg-amber-300/[0.10] text-amber-200";
+  if (kind === "fondeada") return "border-violet-300/20 bg-violet-300/[0.10] text-violet-200";
+  if (kind === "reemplazo") return "border-emerald-300/20 bg-emerald-300/[0.10] text-emerald-200";
+  return "border-white/10 bg-white/[0.05] text-zinc-300";
+}
+
 export default function CalendarioPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [dailyResults, setDailyResults] = useState<DailyResult[]>([]);
   const [events, setEvents] = useState<AccountEvent[]>([]);
+  const [presets, setPresets] = useState<PresetOption[]>([]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [viewMode, setViewMode] = useState<"pnl" | "events">("pnl");
+  const [selectedPresetId, setSelectedPresetId] = useState("todos");
   const [selectedAccountId, setSelectedAccountId] = useState("total");
+  const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -273,16 +300,26 @@ export default function CalendarioPage() {
       .lte("fecha", endKey)
       .order("fecha", { ascending: true });
 
+    const presetsQuery = supabase
+      .from("presets")
+      .select("id, nombre")
+      .order("nombre", { ascending: true });
+
     const accountsQuery = supabase
       .from("accounts")
-      .select("id, alias, numero_cuenta")
+      .select(`
+        id,
+        alias,
+        numero_cuenta,
+        preset_id,
+        presets (
+          nombre
+        )
+      `)
       .order("alias", { ascending: true });
 
-    const [dailyResponse, eventResponse, accountResponse] = await Promise.all([
-      dailyQuery,
-      eventQuery,
-      accountsQuery,
-    ]);
+    const [dailyResponse, eventResponse, presetsResponse, accountsResponse] =
+      await Promise.all([dailyQuery, eventQuery, presetsQuery, accountsQuery]);
 
     if (dailyResponse.error) {
       setError(dailyResponse.error.message);
@@ -296,20 +333,47 @@ export default function CalendarioPage() {
       return;
     }
 
-    if (accountResponse.error) {
-      setError(accountResponse.error.message);
+    if (presetsResponse.error) {
+      setError(presetsResponse.error.message);
       setLoading(false);
       return;
     }
 
+    if (accountsResponse.error) {
+      setError(accountsResponse.error.message);
+      setLoading(false);
+      return;
+    }
+
+    const rawAccounts = (accountsResponse.data || []) as Array<{
+      id: number;
+      alias: string;
+      numero_cuenta: string;
+      preset_id: number | null;
+      presets?: { nombre: string } | { nombre: string }[] | null;
+    }>;
+
+    const mappedAccounts: AccountOption[] = rawAccounts.map((account) => {
+      const presetRaw = Array.isArray(account.presets)
+        ? account.presets[0]
+        : account.presets;
+
+      const presetNombre = presetRaw?.nombre ?? "Sin preset";
+
+      return {
+        id: account.id,
+        alias: account.alias,
+        numero_cuenta: account.numero_cuenta,
+        preset_id: account.preset_id,
+        preset_nombre: presetNombre,
+        label: `${account.alias} · ${account.numero_cuenta}`,
+      };
+    });
+
     setDailyResults((dailyResponse.data || []) as DailyResult[]);
     setEvents((eventResponse.data || []) as AccountEvent[]);
-    setAccounts(
-      (accountResponse.data || []).map((account) => ({
-        id: account.id,
-        label: `${account.alias} · ${account.numero_cuenta}`,
-      }))
-    );
+    setPresets((presetsResponse.data || []) as PresetOption[]);
+    setAccounts(mappedAccounts);
     setLoading(false);
   }
 
@@ -317,17 +381,49 @@ export default function CalendarioPage() {
     cargarDatos();
   }, [currentMonth]);
 
+  const filteredAccounts = useMemo(() => {
+    if (selectedPresetId === "todos") return accounts;
+    const presetId = Number(selectedPresetId);
+    return accounts.filter((account) => account.preset_id === presetId);
+  }, [accounts, selectedPresetId]);
+
+  useEffect(() => {
+    if (
+      selectedAccountId !== "total" &&
+      !filteredAccounts.some((account) => String(account.id) === selectedAccountId)
+    ) {
+      setSelectedAccountId("total");
+    }
+  }, [filteredAccounts, selectedAccountId]);
+
+  const allowedAccountIds = useMemo(() => {
+    if (selectedPresetId === "todos") {
+      return new Set(accounts.map((account) => account.id));
+    }
+
+    return new Set(filteredAccounts.map((account) => account.id));
+  }, [accounts, filteredAccounts, selectedPresetId]);
+
   const filteredResults = useMemo(() => {
-    if (selectedAccountId === "total") return dailyResults;
+    let base = dailyResults.filter((item) => allowedAccountIds.has(item.account_id));
+
+    if (selectedAccountId === "total") return base;
+
     const accountId = Number(selectedAccountId);
-    return dailyResults.filter((item) => item.account_id === accountId);
-  }, [dailyResults, selectedAccountId]);
+    return base.filter((item) => item.account_id === accountId);
+  }, [dailyResults, allowedAccountIds, selectedAccountId]);
 
   const filteredEvents = useMemo(() => {
-    if (selectedAccountId === "total") return events;
+    let base = events.filter((item) => {
+      if (!item.account_id) return true;
+      return allowedAccountIds.has(item.account_id);
+    });
+
+    if (selectedAccountId === "total") return base;
+
     const accountId = Number(selectedAccountId);
-    return events.filter((item) => item.account_id === accountId);
-  }, [events, selectedAccountId]);
+    return base.filter((item) => item.account_id === accountId);
+  }, [events, allowedAccountIds, selectedAccountId]);
 
   const dailyMap = useMemo(() => {
     const resultMap = new Map<string, CalendarDayData>();
@@ -341,7 +437,11 @@ export default function CalendarioPage() {
         resultCount: 0,
         redDayCount: 0,
         events: [],
+        resultDetails: [],
+        eventDetails: [],
       };
+
+      const account = getAccountData(result.accounts);
 
       existing.totalUsd += Number(result.pnl_usd || 0);
       existing.totalPct += Number(result.pnl_porcentaje || 0);
@@ -350,6 +450,16 @@ export default function CalendarioPage() {
       if (result.red_day) {
         existing.redDayCount += 1;
       }
+
+      existing.resultDetails.push({
+        id: result.id,
+        accountId: result.account_id,
+        alias: account?.alias ?? "-",
+        numeroCuenta: account?.numero_cuenta ?? "-",
+        pnlUsd: Number(result.pnl_usd || 0),
+        pnlPct: Number(result.pnl_porcentaje || 0),
+        redDay: result.red_day,
+      });
 
       resultMap.set(key, existing);
     });
@@ -365,9 +475,20 @@ export default function CalendarioPage() {
         resultCount: 0,
         redDayCount: 0,
         events: [],
+        resultDetails: [],
+        eventDetails: [],
       };
 
+      const account = getAccountData(event.accounts);
       const kind = mapEventKind(event.tipo_evento);
+
+      target.eventDetails.push({
+        id: event.id,
+        tipo: event.tipo_evento,
+        descripcion: event.descripcion ?? "",
+        alias: account?.alias ?? "-",
+        numeroCuenta: account?.numero_cuenta ?? "-",
+      });
 
       if (kind === "sord" && event.pack_id) {
         const groupKey = `${dateKey}_${event.pack_id}`;
@@ -418,13 +539,58 @@ export default function CalendarioPage() {
     });
 
     resultMap.forEach((day) => {
-      day.events = day.events.slice(0, 4);
+      const grouped = new Map<string, CalendarEventItem>();
+
+      day.events.forEach((event) => {
+        const key = `${event.kind}_${event.label}`;
+        const existing = grouped.get(key);
+
+        if (existing) {
+          existing.count = (existing.count ?? 1) + 1;
+        } else {
+          grouped.set(key, { ...event, count: 1 });
+        }
+      });
+
+      day.events = Array.from(grouped.values())
+        .map((event) => ({
+          ...event,
+          label: event.count && event.count > 1 ? `${event.label} ×${event.count}` : event.label,
+        }))
+        .slice(0, 4);
     });
 
     return resultMap;
   }, [filteredResults, filteredEvents]);
 
   const calendarCells = useMemo(() => buildCalendarMatrix(currentMonth), [currentMonth]);
+
+  const calendarWeeks = useMemo(() => {
+    const weeks: Date[][] = [];
+
+    for (let i = 0; i < calendarCells.length; i += 7) {
+      weeks.push(calendarCells.slice(i, i + 7));
+    }
+
+    return weeks;
+  }, [calendarCells]);
+
+  const compactWeekFlags = useMemo(() => {
+    return calendarWeeks.map((week) => {
+      return !week.some((date) => {
+        const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
+        if (!isCurrentMonth) return false;
+
+        const dayData = dailyMap.get(toDateKey(date));
+
+        if (!dayData) return false;
+        if (dayData.resultCount > 0) return true;
+        if (dayData.events.length > 0) return true;
+
+        return false;
+      });
+    });
+  }, [calendarWeeks, currentMonth, dailyMap]);
 
   const monthSummary = useMemo(() => {
     const values = Array.from(dailyMap.values());
@@ -446,16 +612,20 @@ export default function CalendarioPage() {
     );
   }, [dailyMap]);
 
+  const selectedDay = selectedDayKey ? dailyMap.get(selectedDayKey) : undefined;
+
   function previousMonth() {
     setCurrentMonth(
       (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)
     );
+    setSelectedDayKey(null);
   }
 
   function nextMonth() {
     setCurrentMonth(
       (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)
     );
+    setSelectedDayKey(null);
   }
 
   function getDayTone(day: CalendarDayData | undefined) {
@@ -464,14 +634,6 @@ export default function CalendarioPage() {
     if (day.totalUsd > 0) return "border-emerald-400/25 bg-emerald-400/[0.08]";
     if (day.totalUsd < 0) return "border-rose-400/25 bg-rose-400/[0.08]";
     return "border-white/10 bg-white/[0.03]";
-  }
-
-  function getEventPillClasses(kind: CalendarEventItem["kind"]) {
-    if (kind === "sord") return "border-sky-300/20 bg-sky-300/[0.10] text-sky-200";
-    if (kind === "perdida") return "border-amber-300/20 bg-amber-300/[0.10] text-amber-200";
-    if (kind === "fondeada") return "border-violet-300/20 bg-violet-300/[0.10] text-violet-200";
-    if (kind === "reemplazo") return "border-emerald-300/20 bg-emerald-300/[0.10] text-emerald-200";
-    return "border-white/10 bg-white/[0.05] text-zinc-300";
   }
 
   return (
@@ -498,11 +660,27 @@ export default function CalendarioPage() {
             </div>
 
             <Select
+              value={selectedPresetId}
+              onChange={setSelectedPresetId}
+            >
+              <option value="todos">Todos los presets</option>
+              {presets.map((preset) => (
+                <option key={preset.id} value={String(preset.id)}>
+                  {preset.nombre}
+                </option>
+              ))}
+            </Select>
+
+            <Select
               value={selectedAccountId}
               onChange={setSelectedAccountId}
             >
-              <option value="total">Total, todas las cuentas</option>
-              {accounts.map((account) => (
+              <option value="total">
+                {selectedPresetId === "todos"
+                  ? "Total, todas las cuentas"
+                  : "Total del preset"}
+              </option>
+              {filteredAccounts.map((account) => (
                 <option key={account.id} value={String(account.id)}>
                   {account.label}
                 </option>
@@ -580,101 +758,234 @@ export default function CalendarioPage() {
             Error: {error}
           </div>
         ) : (
-          <div className="space-y-2">
-            <div className="grid grid-cols-7 gap-2">
-              {DAY_LABELS.map((label) => (
-                <div
-                  key={label}
-                  className="rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-4 text-center text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500"
-                >
-                  {label}
-                </div>
-              ))}
-            </div>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_340px]">
+            <div className="space-y-2">
+              <div className="grid grid-cols-7 gap-2">
+                {DAY_LABELS.map((label) => (
+                  <div
+                    key={label}
+                    className="rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-4 text-center text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500"
+                  >
+                    {label}
+                  </div>
+                ))}
+              </div>
 
-            <div className="grid grid-cols-7 gap-2">
-              {calendarCells.map((date) => {
-                const dateKey = toDateKey(date);
-                const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
-                const dayData = dailyMap.get(dateKey);
-                const hasVisibleContent =
-                  (viewMode === "pnl" && !!dayData?.resultCount) ||
-                  (viewMode === "events" && !!dayData?.events.length);
+              {calendarWeeks.map((week, weekIndex) => {
+                const compactWeek = compactWeekFlags[weekIndex];
 
                 return (
-                  <div
-                    key={dateKey}
-                    className={`min-h-[118px] rounded-2xl border p-3 transition ${getDayTone(
-                      dayData
-                    )} ${!isCurrentMonth ? "opacity-35" : "opacity-100"}`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-lg font-semibold text-white">
-                        {date.getDate()}
-                      </p>
+                  <div key={`week_${weekIndex}`} className="grid grid-cols-7 gap-2">
+                    {week.map((date) => {
+                      const dateKey = toDateKey(date);
+                      const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
+                      const dayData = dailyMap.get(dateKey);
+                      const hasVisibleContent =
+                        (viewMode === "pnl" && !!dayData?.resultCount) ||
+                        (viewMode === "events" && !!dayData?.events.length);
 
-                      {dayData && dayData.resultCount > 0 && (
-                        <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[10px] text-zinc-400">
-                          {dayData.resultCount}
-                        </span>
-                      )}
-                    </div>
+                      return (
+                        <button
+                          key={dateKey}
+                          type="button"
+                          onClick={() => isCurrentMonth && setSelectedDayKey(dateKey)}
+                          className={`rounded-2xl border p-3 text-left transition ${getDayTone(
+                            dayData
+                          )} ${
+                            !isCurrentMonth ? "opacity-35" : "opacity-100"
+                          } ${
+                            selectedDayKey === dateKey
+                              ? "shadow-[0_0_0_1px_rgba(255,255,255,0.18)]"
+                              : ""
+                          } ${
+                            compactWeek ? "min-h-[74px]" : "min-h-[138px]"
+                          }`}
+                        >
+                          <div className="flex h-full flex-col">
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-lg font-semibold text-white">
+                                {date.getDate()}
+                              </p>
 
-                    {hasVisibleContent ? (
-                      viewMode === "pnl" ? (
-                        <div className="mt-4 space-y-1">
-                          <p
-                            className={`text-3xl font-semibold leading-none ${
-                              dayData && dayData.totalUsd > 0
-                                ? "text-emerald-300"
-                                : dayData && dayData.totalUsd < 0
-                                ? "text-rose-300"
-                                : "text-white"
-                            }`}
-                          >
-                            {dayData ? formatUsd(dayData.totalUsd) : "-"}
-                          </p>
+                              {dayData && dayData.resultCount > 0 && (
+                                <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[10px] text-zinc-400">
+                                  {dayData.resultCount}
+                                </span>
+                              )}
+                            </div>
 
-                          <p
-                            className={`text-sm font-medium ${
-                              dayData && dayData.totalPct > 0
-                                ? "text-emerald-300"
-                                : dayData && dayData.totalPct < 0
-                                ? "text-rose-300"
-                                : "text-zinc-300"
-                            }`}
-                          >
-                            {dayData ? formatPct(dayData.totalPct) : "-"}
-                          </p>
+                            <div className="flex flex-1 items-center justify-center">
+                              {hasVisibleContent ? (
+                                viewMode === "pnl" ? (
+                                  <div className="w-full text-center">
+                                    <p
+                                      className={`text-2xl font-semibold leading-none ${
+                                        dayData && dayData.totalUsd > 0
+                                          ? "text-emerald-300"
+                                          : dayData && dayData.totalUsd < 0
+                                          ? "text-rose-300"
+                                          : "text-white"
+                                      }`}
+                                    >
+                                      {dayData ? formatUsd(dayData.totalUsd) : "-"}
+                                    </p>
 
-                          <p className="pt-1 text-[11px] text-zinc-500">
-                            {dayData?.redDayCount
-                              ? `${dayData.redDayCount} red day`
-                              : `${dayData?.resultCount ?? 0} cuenta${dayData?.resultCount === 1 ? "" : "s"}`}
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="mt-3 flex flex-col gap-1.5">
-                          {dayData?.events.map((event) => (
-                            <span
-                              key={event.id}
-                              className={`inline-flex w-fit rounded-full border px-2.5 py-1 text-[11px] font-medium ${getEventPillClasses(
-                                event.kind
-                              )}`}
-                            >
-                              {event.label}
-                            </span>
-                          ))}
-                        </div>
-                      )
-                    ) : (
-                      <div className="mt-4 text-xs text-zinc-600">
-                        {isCurrentMonth ? " " : ""}
-                      </div>
-                    )}
+                                    <p
+                                      className={`mt-2 text-sm font-medium ${
+                                        dayData && dayData.totalPct > 0
+                                          ? "text-emerald-300"
+                                          : dayData && dayData.totalPct < 0
+                                          ? "text-rose-300"
+                                          : "text-zinc-300"
+                                      }`}
+                                    >
+                                      {dayData ? formatPct(dayData.totalPct) : "-"}
+                                    </p>
+
+                                    <p className="mt-2 text-[11px] text-zinc-500">
+                                      {dayData?.redDayCount
+                                        ? `${dayData.redDayCount} red day`
+                                        : `${dayData?.resultCount ?? 0} cuenta${
+                                            dayData?.resultCount === 1 ? "" : "s"
+                                          }`}
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <div className="flex w-full flex-col items-center gap-1.5">
+                                    {dayData?.events.map((event) => (
+                                      <span
+                                        key={event.id}
+                                        className={`inline-flex w-fit rounded-full border px-2.5 py-1 text-[11px] font-medium ${getEventPillClasses(
+                                          event.kind
+                                        )}`}
+                                      >
+                                        {event.label}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )
+                              ) : null}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 );
               })}
+            </div>
+
+            <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[0_14px_30px_rgba(0,0,0,0.16)]">
+              {!selectedDayKey ? (
+                <div className="flex h-full min-h-[240px] items-center justify-center text-center text-sm text-zinc-500">
+                  Pulsa un día para ver el detalle.
+                </div>
+              ) : !selectedDay ? (
+                <div className="flex h-full min-h-[240px] items-center justify-center text-center text-sm text-zinc-500">
+                  No hay datos para este día.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
+                      Fecha
+                    </p>
+                    <p className="mt-1 text-2xl font-semibold text-white">
+                      {selectedDay.fecha}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
+                        USD
+                      </p>
+                      <p className="mt-2 text-xl font-semibold text-white">
+                        {formatUsd(selectedDay.totalUsd)}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                      <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
+                        %
+                      </p>
+                      <p className="mt-2 text-xl font-semibold text-white">
+                        {formatPct(selectedDay.totalPct)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-white">Resultados</p>
+
+                    {selectedDay.resultDetails.length === 0 ? (
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-zinc-500">
+                        Sin resultados.
+                      </div>
+                    ) : (
+                      selectedDay.resultDetails.map((result) => (
+                        <div
+                          key={result.id}
+                          className="rounded-2xl border border-white/10 bg-white/[0.03] p-3"
+                        >
+                          <p className="text-sm font-medium text-white">
+                            {result.alias} · {result.numeroCuenta}
+                          </p>
+                          <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+                            <span
+                              className={
+                                result.pnlUsd > 0
+                                  ? "text-emerald-300"
+                                  : result.pnlUsd < 0
+                                  ? "text-rose-300"
+                                  : "text-zinc-300"
+                              }
+                            >
+                              {formatUsd(result.pnlUsd)}
+                            </span>
+                            <span
+                              className={
+                                result.pnlPct > 0
+                                  ? "text-emerald-300"
+                                  : result.pnlPct < 0
+                                  ? "text-rose-300"
+                                  : "text-zinc-300"
+                              }
+                            >
+                              {formatPct(result.pnlPct)}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-white">Eventos</p>
+
+                    {selectedDay.eventDetails.length === 0 ? (
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-zinc-500">
+                        Sin eventos.
+                      </div>
+                    ) : (
+                      selectedDay.eventDetails.map((event) => (
+                        <div
+                          key={event.id}
+                          className="rounded-2xl border border-white/10 bg-white/[0.03] p-3"
+                        >
+                          <p className="text-sm font-medium text-white">{event.tipo}</p>
+                          <p className="mt-1 text-sm text-zinc-400">
+                            {event.alias} · {event.numeroCuenta}
+                          </p>
+                          {event.descripcion ? (
+                            <p className="mt-2 text-sm text-zinc-500">{event.descripcion}</p>
+                          ) : null}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
