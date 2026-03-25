@@ -84,6 +84,7 @@ type DayPnlCacheMap = Record<
     date: string;
     pct: number | null;
     usd: number | null;
+    totalPct: number | null;
   }
 >;
 
@@ -109,7 +110,7 @@ function SectionCard({
   right?: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
+    <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)] transition-all duration-300 hover:shadow-[0_22px_46px_rgba(0,0,0,0.24)]">
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h2 className="text-sm font-medium text-white">{title}</h2>
         {right ? <div className="flex flex-wrap gap-2">{right}</div> : null}
@@ -144,7 +145,9 @@ function StatCard({
   };
 
   return (
-    <div className={`rounded-2xl border p-3 ${toneClasses[tone]}`}>
+    <div
+      className={`rounded-2xl border p-3 transition-all duration-300 hover:-translate-y-[1px] hover:shadow-[0_18px_34px_rgba(0,0,0,0.16)] ${toneClasses[tone]}`}
+    >
       <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-400">{label}</p>
       <p className="mt-2 text-2xl font-semibold leading-none text-white">{value}</p>
     </div>
@@ -160,7 +163,7 @@ function ActionButton({
   children: React.ReactNode;
   onClick?: () => void;
   disabled?: boolean;
-  variant?: "primary" | "secondary" | "danger" | "ghost";
+  variant?: "primary" | "secondary" | "danger" | "ghost" | "warning";
 }) {
   const styles = {
     primary:
@@ -171,6 +174,8 @@ function ActionButton({
       "border border-white/10 bg-zinc-800 text-white shadow-[0_10px_24px_rgba(0,0,0,0.18)] hover:bg-zinc-700",
     ghost:
       "border border-white/10 bg-transparent text-zinc-300 hover:bg-white/[0.05] hover:text-white",
+    warning:
+      "border border-amber-300/20 bg-amber-300/[0.10] text-amber-100 shadow-[0_12px_26px_rgba(251,191,36,0.10)] hover:bg-amber-300/[0.14]",
   };
 
   return (
@@ -188,18 +193,25 @@ function FilterPill({
   label,
   active,
   onClick,
+  tone = "blue",
 }: {
   label: string;
   active?: boolean;
   onClick?: () => void;
+  tone?: "blue" | "amber";
 }) {
+  const activeClasses =
+    tone === "amber"
+      ? "border-amber-300/20 bg-[linear-gradient(180deg,rgba(251,191,36,0.16),rgba(251,191,36,0.07))] text-amber-100 shadow-[0_12px_28px_rgba(251,191,36,0.14)]"
+      : "border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.16),rgba(56,189,248,0.07))] text-white shadow-[0_12px_28px_rgba(56,189,248,0.14)]";
+
   return (
     <button
       type="button"
       onClick={onClick}
       className={`rounded-xl border px-3 py-2 text-sm font-medium transition-all duration-200 ${
         active
-          ? "scale-[0.985] border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.16),rgba(56,189,248,0.07))] text-white shadow-[0_12px_28px_rgba(56,189,248,0.14)]"
+          ? `scale-[0.985] ${activeClasses}`
           : "border-white/10 bg-white/[0.03] text-zinc-200 shadow-[0_10px_22px_rgba(255,255,255,0.03)] hover:bg-white/[0.06] hover:text-white"
       }`}
     >
@@ -391,7 +403,7 @@ function resolveDisplayDayPct(
   return incomingPct;
 }
 
-function resolveDisplayDayUsd(
+function resolveDisplayTotalPct(
   numeroCuenta: string,
   live: LiveStatusItem | undefined,
   dayPnlCache: DayPnlCacheMap
@@ -399,19 +411,26 @@ function resolveDisplayDayUsd(
   const todayKey = getTodayKey();
   const cached = dayPnlCache[numeroCuenta];
 
-  const incomingUsd =
-    typeof live?.pnl_hoy_usd === "number" && !Number.isNaN(live.pnl_hoy_usd)
-      ? live.pnl_hoy_usd
+  const incomingTotalPct =
+    typeof live?.profit_total_pct === "number" && !Number.isNaN(live.profit_total_pct)
+      ? live.profit_total_pct
       : null;
 
-  if (cached && cached.date === todayKey) {
-    if (incomingUsd === null || incomingUsd === 0) {
-      return cached.usd;
-    }
-    return incomingUsd;
+  const displayDayPct = resolveDisplayDayPct(numeroCuenta, live, dayPnlCache);
+
+  if (incomingTotalPct === null) {
+    return null;
   }
 
-  return incomingUsd;
+  if (cached && cached.date === todayKey && cached.totalPct !== null) {
+    if (displayDayPct !== null && cached.pct !== null) {
+      return cached.totalPct + (displayDayPct - cached.pct);
+    }
+
+    return cached.totalPct;
+  }
+
+  return incomingTotalPct;
 }
 
 function mergeLiveDayPnlCache(
@@ -442,6 +461,11 @@ function mergeLiveDayPnlCache(
         ? live.pnl_hoy_usd
         : null;
 
+    const incomingTotalPct =
+      typeof live?.profit_total_pct === "number" && !Number.isNaN(live.profit_total_pct)
+        ? live.profit_total_pct
+        : null;
+
     const nextPct =
       incomingPct !== null && incomingPct !== 0
         ? incomingPct
@@ -456,10 +480,18 @@ function mergeLiveDayPnlCache(
         ? existing.usd
         : null;
 
+    const nextTotalPct =
+      incomingTotalPct !== null
+        ? incomingTotalPct
+        : existing?.date === todayKey
+        ? existing.totalPct
+        : null;
+
     next[numeroCuenta] = {
       date: todayKey,
       pct: nextPct,
       usd: nextUsd,
+      totalPct: nextTotalPct,
     };
   });
 
@@ -833,14 +865,6 @@ export default function DashboardPage() {
       return flags.hasPendingReplacement || flags.isIncomplete;
     }).length;
 
-    const slotsPendientes = packsFiltrados.reduce((acc, pack) => {
-      return (
-        acc +
-        buildDisplaySlots(pack).filter((slot) => slot.pendiente_reemplazo || !slot.accounts?.id)
-          .length
-      );
-    }, 0);
-
     const cuentasActivas = packsFiltrados.reduce((acc, pack) => {
       return acc + (pack.pack_slots?.filter((slot) => slot.accounts?.estado === "activa").length ?? 0);
     }, 0);
@@ -848,7 +872,6 @@ export default function DashboardPage() {
     return {
       packsVisibles: packsFiltrados.length,
       packsConIncidencias,
-      slotsPendientes,
       cuentasActivas,
     };
   }, [packsFiltrados]);
@@ -889,7 +912,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5 text-white">
-      <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
+      <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)] transition-all duration-300 hover:shadow-[0_22px_46px_rgba(0,0,0,0.24)]">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
             <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">
@@ -922,10 +945,9 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-2.5 xl:grid-cols-6">
-          <StatCard label="Packs visibles" value={resumen.packsVisibles} tone="blue" />
+        <div className="mt-6 grid grid-cols-2 gap-2.5 xl:grid-cols-5">
+          <StatCard label="Packs" value={resumen.packsVisibles} tone="blue" />
           <StatCard label="Con alertas" value={resumen.packsConIncidencias} tone="amber" />
-          <StatCard label="Slots pendientes" value={resumen.slotsPendientes} tone="amber" />
           <StatCard label="Cuentas activas" value={resumen.cuentasActivas} tone="green" />
           <StatCard label="Fondeadas" value={summary.fondeadasHistoricas} tone="violet" />
           <StatCard label="Perdidas" value={summary.perdidasHistoricas} tone="red" />
@@ -937,7 +959,7 @@ export default function DashboardPage() {
         right={
           <ActionButton
             onClick={() => setSoloIncidencias((prev) => !prev)}
-            variant={soloIncidencias ? "primary" : "secondary"}
+            variant={soloIncidencias ? "warning" : "secondary"}
           >
             {soloIncidencias ? "Alertas: sí" : "Alertas"}
           </ActionButton>
@@ -1011,7 +1033,7 @@ export default function DashboardPage() {
             ref={reemplazoRef}
             className="grid grid-cols-1 gap-3 xl:grid-cols-[0.85fr_1.15fr]"
           >
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-4 shadow-[0_12px_28px_rgba(255,255,255,0.03)]">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4 shadow-[0_12px_28px_rgba(255,255,255,0.03)] transition-all duration-300 hover:shadow-[0_16px_34px_rgba(255,255,255,0.04)]">
               <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
                 Pendientes
               </p>
@@ -1023,7 +1045,7 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-4 shadow-[0_12px_28px_rgba(255,255,255,0.03)]">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4 shadow-[0_12px_28px_rgba(255,255,255,0.03)] transition-all duration-300 hover:shadow-[0_16px_34px_rgba(255,255,255,0.04)]">
               <div className="grid grid-cols-1 gap-2.5">
                 <div>
                   <FieldLabel>Slot pendiente</FieldLabel>
@@ -1079,7 +1101,7 @@ export default function DashboardPage() {
             {resultadosRevision.map((resultado) => (
               <div
                 key={`${resultado.packId}-${resultado.packNombre}`}
-                className="rounded-2xl border border-white/10 bg-black/20 p-3 shadow-[0_12px_28px_rgba(255,255,255,0.03)]"
+                className="rounded-2xl border border-white/10 bg-black/20 p-3 shadow-[0_12px_28px_rgba(255,255,255,0.03)] transition-all duration-300 hover:shadow-[0_16px_34px_rgba(255,255,255,0.04)]"
               >
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <p className="text-sm font-medium text-white">{resultado.packNombre}</p>
@@ -1111,7 +1133,7 @@ export default function DashboardPage() {
           {eventosRecientes.map((event) => (
             <div
               key={event.id}
-              className="rounded-2xl border border-white/10 bg-black/20 p-3 shadow-[0_12px_28px_rgba(255,255,255,0.03)]"
+              className="rounded-2xl border border-white/10 bg-black/20 p-3 shadow-[0_12px_28px_rgba(255,255,255,0.03)] transition-all duration-300 hover:shadow-[0_16px_34px_rgba(255,255,255,0.04)]"
             >
               <div className="flex flex-col gap-1.5 md:flex-row md:items-start md:justify-between">
                 <div className="space-y-1">
@@ -1163,7 +1185,7 @@ function PackCard({
   const displaySlots = buildDisplaySlots(pack);
 
   return (
-    <div className="overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(255,255,255,0.01))] shadow-[0_14px_30px_rgba(0,0,0,0.18)]">
+    <div className="overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(255,255,255,0.01))] shadow-[0_14px_30px_rgba(0,0,0,0.18)] transition-all duration-300 hover:shadow-[0_18px_38px_rgba(0,0,0,0.20)]">
       <div className="border-b border-white/8 px-4 py-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -1240,10 +1262,14 @@ function PackCard({
             ? resolveDisplayDayPct(numeroCuenta, live, dayPnlCache)
             : null;
 
+          const displayTotalPct = numeroCuenta
+            ? resolveDisplayTotalPct(numeroCuenta, live, dayPnlCache)
+            : null;
+
           return (
             <div
               key={`${slot.id}-${slot.slot}`}
-              className={`rounded-2xl border p-3 transition-all duration-200 ${
+              className={`rounded-2xl border p-3 transition-all duration-300 hover:-translate-y-[1px] ${
                 slot.es_activa
                   ? "border-sky-300/25 bg-[linear-gradient(180deg,rgba(56,189,248,0.10),rgba(56,189,248,0.05))] shadow-[0_0_0_1px_rgba(125,211,252,0.06),0_14px_30px_rgba(56,189,248,0.08)]"
                   : slot.pendiente_reemplazo
@@ -1293,21 +1319,21 @@ function PackCard({
                 <p>Estado: {slot.accounts?.estado ?? "-"}</p>
                 <p>Tipo: {slot.accounts?.tipo_cuenta ?? "-"}</p>
 
-                <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-white/5 bg-black/20 p-2.5 shadow-[0_10px_22px_rgba(0,0,0,0.16)]">
+                <div className="mt-3 rounded-xl border border-white/5 bg-black/20 p-2.5 shadow-[0_10px_22px_rgba(0,0,0,0.16)]">
                   <div>
                     <p className="text-[9px] uppercase tracking-[0.12em] text-zinc-500">
                       Total %
                     </p>
                     <p
                       className={`mt-1 text-sm font-medium ${getLivePnlClass(
-                        live?.profit_total_pct
+                        displayTotalPct
                       )}`}
                     >
-                      {formatPercent(live?.profit_total_pct)}
+                      {formatPercent(displayTotalPct)}
                     </p>
                   </div>
 
-                  <div>
+                  <div className="mt-3 border-t border-white/5 pt-3">
                     <p className="text-[9px] uppercase tracking-[0.12em] text-zinc-500">
                       Hoy %
                     </p>
