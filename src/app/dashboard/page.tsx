@@ -110,7 +110,7 @@ function SectionCard({
   right?: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)] transition-all duration-300 hover:shadow-[0_22px_46px_rgba(0,0,0,0.24)]">
+    <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h2 className="text-sm font-medium text-white">{title}</h2>
         {right ? <div className="flex flex-wrap gap-2">{right}</div> : null}
@@ -145,9 +145,7 @@ function StatCard({
   };
 
   return (
-    <div
-      className={`rounded-2xl border p-3 transition-all duration-300 hover:-translate-y-[1px] hover:shadow-[0_18px_34px_rgba(0,0,0,0.16)] ${toneClasses[tone]}`}
-    >
+    <div className={`rounded-2xl border p-3 ${toneClasses[tone]}`}>
       <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-400">{label}</p>
       <p className="mt-2 text-2xl font-semibold leading-none text-white">{value}</p>
     </div>
@@ -912,7 +910,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-5 text-white">
-      <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)] transition-all duration-300 hover:shadow-[0_22px_46px_rgba(0,0,0,0.24)]">
+      <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
             <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">
@@ -965,39 +963,45 @@ export default function DashboardPage() {
           </ActionButton>
         }
       >
-        <div className="flex flex-wrap items-center gap-2">
-          <FilterPill
-            label="Todos los presets"
-            active={presetFilter === "todos"}
-            onClick={() => setPresetFilter("todos")}
-          />
+        <div className="space-y-3">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-2 shadow-[0_12px_28px_rgba(255,255,255,0.03)]">
+            <div className="flex flex-wrap items-center gap-2">
+              <FilterPill
+                label="Todos los presets"
+                active={presetFilter === "todos"}
+                onClick={() => setPresetFilter("todos")}
+              />
 
-          {presetOptions.map((preset) => (
-            <FilterPill
-              key={preset}
-              label={preset}
-              active={presetFilter === preset}
-              onClick={() => setPresetFilter(preset)}
-            />
-          ))}
+              {presetOptions.map((preset) => (
+                <FilterPill
+                  key={preset}
+                  label={preset}
+                  active={presetFilter === preset}
+                  onClick={() => setPresetFilter(preset)}
+                />
+              ))}
+            </div>
+          </div>
 
-          <div className="mx-1 h-8 w-px bg-white/10" />
-
-          <FilterPill
-            label="Todos"
-            active={tipoFilter === "todos"}
-            onClick={() => setTipoFilter("todos")}
-          />
-          <FilterPill
-            label="Prueba"
-            active={tipoFilter === "prueba"}
-            onClick={() => setTipoFilter("prueba")}
-          />
-          <FilterPill
-            label="Fondeada"
-            active={tipoFilter === "fondeada"}
-            onClick={() => setTipoFilter("fondeada")}
-          />
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-2 shadow-[0_12px_28px_rgba(255,255,255,0.03)]">
+            <div className="flex flex-wrap items-center gap-2">
+              <FilterPill
+                label="Todos"
+                active={tipoFilter === "todos"}
+                onClick={() => setTipoFilter("todos")}
+              />
+              <FilterPill
+                label="Prueba"
+                active={tipoFilter === "prueba"}
+                onClick={() => setTipoFilter("prueba")}
+              />
+              <FilterPill
+                label="Fondeada"
+                active={tipoFilter === "fondeada"}
+                onClick={() => setTipoFilter("fondeada")}
+              />
+            </div>
+          </div>
         </div>
       </SectionCard>
 
@@ -1319,7 +1323,7 @@ function PackCard({
                 <p>Estado: {slot.accounts?.estado ?? "-"}</p>
                 <p>Tipo: {slot.accounts?.tipo_cuenta ?? "-"}</p>
 
-                <div className="mt-3 rounded-xl border border-white/5 bg-black/20 p-2.5 shadow-[0_10px_22px_rgba(0,0,0,0.16)]">
+                <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-white/5 bg-black/20 p-2.5 shadow-[0_10px_22px_rgba(0,0,0,0.16)]">
                   <div>
                     <p className="text-[9px] uppercase tracking-[0.12em] text-zinc-500">
                       Total %
@@ -1333,7 +1337,7 @@ function PackCard({
                     </p>
                   </div>
 
-                  <div className="mt-3 border-t border-white/5 pt-3">
+                  <div>
                     <p className="text-[9px] uppercase tracking-[0.12em] text-zinc-500">
                       Hoy %
                     </p>
@@ -1377,7 +1381,7 @@ function PackCard({
                     disabled={loading}
                     variant="secondary"
                   >
-                    Reemplazo.
+                    Reemplazo
                   </ActionButton>
                 )}
               </div>
