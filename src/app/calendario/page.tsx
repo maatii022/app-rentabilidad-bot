@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type AccountRelation =
@@ -44,6 +44,7 @@ type AccountOption = {
   alias: string;
   numero_cuenta: string;
   preset_id: number | null;
+  tipo_cuenta: string | null;
 };
 
 type PackSlotRow = {
@@ -56,11 +57,13 @@ type PackSlotRow = {
         id: number;
         nombre: string;
         preset_id: number | null;
+        tipo_pack: string | null;
       }
     | {
         id: number;
         nombre: string;
         preset_id: number | null;
+        tipo_pack: string | null;
       }[]
     | null;
 };
@@ -69,6 +72,7 @@ type PackFilterItem = {
   id: number;
   nombre: string;
   preset_id: number | null;
+  tipo_pack: string | null;
   slots: {
     slot: string;
     account_id: number | null;
@@ -107,6 +111,9 @@ type CalendarDayData = {
   }[];
 };
 
+type TradingMode = "pnl" | "events";
+type CuentaTipoFiltro = "prueba" | "fondeada";
+
 const DAY_LABELS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 const SLOT_ORDER = ["A", "B", "C"];
 
@@ -121,11 +128,13 @@ function getSinglePack(
         id: number;
         nombre: string;
         preset_id: number | null;
+        tipo_pack: string | null;
       }
     | {
         id: number;
         nombre: string;
         preset_id: number | null;
+        tipo_pack: string | null;
       }[]
     | null
 ) {
@@ -225,50 +234,28 @@ function SectionCard({
   );
 }
 
-function ActionButton({
-  children,
-  onClick,
-  disabled,
+function SegmentedButton({
+  label,
   active,
+  onClick,
 }: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
+  label: string;
   active?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={disabled}
-      className={`rounded-xl border px-3 py-2 text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
+      className={`rounded-xl border px-4 py-2 text-sm font-medium transition-all duration-200 ${
         active
-          ? "border-emerald-300/20 bg-emerald-400 text-black shadow-[0_10px_30px_rgba(16,185,129,0.18)]"
-          : "border-white/10 bg-white/[0.03] text-zinc-200 hover:bg-white/[0.06]"
+          ? "border-emerald-300/20 bg-emerald-400 text-black shadow-[0_12px_30px_rgba(16,185,129,0.18)]"
+          : "border-white/10 bg-white/[0.03] text-zinc-200 hover:bg-white/[0.06] hover:shadow-[0_10px_24px_rgba(255,255,255,0.04)]"
       }`}
     >
-      {children}
+      {label}
     </button>
   );
-}
-
-function getEventPillClasses(kind: CalendarEventItem["kind"]) {
-  if (kind === "perdida") return "border-amber-300/20 bg-amber-300/[0.10] text-amber-200";
-  if (kind === "fondeada") return "border-violet-300/20 bg-violet-300/[0.10] text-violet-200";
-  if (kind === "reemplazo") return "border-emerald-300/20 bg-emerald-300/[0.10] text-emerald-200";
-  return "border-white/10 bg-white/[0.05] text-zinc-300";
-}
-
-function getToneByValue(value: number) {
-  if (value > 0) {
-    return "border-emerald-400/25 bg-emerald-400/[0.08]";
-  }
-
-  if (value < 0) {
-    return "border-rose-400/25 bg-rose-400/[0.08]";
-  }
-
-  return "border-white/10 bg-white/[0.03]";
 }
 
 function FilterButton({
@@ -290,8 +277,8 @@ function FilterButton({
         compact ? "px-3 py-2" : "px-4 py-2.5"
       } ${
         active
-          ? "scale-[0.98] border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.16),rgba(56,189,248,0.07))] text-white shadow-[0_10px_26px_rgba(56,189,248,0.16)]"
-          : "border-white/10 bg-white/[0.03] text-zinc-200 hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
+          ? "scale-[0.985] border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.16),rgba(56,189,248,0.07))] text-white shadow-[0_12px_30px_rgba(56,189,248,0.16)]"
+          : "border-white/10 bg-white/[0.03] text-zinc-200 hover:border-white/15 hover:bg-white/[0.06] hover:text-white hover:shadow-[0_10px_24px_rgba(255,255,255,0.04)]"
       }`}
     >
       {label}
@@ -314,13 +301,32 @@ function SlotButton({
       onClick={onClick}
       className={`rounded-lg border px-3 py-2 text-sm font-medium transition-all duration-200 ${
         active
-          ? "scale-[0.98] border-emerald-300/20 bg-emerald-300/[0.14] text-emerald-200 shadow-[0_8px_22px_rgba(16,185,129,0.14)]"
-          : "border-white/10 bg-white/[0.03] text-zinc-200 hover:bg-white/[0.06]"
+          ? "scale-[0.985] border-emerald-300/20 bg-emerald-300/[0.14] text-emerald-200 shadow-[0_10px_24px_rgba(16,185,129,0.14)]"
+          : "border-white/10 bg-white/[0.03] text-zinc-200 hover:bg-white/[0.06] hover:shadow-[0_8px_18px_rgba(255,255,255,0.04)]"
       }`}
     >
       {label}
     </button>
   );
+}
+
+function getEventPillClasses(kind: CalendarEventItem["kind"]) {
+  if (kind === "perdida") return "border-amber-300/20 bg-amber-300/[0.10] text-amber-200 shadow-[0_8px_18px_rgba(251,191,36,0.08)]";
+  if (kind === "fondeada") return "border-violet-300/20 bg-violet-300/[0.10] text-violet-200 shadow-[0_8px_18px_rgba(167,139,250,0.08)]";
+  if (kind === "reemplazo") return "border-emerald-300/20 bg-emerald-300/[0.10] text-emerald-200 shadow-[0_8px_18px_rgba(16,185,129,0.08)]";
+  return "border-white/10 bg-white/[0.05] text-zinc-300";
+}
+
+function getToneByValue(value: number) {
+  if (value > 0) {
+    return "border-emerald-400/25 bg-emerald-400/[0.08] shadow-[0_14px_30px_rgba(16,185,129,0.08)]";
+  }
+
+  if (value < 0) {
+    return "border-rose-400/25 bg-rose-400/[0.08] shadow-[0_14px_30px_rgba(244,63,94,0.08)]";
+  }
+
+  return "border-white/10 bg-white/[0.03] shadow-[0_10px_24px_rgba(255,255,255,0.03)]";
 }
 
 export default function CalendarioPage() {
@@ -332,7 +338,9 @@ export default function CalendarioPage() {
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [packs, setPacks] = useState<PackFilterItem[]>([]);
 
-  const [viewMode, setViewMode] = useState<"pnl" | "events">("pnl");
+  const [viewMode, setViewMode] = useState<TradingMode>("pnl");
+  const [selectedCuentaTipo, setSelectedCuentaTipo] =
+    useState<CuentaTipoFiltro>("prueba");
 
   const [selectedPresetIds, setSelectedPresetIds] = useState<string[]>(["all"]);
   const [selectedPackId, setSelectedPackId] = useState<number | null>(null);
@@ -411,7 +419,8 @@ export default function CalendarioPage() {
         id,
         alias,
         numero_cuenta,
-        preset_id
+        preset_id,
+        tipo_cuenta
       `)
       .order("alias", { ascending: true });
 
@@ -425,7 +434,8 @@ export default function CalendarioPage() {
         packs (
           id,
           nombre,
-          preset_id
+          preset_id,
+          tipo_pack
         )
       `)
       .order("pack_id", { ascending: true });
@@ -487,6 +497,7 @@ export default function CalendarioPage() {
         id: pack.id,
         nombre: pack.nombre,
         preset_id: pack.preset_id,
+        tipo_pack: pack.tipo_pack,
         slots: [],
       };
 
@@ -514,6 +525,45 @@ export default function CalendarioPage() {
     cargarDatos();
   }, [currentMonth]);
 
+  useEffect(() => {
+    setSelectedPackId(null);
+    setSelectedSlots([]);
+    setSelectedDayKey(null);
+    setIsDetailOpen(false);
+  }, [selectedCuentaTipo]);
+
+  const filteredPresets = useMemo(() => {
+    const presetIdsForType = new Set(
+      accounts
+        .filter((account) => account.tipo_cuenta === selectedCuentaTipo)
+        .map((account) => account.preset_id)
+        .filter((id): id is number => id !== null)
+    );
+
+    return presets.filter((preset) => presetIdsForType.has(preset.id));
+  }, [accounts, presets, selectedCuentaTipo]);
+
+  useEffect(() => {
+    const allowedPresetIds = new Set(filteredPresets.map((preset) => String(preset.id)));
+
+    if (selectedPresetIds.includes("all")) return;
+
+    const next = selectedPresetIds.filter((id) => allowedPresetIds.has(id));
+
+    if (next.length === 0) {
+      setSelectedPresetIds(["all"]);
+      setSelectedPackId(null);
+      setSelectedSlots([]);
+      return;
+    }
+
+    if (next.length !== selectedPresetIds.length) {
+      setSelectedPresetIds(next);
+      setSelectedPackId(null);
+      setSelectedSlots([]);
+    }
+  }, [filteredPresets, selectedPresetIds]);
+
   const isAllSelected = selectedPresetIds.includes("all");
 
   const selectedSinglePresetId = useMemo(() => {
@@ -523,8 +573,13 @@ export default function CalendarioPage() {
 
   const filteredPacks = useMemo(() => {
     if (selectedSinglePresetId === null) return [];
-    return packs.filter((pack) => pack.preset_id === selectedSinglePresetId);
-  }, [packs, selectedSinglePresetId]);
+
+    return packs.filter(
+      (pack) =>
+        pack.preset_id === selectedSinglePresetId &&
+        (pack.tipo_pack ?? "").toLowerCase() === selectedCuentaTipo
+    );
+  }, [packs, selectedSinglePresetId, selectedCuentaTipo]);
 
   useEffect(() => {
     if (
@@ -561,6 +616,8 @@ export default function CalendarioPage() {
       setSelectedPresetIds(["all"]);
       setSelectedPackId(null);
       setSelectedSlots([]);
+      setSelectedDayKey(null);
+      setIsDetailOpen(false);
       return;
     }
 
@@ -568,6 +625,8 @@ export default function CalendarioPage() {
       setSelectedPresetIds([presetId]);
       setSelectedPackId(null);
       setSelectedSlots([]);
+      setSelectedDayKey(null);
+      setIsDetailOpen(false);
       return;
     }
 
@@ -580,16 +639,22 @@ export default function CalendarioPage() {
       setSelectedPresetIds(["all"]);
       setSelectedPackId(null);
       setSelectedSlots([]);
+      setSelectedDayKey(null);
+      setIsDetailOpen(false);
       return;
     }
 
     setSelectedPresetIds(next);
     setSelectedPackId(null);
     setSelectedSlots([]);
+    setSelectedDayKey(null);
+    setIsDetailOpen(false);
   }
 
   const allowedAccountIds = useMemo(() => {
-    let baseAccounts = accounts;
+    let baseAccounts = accounts.filter(
+      (account) => (account.tipo_cuenta ?? "").toLowerCase() === selectedCuentaTipo
+    );
 
     if (!isAllSelected) {
       const selectedPresetNumbers = new Set(selectedPresetIds.map((id) => Number(id)));
@@ -629,7 +694,7 @@ export default function CalendarioPage() {
     }
 
     return allowedIds;
-  }, [accounts, isAllSelected, selectedPack, selectedPresetIds, selectedSlots]);
+  }, [accounts, isAllSelected, selectedCuentaTipo, selectedPack, selectedPresetIds, selectedSlots]);
 
   const filteredResults = useMemo(() => {
     return dailyResults.filter((item) => allowedAccountIds.has(item.account_id));
@@ -830,12 +895,16 @@ export default function CalendarioPage() {
     if (!day) return "border-white/5 bg-white/[0.02]";
     if (viewMode === "events") {
       return day.events.length > 0
-        ? "border-white/10 bg-white/[0.03]"
+        ? "border-white/10 bg-white/[0.03] shadow-[0_10px_24px_rgba(255,255,255,0.03)]"
         : "border-white/5 bg-white/[0.02]";
     }
-    if (day.totalUsd > 0) return "border-emerald-400/25 bg-emerald-400/[0.08]";
-    if (day.totalUsd < 0) return "border-rose-400/25 bg-rose-400/[0.08]";
-    return "border-white/10 bg-white/[0.03]";
+    if (day.totalUsd > 0) {
+      return "border-emerald-400/25 bg-emerald-400/[0.08] shadow-[0_14px_30px_rgba(16,185,129,0.08)]";
+    }
+    if (day.totalUsd < 0) {
+      return "border-rose-400/25 bg-rose-400/[0.08] shadow-[0_14px_30px_rgba(244,63,94,0.08)]";
+    }
+    return "border-white/10 bg-white/[0.03] shadow-[0_10px_24px_rgba(255,255,255,0.03)]";
   }
 
   return (
@@ -844,27 +913,35 @@ export default function CalendarioPage() {
         title="Trading Calendar"
         right={
           <div className="flex flex-wrap items-center gap-2">
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-1">
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-1 shadow-[0_12px_30px_rgba(255,255,255,0.03)]">
               <div className="flex gap-1">
-                <ActionButton
-                  onClick={() => setViewMode("pnl")}
+                <SegmentedButton
+                  label="PNL"
                   active={viewMode === "pnl"}
-                >
-                  PNL
-                </ActionButton>
-                <ActionButton
-                  onClick={() => setViewMode("events")}
+                  onClick={() => setViewMode("pnl")}
+                />
+                <SegmentedButton
+                  label="Events"
                   active={viewMode === "events"}
-                >
-                  Events
-                </ActionButton>
+                  onClick={() => setViewMode("events")}
+                />
               </div>
             </div>
 
-            <FilterButton
-              label="Presets"
-              active={!isAllSelected || selectedPresetIds.length > 0}
-            />
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-1 shadow-[0_12px_30px_rgba(255,255,255,0.03)]">
+              <div className="flex gap-1">
+                <SegmentedButton
+                  label="Pruebas"
+                  active={selectedCuentaTipo === "prueba"}
+                  onClick={() => setSelectedCuentaTipo("prueba")}
+                />
+                <SegmentedButton
+                  label="Fondeadas"
+                  active={selectedCuentaTipo === "fondeada"}
+                  onClick={() => setSelectedCuentaTipo("fondeada")}
+                />
+              </div>
+            </div>
           </div>
         }
       >
@@ -887,7 +964,7 @@ export default function CalendarioPage() {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 shadow-[0_12px_30px_rgba(255,255,255,0.03)]">
             <div className="flex h-full flex-wrap items-center gap-2">
               <FilterButton
                 label="All"
@@ -895,7 +972,7 @@ export default function CalendarioPage() {
                 onClick={() => togglePreset("all")}
               />
 
-              {presets.map((preset) => (
+              {filteredPresets.map((preset) => (
                 <FilterButton
                   key={preset.id}
                   label={preset.nombre}
@@ -908,14 +985,14 @@ export default function CalendarioPage() {
         </div>
 
         <div className="mb-5 grid grid-cols-1 gap-3 xl:grid-cols-[1fr_auto]">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 shadow-[0_12px_30px_rgba(255,255,255,0.03)]">
             {selectedSinglePresetId === null ? (
               <div className="text-sm text-zinc-500">
                 Selecciona un solo preset para ver sus packs.
               </div>
             ) : filteredPacks.length === 0 ? (
               <div className="text-sm text-zinc-500">
-                No hay packs disponibles para este preset.
+                No hay packs disponibles para este preset y este tipo de cuenta.
               </div>
             ) : (
               <div className="flex flex-wrap items-center gap-2">
@@ -976,7 +1053,7 @@ export default function CalendarioPage() {
             <button
               type="button"
               onClick={previousMonth}
-              className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-zinc-300 transition hover:bg-white/[0.06]"
+              className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-zinc-300 shadow-[0_10px_24px_rgba(255,255,255,0.03)] transition hover:bg-white/[0.06]"
             >
               ←
             </button>
@@ -988,7 +1065,7 @@ export default function CalendarioPage() {
             <button
               type="button"
               onClick={nextMonth}
-              className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-zinc-300 transition hover:bg-white/[0.06]"
+              className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-zinc-300 shadow-[0_10px_24px_rgba(255,255,255,0.03)] transition hover:bg-white/[0.06]"
             >
               →
             </button>
@@ -1014,7 +1091,7 @@ export default function CalendarioPage() {
                 {DAY_LABELS.map((label) => (
                   <div
                     key={label}
-                    className="rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-4 text-center text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500"
+                    className="rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-4 text-center text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500 shadow-[0_8px_18px_rgba(255,255,255,0.02)]"
                   >
                     {label}
                   </div>
@@ -1049,14 +1126,14 @@ export default function CalendarioPage() {
                             setSelectedDayKey(dateKey);
                             setIsDetailOpen(true);
                           }}
-                          className={`rounded-2xl border p-3 text-left transition ${getDayTone(
+                          className={`rounded-2xl border p-3 text-left transition-all duration-200 ${getDayTone(
                             dayData
                           )} ${
                             !isCurrentMonth ? "opacity-35" : "opacity-100"
                           } ${
                             selectedDayKey === dateKey && isDetailOpen
-                              ? "shadow-[0_0_0_1px_rgba(255,255,255,0.18)]"
-                              : ""
+                              ? "shadow-[0_0_0_1px_rgba(255,255,255,0.18),0_18px_36px_rgba(255,255,255,0.04)]"
+                              : "hover:shadow-[0_12px_28px_rgba(255,255,255,0.03)]"
                           } ${
                             compactWeek ? "min-h-[74px]" : "min-h-[138px]"
                           }`}
@@ -1068,7 +1145,7 @@ export default function CalendarioPage() {
                               </p>
 
                               {dayData && dayData.resultCount > 0 && (
-                                <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[10px] text-zinc-400">
+                                <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[10px] text-zinc-400 shadow-[0_6px_14px_rgba(255,255,255,0.03)]">
                                   {dayData.resultCount}
                                 </span>
                               )}
@@ -1136,7 +1213,7 @@ export default function CalendarioPage() {
             </div>
 
             {isDetailOpen && (
-              <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[0_14px_30px_rgba(0,0,0,0.16)]">
+              <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.18)]">
                 <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
                     <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
@@ -1150,7 +1227,7 @@ export default function CalendarioPage() {
                   <button
                     type="button"
                     onClick={() => setIsDetailOpen(false)}
-                    className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/[0.06]"
+                    className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-zinc-300 shadow-[0_10px_24px_rgba(255,255,255,0.03)] transition hover:bg-white/[0.06]"
                   >
                     ✕
                   </button>
@@ -1264,7 +1341,7 @@ export default function CalendarioPage() {
                         selectedDay.eventDetails.map((event) => (
                           <div
                             key={event.id}
-                            className="rounded-2xl border border-white/10 bg-white/[0.03] p-3"
+                            className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 shadow-[0_10px_24px_rgba(255,255,255,0.03)]"
                           >
                             <p className="text-sm font-medium text-white">{event.tipo}</p>
                             <p className="mt-1 text-sm text-zinc-400">
