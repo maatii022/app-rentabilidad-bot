@@ -50,7 +50,7 @@ type AccountOption = {
 
 type CalendarEventItem = {
   id: string;
-  kind: "sord" | "perdida" | "fondeada" | "reemplazo" | "otro";
+  kind: "perdida" | "fondeada" | "reemplazo" | "otro";
   label: string;
   count?: number;
 };
@@ -110,20 +110,22 @@ function toDateKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function parseSlotFromText(text?: string | null) {
-  if (!text) return null;
-  const match = text.match(/slot\s+([A-Z])/i);
-  return match?.[1]?.toUpperCase() ?? null;
-}
-
 function mapEventKind(tipo: string): CalendarEventItem["kind"] {
   const normalized = tipo.toLowerCase();
 
-  if (normalized.includes("sord")) return "sord";
   if (normalized.includes("perdida")) return "perdida";
   if (normalized.includes("fondeada")) return "fondeada";
   if (normalized.includes("reemplazo")) return "reemplazo";
   return "otro";
+}
+
+function isImportantEvent(tipo: string) {
+  const normalized = tipo.toLowerCase();
+  return (
+    normalized.includes("perdida") ||
+    normalized.includes("fondeada") ||
+    normalized.includes("reemplazo")
+  );
 }
 
 function buildEventLabel(event: AccountEvent) {
@@ -223,7 +225,6 @@ function Select({
 }
 
 function getEventPillClasses(kind: CalendarEventItem["kind"]) {
-  if (kind === "sord") return "border-sky-300/20 bg-sky-300/[0.10] text-sky-200";
   if (kind === "perdida") return "border-amber-300/20 bg-amber-300/[0.10] text-amber-200";
   if (kind === "fondeada") return "border-violet-300/20 bg-violet-300/[0.10] text-violet-200";
   if (kind === "reemplazo") return "border-emerald-300/20 bg-emerald-300/[0.10] text-emerald-200";
@@ -241,6 +242,7 @@ export default function CalendarioPage() {
   const [selectedPresetId, setSelectedPresetId] = useState("todos");
   const [selectedAccountId, setSelectedAccountId] = useState("total");
   const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -464,9 +466,11 @@ export default function CalendarioPage() {
       resultMap.set(key, existing);
     });
 
-    const groupedByDatePack = new Map<string, { out?: string; in?: string }>();
-
     filteredEvents.forEach((event) => {
+      if (!isImportantEvent(event.tipo_evento)) {
+        return;
+      }
+
       const dateKey = event.fecha;
       const target = resultMap.get(dateKey) ?? {
         fecha: dateKey,
@@ -484,58 +488,19 @@ export default function CalendarioPage() {
 
       target.eventDetails.push({
         id: event.id,
-        tipo: event.tipo_evento,
+        tipo: buildEventLabel(event),
         descripcion: event.descripcion ?? "",
         alias: account?.alias ?? "-",
         numeroCuenta: account?.numero_cuenta ?? "-",
       });
 
-      if (kind === "sord" && event.pack_id) {
-        const groupKey = `${dateKey}_${event.pack_id}`;
-        const group = groupedByDatePack.get(groupKey) ?? {};
-
-        if (event.tipo_evento.toLowerCase() === "sord out") {
-          group.out = parseSlotFromText(event.descripcion) ?? undefined;
-        }
-
-        if (event.tipo_evento.toLowerCase() === "sord in") {
-          group.in = parseSlotFromText(event.descripcion) ?? undefined;
-        }
-
-        groupedByDatePack.set(groupKey, group);
-      } else {
-        target.events.push({
-          id: `${event.id}`,
-          kind,
-          label: buildEventLabel(event),
-        });
-      }
+      target.events.push({
+        id: `${event.id}`,
+        kind,
+        label: buildEventLabel(event),
+      });
 
       resultMap.set(dateKey, target);
-    });
-
-    groupedByDatePack.forEach((value, groupKey) => {
-      const [dateKey] = groupKey.split("_");
-      const target = resultMap.get(dateKey);
-
-      if (!target) return;
-
-      if (value.out && value.in) {
-        target.events.push({
-          id: `sord_${groupKey}`,
-          kind: "sord",
-          label: `${value.out}>${value.in}`,
-        });
-        return;
-      }
-
-      if (value.out || value.in) {
-        target.events.push({
-          id: `sord_partial_${groupKey}`,
-          kind: "sord",
-          label: `SORD ${value.out ?? "?"}>${value.in ?? "?"}`,
-        });
-      }
     });
 
     resultMap.forEach((day) => {
@@ -619,6 +584,7 @@ export default function CalendarioPage() {
       (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)
     );
     setSelectedDayKey(null);
+    setIsDetailOpen(false);
   }
 
   function nextMonth() {
@@ -626,11 +592,16 @@ export default function CalendarioPage() {
       (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)
     );
     setSelectedDayKey(null);
+    setIsDetailOpen(false);
   }
 
   function getDayTone(day: CalendarDayData | undefined) {
     if (!day) return "border-white/5 bg-white/[0.02]";
-    if (viewMode === "events") return "border-white/10 bg-white/[0.03]";
+    if (viewMode === "events") {
+      return day.events.length > 0
+        ? "border-white/10 bg-white/[0.03]"
+        : "border-white/5 bg-white/[0.02]";
+    }
     if (day.totalUsd > 0) return "border-emerald-400/25 bg-emerald-400/[0.08]";
     if (day.totalUsd < 0) return "border-rose-400/25 bg-rose-400/[0.08]";
     return "border-white/10 bg-white/[0.03]";
@@ -758,7 +729,11 @@ export default function CalendarioPage() {
             Error: {error}
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_340px]">
+          <div
+            className={`grid grid-cols-1 gap-4 ${
+              isDetailOpen ? "xl:grid-cols-[1fr_340px]" : ""
+            }`}
+          >
             <div className="space-y-2">
               <div className="grid grid-cols-7 gap-2">
                 {DAY_LABELS.map((label) => (
@@ -788,13 +763,17 @@ export default function CalendarioPage() {
                         <button
                           key={dateKey}
                           type="button"
-                          onClick={() => isCurrentMonth && setSelectedDayKey(dateKey)}
+                          onClick={() => {
+                            if (!isCurrentMonth) return;
+                            setSelectedDayKey(dateKey);
+                            setIsDetailOpen(true);
+                          }}
                           className={`rounded-2xl border p-3 text-left transition ${getDayTone(
                             dayData
                           )} ${
                             !isCurrentMonth ? "opacity-35" : "opacity-100"
                           } ${
-                            selectedDayKey === dateKey
+                            selectedDayKey === dateKey && isDetailOpen
                               ? "shadow-[0_0_0_1px_rgba(255,255,255,0.18)]"
                               : ""
                           } ${
@@ -875,118 +854,126 @@ export default function CalendarioPage() {
               })}
             </div>
 
-            <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[0_14px_30px_rgba(0,0,0,0.16)]">
-              {!selectedDayKey ? (
-                <div className="flex h-full min-h-[240px] items-center justify-center text-center text-sm text-zinc-500">
-                  Pulsa un día para ver el detalle.
-                </div>
-              ) : !selectedDay ? (
-                <div className="flex h-full min-h-[240px] items-center justify-center text-center text-sm text-zinc-500">
-                  No hay datos para este día.
-                </div>
-              ) : (
-                <div className="space-y-4">
+            {isDetailOpen && (
+              <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[0_14px_30px_rgba(0,0,0,0.16)]">
+                <div className="mb-4 flex items-start justify-between gap-3">
                   <div>
                     <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
                       Fecha
                     </p>
                     <p className="mt-1 text-2xl font-semibold text-white">
-                      {selectedDay.fecha}
+                      {selectedDayKey ?? "-"}
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
-                        USD
-                      </p>
-                      <p className="mt-2 text-xl font-semibold text-white">
-                        {formatUsd(selectedDay.totalUsd)}
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-                      <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
-                        %
-                      </p>
-                      <p className="mt-2 text-xl font-semibold text-white">
-                        {formatPct(selectedDay.totalPct)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-white">Resultados</p>
-
-                    {selectedDay.resultDetails.length === 0 ? (
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-zinc-500">
-                        Sin resultados.
-                      </div>
-                    ) : (
-                      selectedDay.resultDetails.map((result) => (
-                        <div
-                          key={result.id}
-                          className="rounded-2xl border border-white/10 bg-white/[0.03] p-3"
-                        >
-                          <p className="text-sm font-medium text-white">
-                            {result.alias} · {result.numeroCuenta}
-                          </p>
-                          <div className="mt-2 flex items-center justify-between gap-3 text-sm">
-                            <span
-                              className={
-                                result.pnlUsd > 0
-                                  ? "text-emerald-300"
-                                  : result.pnlUsd < 0
-                                  ? "text-rose-300"
-                                  : "text-zinc-300"
-                              }
-                            >
-                              {formatUsd(result.pnlUsd)}
-                            </span>
-                            <span
-                              className={
-                                result.pnlPct > 0
-                                  ? "text-emerald-300"
-                                  : result.pnlPct < 0
-                                  ? "text-rose-300"
-                                  : "text-zinc-300"
-                              }
-                            >
-                              {formatPct(result.pnlPct)}
-                            </span>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <p className="text-sm font-medium text-white">Eventos</p>
-
-                    {selectedDay.eventDetails.length === 0 ? (
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-zinc-500">
-                        Sin eventos.
-                      </div>
-                    ) : (
-                      selectedDay.eventDetails.map((event) => (
-                        <div
-                          key={event.id}
-                          className="rounded-2xl border border-white/10 bg-white/[0.03] p-3"
-                        >
-                          <p className="text-sm font-medium text-white">{event.tipo}</p>
-                          <p className="mt-1 text-sm text-zinc-400">
-                            {event.alias} · {event.numeroCuenta}
-                          </p>
-                          {event.descripcion ? (
-                            <p className="mt-2 text-sm text-zinc-500">{event.descripcion}</p>
-                          ) : null}
-                        </div>
-                      ))
-                    )}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsDetailOpen(false)}
+                    className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/[0.06]"
+                  >
+                    ✕
+                  </button>
                 </div>
-              )}
-            </div>
+
+                {!selectedDay ? (
+                  <div className="flex min-h-[240px] items-center justify-center text-center text-sm text-zinc-500">
+                    No hay datos para este día.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                        <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
+                          USD
+                        </p>
+                        <p className="mt-2 text-xl font-semibold text-white">
+                          {formatUsd(selectedDay.totalUsd)}
+                        </p>
+                      </div>
+
+                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                        <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
+                          %
+                        </p>
+                        <p className="mt-2 text-xl font-semibold text-white">
+                          {formatPct(selectedDay.totalPct)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-white">Resultados</p>
+
+                      {selectedDay.resultDetails.length === 0 ? (
+                        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-zinc-500">
+                          Sin resultados.
+                        </div>
+                      ) : (
+                        selectedDay.resultDetails.map((result) => (
+                          <div
+                            key={result.id}
+                            className="rounded-2xl border border-white/10 bg-white/[0.03] p-3"
+                          >
+                            <p className="text-sm font-medium text-white">
+                              {result.alias} · {result.numeroCuenta}
+                            </p>
+                            <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+                              <span
+                                className={
+                                  result.pnlUsd > 0
+                                    ? "text-emerald-300"
+                                    : result.pnlUsd < 0
+                                    ? "text-rose-300"
+                                    : "text-zinc-300"
+                                }
+                              >
+                                {formatUsd(result.pnlUsd)}
+                              </span>
+                              <span
+                                className={
+                                  result.pnlPct > 0
+                                    ? "text-emerald-300"
+                                    : result.pnlPct < 0
+                                    ? "text-rose-300"
+                                    : "text-zinc-300"
+                                }
+                              >
+                                {formatPct(result.pnlPct)}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-white">Eventos</p>
+
+                      {selectedDay.eventDetails.length === 0 ? (
+                        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-zinc-500">
+                          Sin eventos.
+                        </div>
+                      ) : (
+                        selectedDay.eventDetails.map((event) => (
+                          <div
+                            key={event.id}
+                            className="rounded-2xl border border-white/10 bg-white/[0.03] p-3"
+                          >
+                            <p className="text-sm font-medium text-white">{event.tipo}</p>
+                            <p className="mt-1 text-sm text-zinc-400">
+                              {event.alias} · {event.numeroCuenta}
+                            </p>
+                            {event.descripcion ? (
+                              <p className="mt-2 text-sm text-zinc-500">{event.descripcion}</p>
+                            ) : null}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </SectionCard>
