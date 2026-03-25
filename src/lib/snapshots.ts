@@ -4,63 +4,78 @@ function getTodayDate() {
   return new Date().toISOString().slice(0, 10);
 }
 
+type AccountRow = {
+  id: number;
+  estado: string | null;
+};
+
+type DailyResultRow = {
+  account_id: number;
+  fecha: string;
+  pnl_usd: number | null;
+  pnl_porcentaje: number | null;
+  numero_trades: number | null;
+};
+
 export async function syncDailySnapshots() {
   const today = getTodayDate();
 
-  // 1. Cargar cuentas
   const { data: accounts, error: accountsError } = await supabaseAdmin
     .from("accounts")
-    .select("*");
+    .select("id, estado");
 
   if (accountsError) {
     throw new Error("Error cargando accounts: " + accountsError.message);
   }
 
   if (!accounts || accounts.length === 0) {
-    return { ok: true, message: "No hay cuentas" };
+    return { ok: true, count: 0, message: "No hay cuentas" };
   }
 
-  // 2. Cargar resultados del día
-  const { data: results, error: resultsError } = await supabaseAdmin
+  const { data: allResults, error: resultsError } = await supabaseAdmin
     .from("daily_results")
-    .select("*")
-    .eq("fecha", today);
+    .select("account_id, fecha, pnl_usd, pnl_porcentaje, numero_trades");
 
   if (resultsError) {
     throw new Error("Error cargando daily_results: " + resultsError.message);
   }
 
-  // Crear mapa por account_id
-  const resultsMap = new Map<number, any>();
+  const typedAccounts = (accounts ?? []) as AccountRow[];
+  const typedResults = (allResults ?? []) as DailyResultRow[];
 
-  for (const r of results ?? []) {
-    resultsMap.set(r.account_id, r);
+  const todayResultsMap = new Map<number, DailyResultRow>();
+  const totalPctMap = new Map<number, number>();
+
+  for (const row of typedResults) {
+    const accountId = row.account_id;
+    const pnlPct = Number(row.pnl_porcentaje ?? 0);
+
+    totalPctMap.set(accountId, (totalPctMap.get(accountId) ?? 0) + pnlPct);
+
+    if (row.fecha === today) {
+      todayResultsMap.set(accountId, row);
+    }
   }
 
-  const snapshots = [];
+  const snapshots = typedAccounts.map((acc) => {
+    const todayResult = todayResultsMap.get(acc.id);
 
-  for (const acc of accounts) {
-    const result = resultsMap.get(acc.id);
+    const pnlHoyUsd = Number(todayResult?.pnl_usd ?? 0);
+    const pnlHoyPct = Number(todayResult?.pnl_porcentaje ?? 0);
+    const tradesAbiertos = Number(todayResult?.numero_trades ?? 0);
+    const profitTotalPct = Number(totalPctMap.get(acc.id) ?? 0);
 
-    const pnlUsd = result?.pnl_usd ?? 0;
-    const pnlPct = result?.pnl_porcentaje ?? 0;
-    const trades = result?.numero_trades ?? 0;
-
-    // live_status basado en estado actual
-    let liveStatus = acc.estado ?? "inactiva";
-
-    snapshots.push({
+    return {
       account_id: acc.id,
       snapshot_date: today,
-      pnl_hoy_usd: pnlUsd,
-      pnl_hoy_pct: pnlPct,
-      profit_total_pct: pnlPct, // provisional
-      trades_abiertos: trades,
-      live_status: liveStatus,
-    });
-  }
+      pnl_hoy_usd: pnlHoyUsd,
+      pnl_hoy_pct: pnlHoyPct,
+      profit_total_pct: profitTotalPct,
+      trades_abiertos: tradesAbiertos,
+      live_status: acc.estado ?? "inactiva",
+    };
+  });
 
-  // 3. Guardar en batch con upsert
   const { error: upsertError } = await supabaseAdmin
     .from("account_daily_snapshots")
     .upsert(snapshots, {
