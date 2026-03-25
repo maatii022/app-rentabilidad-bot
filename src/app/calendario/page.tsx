@@ -44,8 +44,6 @@ type AccountOption = {
   alias: string;
   numero_cuenta: string;
   preset_id: number | null;
-  preset_nombre: string;
-  label: string;
 };
 
 type PackSlotRow = {
@@ -145,10 +143,12 @@ function formatPct(value: number) {
 }
 
 function getMonthLabel(date: Date) {
-  return date.toLocaleDateString("es-ES", {
+  const text = date.toLocaleDateString("es-ES", {
     month: "long",
     year: "numeric",
   });
+
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function toDateKey(date: Date) {
@@ -241,9 +241,9 @@ function ActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-xl border px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${
+      className={`rounded-xl border px-3 py-2 text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
         active
-          ? "border-emerald-300/20 bg-emerald-400 text-black"
+          ? "border-emerald-300/20 bg-emerald-400 text-black shadow-[0_10px_30px_rgba(16,185,129,0.18)]"
           : "border-white/10 bg-white/[0.03] text-zinc-200 hover:bg-white/[0.06]"
       }`}
     >
@@ -259,6 +259,70 @@ function getEventPillClasses(kind: CalendarEventItem["kind"]) {
   return "border-white/10 bg-white/[0.05] text-zinc-300";
 }
 
+function getToneByValue(value: number) {
+  if (value > 0) {
+    return "border-emerald-400/25 bg-emerald-400/[0.08]";
+  }
+
+  if (value < 0) {
+    return "border-rose-400/25 bg-rose-400/[0.08]";
+  }
+
+  return "border-white/10 bg-white/[0.03]";
+}
+
+function FilterButton({
+  label,
+  active,
+  onClick,
+  compact = false,
+}: {
+  label: string;
+  active?: boolean;
+  onClick?: () => void;
+  compact?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl border text-sm font-medium transition-all duration-200 ${
+        compact ? "px-3 py-2" : "px-4 py-2.5"
+      } ${
+        active
+          ? "scale-[0.98] border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.16),rgba(56,189,248,0.07))] text-white shadow-[0_10px_26px_rgba(56,189,248,0.16)]"
+          : "border-white/10 bg-white/[0.03] text-zinc-200 hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function SlotButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-lg border px-3 py-2 text-sm font-medium transition-all duration-200 ${
+        active
+          ? "scale-[0.98] border-emerald-300/20 bg-emerald-300/[0.14] text-emerald-200 shadow-[0_8px_22px_rgba(16,185,129,0.14)]"
+          : "border-white/10 bg-white/[0.03] text-zinc-200 hover:bg-white/[0.06]"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
 export default function CalendarioPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -270,9 +334,7 @@ export default function CalendarioPage() {
 
   const [viewMode, setViewMode] = useState<"pnl" | "events">("pnl");
 
-  const [selectedPresetId, setSelectedPresetId] = useState("todos");
-  const [showPresetDropdown, setShowPresetDropdown] = useState(false);
-
+  const [selectedPresetIds, setSelectedPresetIds] = useState<string[]>(["all"]);
   const [selectedPackId, setSelectedPackId] = useState<number | null>(null);
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
 
@@ -283,24 +345,6 @@ export default function CalendarioPage() {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
-
-  const presetDropdownRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        presetDropdownRef.current &&
-        !presetDropdownRef.current.contains(event.target as Node)
-      ) {
-        setShowPresetDropdown(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
 
   async function cargarDatos() {
     setLoading(true);
@@ -367,10 +411,7 @@ export default function CalendarioPage() {
         id,
         alias,
         numero_cuenta,
-        preset_id,
-        presets (
-          nombre
-        )
+        preset_id
       `)
       .order("alias", { ascending: true });
 
@@ -387,8 +428,7 @@ export default function CalendarioPage() {
           preset_id
         )
       `)
-      .order("pack_id", { ascending: true })
-      .order("slot", { ascending: true });
+      .order("pack_id", { ascending: true });
 
     const [
       dailyResponse,
@@ -434,30 +474,7 @@ export default function CalendarioPage() {
       return;
     }
 
-    const rawAccounts = (accountsResponse.data || []) as Array<{
-      id: number;
-      alias: string;
-      numero_cuenta: string;
-      preset_id: number | null;
-      presets?: { nombre: string } | { nombre: string }[] | null;
-    }>;
-
-    const mappedAccounts: AccountOption[] = rawAccounts.map((account) => {
-      const presetRaw = Array.isArray(account.presets)
-        ? account.presets[0]
-        : account.presets;
-
-      const presetNombre = presetRaw?.nombre ?? "Sin preset";
-
-      return {
-        id: account.id,
-        alias: account.alias,
-        numero_cuenta: account.numero_cuenta,
-        preset_id: account.preset_id,
-        preset_nombre: presetNombre,
-        label: `${account.alias} · ${account.numero_cuenta}`,
-      };
-    });
+    const mappedAccounts = (accountsResponse.data || []) as AccountOption[];
 
     const rawPackSlots = (packSlotsResponse.data || []) as PackSlotRow[];
     const packMap = new Map<number, PackFilterItem>();
@@ -497,19 +514,17 @@ export default function CalendarioPage() {
     cargarDatos();
   }, [currentMonth]);
 
-  const presetName = useMemo(() => {
-    if (selectedPresetId === "todos") return "Todos los presets";
-    return (
-      presets.find((preset) => String(preset.id) === selectedPresetId)?.nombre ??
-      "Preset"
-    );
-  }, [presets, selectedPresetId]);
+  const isAllSelected = selectedPresetIds.includes("all");
+
+  const selectedSinglePresetId = useMemo(() => {
+    if (isAllSelected) return null;
+    return selectedPresetIds.length === 1 ? Number(selectedPresetIds[0]) : null;
+  }, [isAllSelected, selectedPresetIds]);
 
   const filteredPacks = useMemo(() => {
-    if (selectedPresetId === "todos") return packs;
-    const presetId = Number(selectedPresetId);
-    return packs.filter((pack) => pack.preset_id === presetId);
-  }, [packs, selectedPresetId]);
+    if (selectedSinglePresetId === null) return [];
+    return packs.filter((pack) => pack.preset_id === selectedSinglePresetId);
+  }, [packs, selectedSinglePresetId]);
 
   useEffect(() => {
     if (
@@ -541,12 +556,47 @@ export default function CalendarioPage() {
     setSelectedSlots((prev) => prev.filter((slot) => availableSlots.includes(slot)));
   }, [availableSlots]);
 
+  function togglePreset(presetId: string) {
+    if (presetId === "all") {
+      setSelectedPresetIds(["all"]);
+      setSelectedPackId(null);
+      setSelectedSlots([]);
+      return;
+    }
+
+    if (isAllSelected) {
+      setSelectedPresetIds([presetId]);
+      setSelectedPackId(null);
+      setSelectedSlots([]);
+      return;
+    }
+
+    const exists = selectedPresetIds.includes(presetId);
+    const next = exists
+      ? selectedPresetIds.filter((id) => id !== presetId)
+      : [...selectedPresetIds, presetId];
+
+    if (next.length === 0) {
+      setSelectedPresetIds(["all"]);
+      setSelectedPackId(null);
+      setSelectedSlots([]);
+      return;
+    }
+
+    setSelectedPresetIds(next);
+    setSelectedPackId(null);
+    setSelectedSlots([]);
+  }
+
   const allowedAccountIds = useMemo(() => {
     let baseAccounts = accounts;
 
-    if (selectedPresetId !== "todos") {
-      const presetId = Number(selectedPresetId);
-      baseAccounts = baseAccounts.filter((account) => account.preset_id === presetId);
+    if (!isAllSelected) {
+      const selectedPresetNumbers = new Set(selectedPresetIds.map((id) => Number(id)));
+      baseAccounts = baseAccounts.filter(
+        (account) =>
+          account.preset_id !== null && selectedPresetNumbers.has(account.preset_id)
+      );
     }
 
     let allowedIds = new Set(baseAccounts.map((account) => account.id));
@@ -579,7 +629,7 @@ export default function CalendarioPage() {
     }
 
     return allowedIds;
-  }, [accounts, selectedPresetId, selectedPack, selectedSlots]);
+  }, [accounts, isAllSelected, selectedPack, selectedPresetIds, selectedSlots]);
 
   const filteredResults = useMemo(() => {
     return dailyResults.filter((item) => allowedAccountIds.has(item.account_id));
@@ -811,69 +861,15 @@ export default function CalendarioPage() {
               </div>
             </div>
 
-            <div className="relative" ref={presetDropdownRef}>
-              <button
-                type="button"
-                onClick={() => setShowPresetDropdown((prev) => !prev)}
-                className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
-                  showPresetDropdown
-                    ? "border-sky-300/20 bg-sky-300/[0.10] text-white"
-                    : "border-white/10 bg-white/[0.03] text-zinc-200 hover:bg-white/[0.06]"
-                }`}
-              >
-                Presets
-              </button>
-
-              {showPresetDropdown && (
-                <div className="absolute right-0 z-20 mt-2 w-60 rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(10,18,32,0.92),rgba(8,16,28,0.88))] p-2 shadow-[0_18px_40px_rgba(0,0,0,0.22)] backdrop-blur-xl">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedPresetId("todos");
-                      setSelectedPackId(null);
-                      setSelectedSlots([]);
-                      setShowPresetDropdown(false);
-                    }}
-                    className={`w-full rounded-xl px-3 py-2 text-left text-sm transition ${
-                      selectedPresetId === "todos"
-                        ? "bg-white/[0.08] text-white"
-                        : "text-zinc-300 hover:bg-white/[0.05] hover:text-white"
-                    }`}
-                  >
-                    Todos los presets
-                  </button>
-
-                  {presets.map((preset) => (
-                    <button
-                      type="button"
-                      key={preset.id}
-                      onClick={() => {
-                        setSelectedPresetId(String(preset.id));
-                        setSelectedPackId(null);
-                        setSelectedSlots([]);
-                        setShowPresetDropdown(false);
-                      }}
-                      className={`mt-1 w-full rounded-xl px-3 py-2 text-left text-sm transition ${
-                        selectedPresetId === String(preset.id)
-                          ? "bg-white/[0.08] text-white"
-                          : "text-zinc-300 hover:bg-white/[0.05] hover:text-white"
-                      }`}
-                    >
-                      {preset.nombre}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-zinc-200">
-              {presetName}
-            </div>
+            <FilterButton
+              label="Presets"
+              active={!isAllSelected || selectedPresetIds.length > 0}
+            />
           </div>
         }
       >
-        <div className="mb-5 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1fr_2fr]">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+        <div className="mb-5 grid grid-cols-1 gap-3 xl:grid-cols-[1fr_1fr_2fr]">
+          <div className={`rounded-2xl border p-3 ${getToneByValue(monthSummary.totalUsd)}`}>
             <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-400">
               PnL mes USD
             </p>
@@ -882,7 +878,7 @@ export default function CalendarioPage() {
             </p>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+          <div className={`rounded-2xl border p-3 ${getToneByValue(monthSummary.totalPct)}`}>
             <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-400">
               PnL mes %
             </p>
@@ -892,88 +888,111 @@ export default function CalendarioPage() {
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-            <div className="flex flex-wrap items-center gap-2">
-              {filteredPacks.length === 0 ? (
-                <div className="text-sm text-zinc-500">No hay packs para este preset.</div>
-              ) : (
-                filteredPacks.map((pack) => {
-                  const active = selectedPackId === pack.id;
+            <div className="flex h-full flex-wrap items-center gap-2">
+              <FilterButton
+                label="All"
+                active={isAllSelected}
+                onClick={() => togglePreset("all")}
+              />
 
-                  return (
-                    <button
-                      key={pack.id}
-                      type="button"
-                      onClick={() => {
-                        if (selectedPackId === pack.id) {
-                          setSelectedPackId(null);
-                          setSelectedSlots([]);
-                          return;
-                        }
-
-                        setSelectedPackId(pack.id);
-                        setSelectedSlots([]);
-                      }}
-                      className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
-                        active
-                          ? "border-sky-300/20 bg-sky-300/[0.10] text-white"
-                          : "border-white/10 bg-white/[0.03] text-zinc-200 hover:bg-white/[0.06]"
-                      }`}
-                    >
-                      {pack.nombre}
-                    </button>
-                  );
-                })
-              )}
-
-              {selectedPack &&
-                availableSlots.map((slot) => {
-                  const active = selectedSlots.includes(slot);
-
-                  return (
-                    <button
-                      key={slot}
-                      type="button"
-                      onClick={() => {
-                        setSelectedSlots((prev) =>
-                          prev.includes(slot)
-                            ? prev.filter((item) => item !== slot)
-                            : [...prev, slot]
-                        );
-                      }}
-                      className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
-                        active
-                          ? "border-emerald-300/20 bg-emerald-300/[0.12] text-emerald-200"
-                          : "border-white/10 bg-white/[0.03] text-zinc-200 hover:bg-white/[0.06]"
-                      }`}
-                    >
-                      {slot}
-                    </button>
-                  );
-                })}
+              {presets.map((preset) => (
+                <FilterButton
+                  key={preset.id}
+                  label={preset.nombre}
+                  active={selectedPresetIds.includes(String(preset.id))}
+                  onClick={() => togglePreset(String(preset.id))}
+                />
+              ))}
             </div>
           </div>
         </div>
 
-        <div className="mb-5 flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={previousMonth}
-            className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-zinc-300 transition hover:bg-white/[0.06]"
-          >
-            ←
-          </button>
+        <div className="mb-5 grid grid-cols-1 gap-3 xl:grid-cols-[1fr_auto]">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+            {selectedSinglePresetId === null ? (
+              <div className="text-sm text-zinc-500">
+                Selecciona un solo preset para ver sus packs.
+              </div>
+            ) : filteredPacks.length === 0 ? (
+              <div className="text-sm text-zinc-500">
+                No hay packs disponibles para este preset.
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                {filteredPacks.map((pack) => {
+                  const active = selectedPackId === pack.id;
 
-          <p className="text-xl font-semibold capitalize text-white">
-            {getMonthLabel(currentMonth)}
-          </p>
+                  return (
+                    <div
+                      key={pack.id}
+                      className={`flex items-center gap-2 transition-all duration-300 ${
+                        active ? "scale-[0.99]" : ""
+                      }`}
+                    >
+                      <FilterButton
+                        label={pack.nombre}
+                        active={active}
+                        compact={active}
+                        onClick={() => {
+                          if (selectedPackId === pack.id) {
+                            setSelectedPackId(null);
+                            setSelectedSlots([]);
+                            return;
+                          }
 
-          <button
-            type="button"
-            onClick={nextMonth}
-            className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-zinc-300 transition hover:bg-white/[0.06]"
-          >
-            →
-          </button>
+                          setSelectedPackId(pack.id);
+                          setSelectedSlots([]);
+                        }}
+                      />
+
+                      <div
+                        className={`flex items-center gap-2 overflow-hidden transition-all duration-300 ${
+                          active ? "max-w-[220px] opacity-100" : "max-w-0 opacity-0"
+                        }`}
+                      >
+                        {availableSlots.map((slot) => (
+                          <SlotButton
+                            key={`${pack.id}_${slot}`}
+                            label={slot}
+                            active={selectedSlots.includes(slot)}
+                            onClick={() => {
+                              setSelectedSlots((prev) =>
+                                prev.includes(slot)
+                                  ? prev.filter((item) => item !== slot)
+                                  : [...prev, slot]
+                              );
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={previousMonth}
+              className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-zinc-300 transition hover:bg-white/[0.06]"
+            >
+              ←
+            </button>
+
+            <p className="text-xl font-semibold text-white">
+              {getMonthLabel(currentMonth)}
+            </p>
+
+            <button
+              type="button"
+              onClick={nextMonth}
+              className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-zinc-300 transition hover:bg-white/[0.06]"
+            >
+              →
+            </button>
+          </div>
         </div>
 
         {loading ? (
@@ -1144,7 +1163,11 @@ export default function CalendarioPage() {
                 ) : (
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                      <div
+                        className={`rounded-2xl border p-3 ${getToneByValue(
+                          selectedDay.totalUsd
+                        )}`}
+                      >
                         <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
                           USD
                         </p>
@@ -1161,7 +1184,11 @@ export default function CalendarioPage() {
                         </p>
                       </div>
 
-                      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                      <div
+                        className={`rounded-2xl border p-3 ${getToneByValue(
+                          selectedDay.totalPct
+                        )}`}
+                      >
                         <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
                           %
                         </p>
@@ -1190,7 +1217,9 @@ export default function CalendarioPage() {
                         selectedDay.resultDetails.map((result) => (
                           <div
                             key={result.id}
-                            className="rounded-2xl border border-white/10 bg-white/[0.03] p-3"
+                            className={`rounded-2xl border p-3 ${getToneByValue(
+                              result.pnlUsd
+                            )}`}
                           >
                             <p className="text-sm font-medium text-white">
                               {result.alias} · {result.numeroCuenta}
