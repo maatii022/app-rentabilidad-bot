@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type AccountRelation =
@@ -48,6 +48,35 @@ type AccountOption = {
   label: string;
 };
 
+type PackSlotRow = {
+  id: number;
+  pack_id: number;
+  slot: string;
+  account_id: number | null;
+  packs:
+    | {
+        id: number;
+        nombre: string;
+        preset_id: number | null;
+      }
+    | {
+        id: number;
+        nombre: string;
+        preset_id: number | null;
+      }[]
+    | null;
+};
+
+type PackFilterItem = {
+  id: number;
+  nombre: string;
+  preset_id: number | null;
+  slots: {
+    slot: string;
+    account_id: number | null;
+  }[];
+};
+
 type CalendarEventItem = {
   id: string;
   kind: "perdida" | "fondeada" | "reemplazo" | "otro";
@@ -81,10 +110,29 @@ type CalendarDayData = {
 };
 
 const DAY_LABELS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+const SLOT_ORDER = ["A", "B", "C"];
 
 function getAccountData(accounts?: AccountRelation) {
   if (!accounts) return null;
   return Array.isArray(accounts) ? accounts[0] : accounts;
+}
+
+function getSinglePack(
+  pack:
+    | {
+        id: number;
+        nombre: string;
+        preset_id: number | null;
+      }
+    | {
+        id: number;
+        nombre: string;
+        preset_id: number | null;
+      }[]
+    | null
+) {
+  if (!pack) return null;
+  return Array.isArray(pack) ? pack[0] : pack;
 }
 
 function formatUsd(value: number) {
@@ -204,26 +252,6 @@ function ActionButton({
   );
 }
 
-function Select({
-  value,
-  onChange,
-  children,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none transition focus:border-white/20"
-    >
-      {children}
-    </select>
-  );
-}
-
 function getEventPillClasses(kind: CalendarEventItem["kind"]) {
   if (kind === "perdida") return "border-amber-300/20 bg-amber-300/[0.10] text-amber-200";
   if (kind === "fondeada") return "border-violet-300/20 bg-violet-300/[0.10] text-violet-200";
@@ -238,15 +266,41 @@ export default function CalendarioPage() {
   const [events, setEvents] = useState<AccountEvent[]>([]);
   const [presets, setPresets] = useState<PresetOption[]>([]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
+  const [packs, setPacks] = useState<PackFilterItem[]>([]);
+
   const [viewMode, setViewMode] = useState<"pnl" | "events">("pnl");
+
   const [selectedPresetId, setSelectedPresetId] = useState("todos");
-  const [selectedAccountId, setSelectedAccountId] = useState("total");
+  const [showPresetDropdown, setShowPresetDropdown] = useState(false);
+
+  const [selectedPackId, setSelectedPackId] = useState<number | null>(null);
+  const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
+
   const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
+
+  const presetDropdownRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        presetDropdownRef.current &&
+        !presetDropdownRef.current.contains(event.target as Node)
+      ) {
+        setShowPresetDropdown(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   async function cargarDatos() {
     setLoading(true);
@@ -320,8 +374,35 @@ export default function CalendarioPage() {
       `)
       .order("alias", { ascending: true });
 
-    const [dailyResponse, eventResponse, presetsResponse, accountsResponse] =
-      await Promise.all([dailyQuery, eventQuery, presetsQuery, accountsQuery]);
+    const packSlotsQuery = supabase
+      .from("pack_slots")
+      .select(`
+        id,
+        pack_id,
+        slot,
+        account_id,
+        packs (
+          id,
+          nombre,
+          preset_id
+        )
+      `)
+      .order("pack_id", { ascending: true })
+      .order("slot", { ascending: true });
+
+    const [
+      dailyResponse,
+      eventResponse,
+      presetsResponse,
+      accountsResponse,
+      packSlotsResponse,
+    ] = await Promise.all([
+      dailyQuery,
+      eventQuery,
+      presetsQuery,
+      accountsQuery,
+      packSlotsQuery,
+    ]);
 
     if (dailyResponse.error) {
       setError(dailyResponse.error.message);
@@ -343,6 +424,12 @@ export default function CalendarioPage() {
 
     if (accountsResponse.error) {
       setError(accountsResponse.error.message);
+      setLoading(false);
+      return;
+    }
+
+    if (packSlotsResponse.error) {
+      setError(packSlotsResponse.error.message);
       setLoading(false);
       return;
     }
@@ -372,10 +459,37 @@ export default function CalendarioPage() {
       };
     });
 
+    const rawPackSlots = (packSlotsResponse.data || []) as PackSlotRow[];
+    const packMap = new Map<number, PackFilterItem>();
+
+    rawPackSlots.forEach((row) => {
+      const pack = getSinglePack(row.packs);
+      if (!pack) return;
+
+      const existing = packMap.get(pack.id) ?? {
+        id: pack.id,
+        nombre: pack.nombre,
+        preset_id: pack.preset_id,
+        slots: [],
+      };
+
+      existing.slots.push({
+        slot: String(row.slot || "").trim().toUpperCase(),
+        account_id: row.account_id,
+      });
+
+      packMap.set(pack.id, existing);
+    });
+
+    const mappedPacks = Array.from(packMap.values()).sort((a, b) =>
+      a.nombre.localeCompare(b.nombre)
+    );
+
     setDailyResults((dailyResponse.data || []) as DailyResult[]);
     setEvents((eventResponse.data || []) as AccountEvent[]);
     setPresets((presetsResponse.data || []) as PresetOption[]);
     setAccounts(mappedAccounts);
+    setPacks(mappedPacks);
     setLoading(false);
   }
 
@@ -383,49 +497,100 @@ export default function CalendarioPage() {
     cargarDatos();
   }, [currentMonth]);
 
-  const filteredAccounts = useMemo(() => {
-    if (selectedPresetId === "todos") return accounts;
+  const presetName = useMemo(() => {
+    if (selectedPresetId === "todos") return "Todos los presets";
+    return (
+      presets.find((preset) => String(preset.id) === selectedPresetId)?.nombre ??
+      "Preset"
+    );
+  }, [presets, selectedPresetId]);
+
+  const filteredPacks = useMemo(() => {
+    if (selectedPresetId === "todos") return packs;
     const presetId = Number(selectedPresetId);
-    return accounts.filter((account) => account.preset_id === presetId);
-  }, [accounts, selectedPresetId]);
+    return packs.filter((pack) => pack.preset_id === presetId);
+  }, [packs, selectedPresetId]);
 
   useEffect(() => {
     if (
-      selectedAccountId !== "total" &&
-      !filteredAccounts.some((account) => String(account.id) === selectedAccountId)
+      selectedPackId !== null &&
+      !filteredPacks.some((pack) => pack.id === selectedPackId)
     ) {
-      setSelectedAccountId("total");
+      setSelectedPackId(null);
+      setSelectedSlots([]);
     }
-  }, [filteredAccounts, selectedAccountId]);
+  }, [filteredPacks, selectedPackId]);
+
+  const selectedPack = useMemo(() => {
+    if (selectedPackId === null) return null;
+    return filteredPacks.find((pack) => pack.id === selectedPackId) ?? null;
+  }, [filteredPacks, selectedPackId]);
+
+  const availableSlots = useMemo(() => {
+    if (!selectedPack) return [];
+    const set = new Set(
+      selectedPack.slots
+        .map((slot) => slot.slot)
+        .filter((slot) => SLOT_ORDER.includes(slot))
+    );
+
+    return SLOT_ORDER.filter((slot) => set.has(slot));
+  }, [selectedPack]);
+
+  useEffect(() => {
+    setSelectedSlots((prev) => prev.filter((slot) => availableSlots.includes(slot)));
+  }, [availableSlots]);
 
   const allowedAccountIds = useMemo(() => {
-    if (selectedPresetId === "todos") {
-      return new Set(accounts.map((account) => account.id));
+    let baseAccounts = accounts;
+
+    if (selectedPresetId !== "todos") {
+      const presetId = Number(selectedPresetId);
+      baseAccounts = baseAccounts.filter((account) => account.preset_id === presetId);
     }
 
-    return new Set(filteredAccounts.map((account) => account.id));
-  }, [accounts, filteredAccounts, selectedPresetId]);
+    let allowedIds = new Set(baseAccounts.map((account) => account.id));
+
+    if (selectedPack) {
+      const packAccountIds = new Set(
+        selectedPack.slots
+          .filter((slot) => slot.account_id !== null)
+          .map((slot) => slot.account_id as number)
+      );
+
+      allowedIds = new Set(
+        Array.from(allowedIds).filter((id) => packAccountIds.has(id))
+      );
+    }
+
+    if (selectedPack && selectedSlots.length > 0) {
+      const slotAccountIds = new Set(
+        selectedPack.slots
+          .filter(
+            (slot) =>
+              selectedSlots.includes(slot.slot) && slot.account_id !== null
+          )
+          .map((slot) => slot.account_id as number)
+      );
+
+      allowedIds = new Set(
+        Array.from(allowedIds).filter((id) => slotAccountIds.has(id))
+      );
+    }
+
+    return allowedIds;
+  }, [accounts, selectedPresetId, selectedPack, selectedSlots]);
 
   const filteredResults = useMemo(() => {
-    let base = dailyResults.filter((item) => allowedAccountIds.has(item.account_id));
-
-    if (selectedAccountId === "total") return base;
-
-    const accountId = Number(selectedAccountId);
-    return base.filter((item) => item.account_id === accountId);
-  }, [dailyResults, allowedAccountIds, selectedAccountId]);
+    return dailyResults.filter((item) => allowedAccountIds.has(item.account_id));
+  }, [dailyResults, allowedAccountIds]);
 
   const filteredEvents = useMemo(() => {
-    let base = events.filter((item) => {
+    return events.filter((item) => {
       if (!item.account_id) return true;
       return allowedAccountIds.has(item.account_id);
     });
-
-    if (selectedAccountId === "total") return base;
-
-    const accountId = Number(selectedAccountId);
-    return base.filter((item) => item.account_id === accountId);
-  }, [events, allowedAccountIds, selectedAccountId]);
+  }, [events, allowedAccountIds]);
 
   const dailyMap = useMemo(() => {
     const resultMap = new Map<string, CalendarDayData>();
@@ -520,9 +685,15 @@ export default function CalendarioPage() {
       day.events = Array.from(grouped.values())
         .map((event) => ({
           ...event,
-          label: event.count && event.count > 1 ? `${event.label} ×${event.count}` : event.label,
+          label:
+            event.count && event.count > 1
+              ? `${event.label} ×${event.count}`
+              : event.label,
         }))
         .slice(0, 4);
+
+      day.resultDetails.sort((a, b) => a.alias.localeCompare(b.alias));
+      day.eventDetails.sort((a, b) => a.tipo.localeCompare(b.tipo));
     });
 
     return resultMap;
@@ -564,20 +735,30 @@ export default function CalendarioPage() {
       (acc, day) => {
         acc.totalUsd += day.totalUsd;
         acc.totalPct += day.totalPct;
-        acc.totalEvents += day.events.length;
-        acc.daysWithResults += day.resultCount > 0 ? 1 : 0;
         return acc;
       },
       {
         totalUsd: 0,
         totalPct: 0,
-        totalEvents: 0,
-        daysWithResults: 0,
       }
     );
   }, [dailyMap]);
 
   const selectedDay = selectedDayKey ? dailyMap.get(selectedDayKey) : undefined;
+
+  const monthUsdColor =
+    monthSummary.totalUsd > 0
+      ? "text-emerald-300"
+      : monthSummary.totalUsd < 0
+      ? "text-rose-300"
+      : "text-white";
+
+  const monthPctColor =
+    monthSummary.totalPct > 0
+      ? "text-emerald-300"
+      : monthSummary.totalPct < 0
+      ? "text-rose-300"
+      : "text-white";
 
   function previousMonth() {
     setCurrentMonth(
@@ -630,71 +811,146 @@ export default function CalendarioPage() {
               </div>
             </div>
 
-            <Select
-              value={selectedPresetId}
-              onChange={setSelectedPresetId}
-            >
-              <option value="todos">Todos los presets</option>
-              {presets.map((preset) => (
-                <option key={preset.id} value={String(preset.id)}>
-                  {preset.nombre}
-                </option>
-              ))}
-            </Select>
+            <div className="relative" ref={presetDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setShowPresetDropdown((prev) => !prev)}
+                className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
+                  showPresetDropdown
+                    ? "border-sky-300/20 bg-sky-300/[0.10] text-white"
+                    : "border-white/10 bg-white/[0.03] text-zinc-200 hover:bg-white/[0.06]"
+                }`}
+              >
+                Presets
+              </button>
 
-            <Select
-              value={selectedAccountId}
-              onChange={setSelectedAccountId}
-            >
-              <option value="total">
-                {selectedPresetId === "todos"
-                  ? "Total, todas las cuentas"
-                  : "Total del preset"}
-              </option>
-              {filteredAccounts.map((account) => (
-                <option key={account.id} value={String(account.id)}>
-                  {account.label}
-                </option>
-              ))}
-            </Select>
+              {showPresetDropdown && (
+                <div className="absolute right-0 z-20 mt-2 w-60 rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(10,18,32,0.92),rgba(8,16,28,0.88))] p-2 shadow-[0_18px_40px_rgba(0,0,0,0.22)] backdrop-blur-xl">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedPresetId("todos");
+                      setSelectedPackId(null);
+                      setSelectedSlots([]);
+                      setShowPresetDropdown(false);
+                    }}
+                    className={`w-full rounded-xl px-3 py-2 text-left text-sm transition ${
+                      selectedPresetId === "todos"
+                        ? "bg-white/[0.08] text-white"
+                        : "text-zinc-300 hover:bg-white/[0.05] hover:text-white"
+                    }`}
+                  >
+                    Todos los presets
+                  </button>
+
+                  {presets.map((preset) => (
+                    <button
+                      type="button"
+                      key={preset.id}
+                      onClick={() => {
+                        setSelectedPresetId(String(preset.id));
+                        setSelectedPackId(null);
+                        setSelectedSlots([]);
+                        setShowPresetDropdown(false);
+                      }}
+                      className={`mt-1 w-full rounded-xl px-3 py-2 text-left text-sm transition ${
+                        selectedPresetId === String(preset.id)
+                          ? "bg-white/[0.08] text-white"
+                          : "text-zinc-300 hover:bg-white/[0.05] hover:text-white"
+                      }`}
+                    >
+                      {preset.nombre}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-sm text-zinc-200">
+              {presetName}
+            </div>
           </div>
         }
       >
-        <div className="mb-5 grid grid-cols-1 gap-3 md:grid-cols-4">
-          <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] p-3">
+        <div className="mb-5 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_1fr_2fr]">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
             <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-400">
               PnL mes USD
             </p>
-            <p className="mt-2 text-2xl font-semibold text-white">
+            <p className={`mt-2 text-2xl font-semibold ${monthUsdColor}`}>
               {formatUsd(monthSummary.totalUsd)}
             </p>
           </div>
 
-          <div className="rounded-2xl border border-sky-400/20 bg-sky-400/[0.06] p-3">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
             <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-400">
               PnL mes %
             </p>
-            <p className="mt-2 text-2xl font-semibold text-white">
+            <p className={`mt-2 text-2xl font-semibold ${monthPctColor}`}>
               {formatPct(monthSummary.totalPct)}
             </p>
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-400">
-              Días con resultados
-            </p>
-            <p className="mt-2 text-2xl font-semibold text-white">
-              {monthSummary.daysWithResults}
-            </p>
-          </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {filteredPacks.length === 0 ? (
+                <div className="text-sm text-zinc-500">No hay packs para este preset.</div>
+              ) : (
+                filteredPacks.map((pack) => {
+                  const active = selectedPackId === pack.id;
 
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-400">
-              Eventos del mes
-            </p>
-            <p className="mt-2 text-2xl font-semibold text-white">
-              {monthSummary.totalEvents}
-            </p>
+                  return (
+                    <button
+                      key={pack.id}
+                      type="button"
+                      onClick={() => {
+                        if (selectedPackId === pack.id) {
+                          setSelectedPackId(null);
+                          setSelectedSlots([]);
+                          return;
+                        }
+
+                        setSelectedPackId(pack.id);
+                        setSelectedSlots([]);
+                      }}
+                      className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
+                        active
+                          ? "border-sky-300/20 bg-sky-300/[0.10] text-white"
+                          : "border-white/10 bg-white/[0.03] text-zinc-200 hover:bg-white/[0.06]"
+                      }`}
+                    >
+                      {pack.nombre}
+                    </button>
+                  );
+                })
+              )}
+
+              {selectedPack &&
+                availableSlots.map((slot) => {
+                  const active = selectedSlots.includes(slot);
+
+                  return (
+                    <button
+                      key={slot}
+                      type="button"
+                      onClick={() => {
+                        setSelectedSlots((prev) =>
+                          prev.includes(slot)
+                            ? prev.filter((item) => item !== slot)
+                            : [...prev, slot]
+                        );
+                      }}
+                      className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
+                        active
+                          ? "border-emerald-300/20 bg-emerald-300/[0.12] text-emerald-200"
+                          : "border-white/10 bg-white/[0.03] text-zinc-200 hover:bg-white/[0.06]"
+                      }`}
+                    >
+                      {slot}
+                    </button>
+                  );
+                })}
+            </div>
           </div>
         </div>
 
@@ -765,6 +1021,12 @@ export default function CalendarioPage() {
                           type="button"
                           onClick={() => {
                             if (!isCurrentMonth) return;
+
+                            if (selectedDayKey === dateKey && isDetailOpen) {
+                              setIsDetailOpen(false);
+                              return;
+                            }
+
                             setSelectedDayKey(dateKey);
                             setIsDetailOpen(true);
                           }}
@@ -886,7 +1148,15 @@ export default function CalendarioPage() {
                         <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
                           USD
                         </p>
-                        <p className="mt-2 text-xl font-semibold text-white">
+                        <p
+                          className={`mt-2 text-xl font-semibold ${
+                            selectedDay.totalUsd > 0
+                              ? "text-emerald-300"
+                              : selectedDay.totalUsd < 0
+                              ? "text-rose-300"
+                              : "text-white"
+                          }`}
+                        >
                           {formatUsd(selectedDay.totalUsd)}
                         </p>
                       </div>
@@ -895,7 +1165,15 @@ export default function CalendarioPage() {
                         <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
                           %
                         </p>
-                        <p className="mt-2 text-xl font-semibold text-white">
+                        <p
+                          className={`mt-2 text-xl font-semibold ${
+                            selectedDay.totalPct > 0
+                              ? "text-emerald-300"
+                              : selectedDay.totalPct < 0
+                              ? "text-rose-300"
+                              : "text-white"
+                          }`}
+                        >
                           {formatPct(selectedDay.totalPct)}
                         </p>
                       </div>
