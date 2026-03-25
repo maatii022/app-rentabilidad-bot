@@ -62,8 +62,10 @@ type ActiveAccountOption = {
 
 type LiveStatusItem = {
   preset?: string;
-  pnl_actual?: number;
-  trades_abiertos?: number;
+  pnl_actual?: number | null;
+  pnl_pct_actual?: number | null;
+  trades_abiertos?: number | null;
+  balance?: number | null;
   error?: string;
 };
 
@@ -86,24 +88,17 @@ const MONTH_OPTIONS = [
 
 function SectionCard({
   title,
-  description,
   children,
   right,
 }: {
   title: string;
-  description?: string;
   children: React.ReactNode;
   right?: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 md:p-6">
-      <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h2 className="text-lg font-medium text-white">{title}</h2>
-          {description ? (
-            <p className="mt-1 text-sm text-zinc-400">{description}</p>
-          ) : null}
-        </div>
+    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:p-5">
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <h2 className="text-base font-medium text-white">{title}</h2>
         {right ? <div className="flex flex-wrap gap-2">{right}</div> : null}
       </div>
       {children}
@@ -114,14 +109,25 @@ function SectionCard({
 function StatCard({
   label,
   value,
+  tone = "neutral",
 }: {
   label: string;
   value: number | string;
+  tone?: "neutral" | "blue" | "amber" | "green" | "violet" | "red";
 }) {
+  const toneClasses = {
+    neutral: "border-white/10 bg-black/20",
+    blue: "border-sky-400/20 bg-sky-400/[0.08]",
+    amber: "border-amber-300/20 bg-amber-300/[0.08]",
+    green: "border-emerald-400/20 bg-emerald-400/[0.08]",
+    violet: "border-violet-400/20 bg-violet-400/[0.08]",
+    red: "border-rose-400/20 bg-rose-400/[0.08]",
+  };
+
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-      <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">{label}</p>
-      <p className="mt-3 text-2xl font-semibold text-white">{value}</p>
+    <div className={`rounded-2xl border p-3.5 ${toneClasses[tone]}`}>
+      <p className="text-[11px] uppercase tracking-[0.12em] text-zinc-400">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-white">{value}</p>
     </div>
   );
 }
@@ -152,7 +158,7 @@ function ActionButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-xl px-4 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${styles[variant]}`}
+      className={`rounded-xl px-3.5 py-2 text-xs font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${styles[variant]}`}
     >
       {children}
     </button>
@@ -160,14 +166,14 @@ function ActionButton({
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <label className="mb-2 block text-sm text-zinc-400">{children}</label>;
+  return <label className="mb-1.5 block text-xs text-zinc-400">{children}</label>;
 }
 
 function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-white/20 focus:bg-black/30 ${props.className || ""}`}
+      className={`w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-white/20 focus:bg-black/30 ${props.className || ""}`}
     />
   );
 }
@@ -176,7 +182,7 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-white/20 focus:bg-black/30 ${props.className || ""}`}
+      className={`w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white outline-none transition focus:border-white/20 focus:bg-black/30 ${props.className || ""}`}
     />
   );
 }
@@ -195,11 +201,16 @@ function formatEventDate(value: string) {
 }
 
 function getEventTone(tipo: string) {
-  if (tipo === "SORD in") return "text-zinc-100";
-  if (tipo === "SORD out") return "text-zinc-300";
-  if (tipo === "perdida") return "text-zinc-300";
-  if (tipo === "fondeada") return "text-zinc-100";
+  if (tipo === "SORD in") return "text-emerald-300";
+  if (tipo === "SORD out") return "text-rose-300";
+  if (tipo === "perdida") return "text-amber-300";
+  if (tipo === "fondeada") return "text-violet-300";
   return "text-zinc-200";
+}
+
+function formatPercent(value?: number | null) {
+  if (typeof value !== "number" || Number.isNaN(value)) return "-";
+  return `${value.toFixed(2)}%`;
 }
 
 export default function DashboardPage() {
@@ -215,6 +226,7 @@ export default function DashboardPage() {
   const [presetFilter, setPresetFilter] = useState("todos");
   const [tipoFilter, setTipoFilter] = useState("todos");
   const [soloIncidencias, setSoloIncidencias] = useState(false);
+  const [priorizarIncidencias, setPriorizarIncidencias] = useState(false);
 
   const currentDate = new Date();
   const [historicoModo, setHistoricoModo] = useState("todo");
@@ -612,7 +624,7 @@ export default function DashboardPage() {
   }, [events]);
 
   const packsFiltrados = useMemo(() => {
-    return packs.filter((pack) => {
+    const base = packs.filter((pack) => {
       const presetNombre = pack.presets?.nombre ?? "";
 
       const cumplePreset = presetFilter === "todos" || presetNombre === presetFilter;
@@ -623,22 +635,18 @@ export default function DashboardPage() {
 
       return cumplePreset && cumpleTipo && cumpleIncidencia;
     });
-  }, [packs, presetFilter, tipoFilter, soloIncidencias]);
 
-  const packsConIncidencias = useMemo(() => {
-    return packsFiltrados.filter((pack) =>
-      pack.pack_slots?.some((slot) => slot.pendiente_reemplazo)
-    );
-  }, [packsFiltrados]);
+    if (!priorizarIncidencias) return base;
 
-  const packsSinIncidencias = useMemo(() => {
-    return packsFiltrados.filter(
-      (pack) => !pack.pack_slots?.some((slot) => slot.pendiente_reemplazo)
-    );
-  }, [packsFiltrados]);
+    return [...base].sort((a, b) => {
+      const aInc = a.pack_slots?.some((slot) => slot.pendiente_reemplazo) ? 1 : 0;
+      const bInc = b.pack_slots?.some((slot) => slot.pendiente_reemplazo) ? 1 : 0;
+      return bInc - aInc;
+    });
+  }, [packs, presetFilter, tipoFilter, soloIncidencias, priorizarIncidencias]);
 
   const resumen = useMemo(() => {
-    const packsConIncidenciasCount = packsFiltrados.filter((pack) =>
+    const packsConIncidencias = packsFiltrados.filter((pack) =>
       pack.pack_slots?.some((slot) => slot.pendiente_reemplazo)
     ).length;
 
@@ -652,7 +660,7 @@ export default function DashboardPage() {
 
     return {
       packsVisibles: packsFiltrados.length,
-      packsConIncidencias: packsConIncidenciasCount,
+      packsConIncidencias,
       slotsPendientes,
       cuentasActivas,
     };
@@ -680,11 +688,11 @@ export default function DashboardPage() {
     }, 50);
   }
 
-  function getLivePnlClass(value?: number) {
+  function getLivePnlClass(value?: number | null) {
     if (typeof value !== "number") return "text-zinc-500";
-    if (value > 0) return "text-zinc-100";
-    if (value < 0) return "text-zinc-300";
-    return "text-zinc-400";
+    if (value > 0) return "text-emerald-300";
+    if (value < 0) return "text-rose-300";
+    return "text-zinc-300";
   }
 
   useEffect(() => {
@@ -697,19 +705,16 @@ export default function DashboardPage() {
   }, [historicoModo, historicoAnio, historicoMes, presetFilter, tipoFilter]);
 
   return (
-    <div className="space-y-8 text-white">
-      <section className="rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-white/[0.02] p-6 md:p-8">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+    <div className="space-y-6 text-white">
+      <section className="rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-white/[0.02] p-5 md:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
-            <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+            <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">
               App Rentabilidad Bot
             </p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white md:text-4xl">
               Dashboard
             </h1>
-            <p className="mt-3 text-sm leading-6 text-zinc-400 md:text-base">
-              Vista operativa de packs, incidencias, revisión diaria y actividad reciente.
-            </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -718,7 +723,7 @@ export default function DashboardPage() {
               disabled={loadingLive}
               variant="secondary"
             >
-              {loadingLive ? "Recargando estado..." : "Recargar estado"}
+              {loadingLive ? "Recargando..." : "Recargar estado"}
             </ActionButton>
 
             <ActionButton
@@ -731,45 +736,54 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
-          <StatCard label="Packs visibles" value={resumen.packsVisibles} />
-          <StatCard label="Packs con incidencias" value={resumen.packsConIncidencias} />
-          <StatCard label="Slots pendientes" value={resumen.slotsPendientes} />
-          <StatCard label="Cuentas activas" value={resumen.cuentasActivas} />
-          <StatCard label="Fondeadas históricas" value={summary.fondeadasHistoricas} />
-          <StatCard label="Perdidas históricas" value={summary.perdidasHistoricas} />
+        <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <StatCard label="Packs visibles" value={resumen.packsVisibles} tone="blue" />
+          <StatCard label="Con incidencias" value={resumen.packsConIncidencias} tone="amber" />
+          <StatCard label="Slots pendientes" value={resumen.slotsPendientes} tone="amber" />
+          <StatCard label="Cuentas activas" value={resumen.cuentasActivas} tone="green" />
+          <StatCard label="Fondeadas históricas" value={summary.fondeadasHistoricas} tone="violet" />
+          <StatCard label="Perdidas históricas" value={summary.perdidasHistoricas} tone="red" />
         </div>
       </section>
 
       <SectionCard
         title="Filtros"
-        description="Ajusta la vista del dashboard y del resumen histórico."
         right={
-          <ActionButton
-            onClick={() => {
-              setPresetFilter("todos");
-              setTipoFilter("todos");
-              setSoloIncidencias(false);
-              setHistoricoModo("todo");
-              setHistoricoAnio(String(currentDate.getFullYear()));
-              setHistoricoMes(String(currentDate.getMonth() + 1));
-            }}
-            variant="ghost"
-          >
-            Limpiar filtros
-          </ActionButton>
+          <div className="flex flex-wrap gap-2">
+            <ActionButton
+              onClick={() => setPriorizarIncidencias((prev) => !prev)}
+              variant={priorizarIncidencias ? "primary" : "ghost"}
+            >
+              {priorizarIncidencias ? "Incidencias primero: sí" : "Incidencias primero"}
+            </ActionButton>
+
+            <ActionButton
+              onClick={() => {
+                setPresetFilter("todos");
+                setTipoFilter("todos");
+                setSoloIncidencias(false);
+                setPriorizarIncidencias(false);
+                setHistoricoModo("todo");
+                setHistoricoAnio(String(currentDate.getFullYear()));
+                setHistoricoMes(String(currentDate.getMonth() + 1));
+              }}
+              variant="ghost"
+            >
+              Limpiar
+            </ActionButton>
+          </div>
         }
       >
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
           <div>
-            <FieldLabel>Período histórico</FieldLabel>
+            <FieldLabel>Período</FieldLabel>
             <Select
               value={historicoModo}
               onChange={(e) => setHistoricoModo(e.target.value)}
             >
               <option value="todo">Todo</option>
-              <option value="anio">Año concreto</option>
-              <option value="mes">Mes concreto</option>
+              <option value="anio">Año</option>
+              <option value="mes">Mes</option>
             </Select>
           </div>
 
@@ -821,7 +835,7 @@ export default function DashboardPage() {
           </div>
 
           <div>
-            <FieldLabel>Tipo de pack</FieldLabel>
+            <FieldLabel>Tipo</FieldLabel>
             <Select
               value={tipoFilter}
               onChange={(e) => setTipoFilter(e.target.value)}
@@ -833,121 +847,59 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-end xl:col-span-2">
-            <label className="inline-flex min-h-[44px] items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-2.5 text-sm text-zinc-300">
+            <label className="inline-flex min-h-[40px] items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-2 text-sm text-zinc-300">
               <input
                 type="checkbox"
                 checked={soloIncidencias}
                 onChange={(e) => setSoloIncidencias(e.target.checked)}
                 className="h-4 w-4 rounded border-white/20 bg-transparent"
               />
-              Solo packs con incidencias
+              Solo incidencias
             </label>
           </div>
         </div>
       </SectionCard>
 
-      <SectionCard
-        title="Packs activos"
-        description="Bloque principal de seguimiento y acciones por pack."
-      >
-        <div className="space-y-8">
-          {packsConIncidencias.length > 0 && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-medium text-white">Con incidencias</h3>
-                  <p className="text-sm text-zinc-500">
-                    Packs con al menos una cuenta pendiente de reemplazo.
-                  </p>
-                </div>
-                <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-zinc-400">
-                  {packsConIncidencias.length} packs
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {packsConIncidencias.map((pack) => (
-                  <PackCard
-                    key={pack.id}
-                    pack={pack}
-                    liveStatus={liveStatus}
-                    loading={loading}
-                    onRotar={rotarPack}
-                    onEvaluar={evaluarPack}
-                    onPerder={marcarPerdida}
-                    onFondear={marcarFondeada}
-                    onSelectDaily={seleccionarCuentaParaDaily}
-                    onSelectReplace={seleccionarSlotPendiente}
-                    getLivePnlClass={getLivePnlClass}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {packsSinIncidencias.length > 0 && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-medium text-white">Sin incidencias</h3>
-                  <p className="text-sm text-zinc-500">
-                    Packs operativos sin pendientes de reemplazo.
-                  </p>
-                </div>
-                <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-zinc-400">
-                  {packsSinIncidencias.length} packs
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {packsSinIncidencias.map((pack) => (
-                  <PackCard
-                    key={pack.id}
-                    pack={pack}
-                    liveStatus={liveStatus}
-                    loading={loading}
-                    onRotar={rotarPack}
-                    onEvaluar={evaluarPack}
-                    onPerder={marcarPerdida}
-                    onFondear={marcarFondeada}
-                    onSelectDaily={seleccionarCuentaParaDaily}
-                    onSelectReplace={seleccionarSlotPendiente}
-                    getLivePnlClass={getLivePnlClass}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
+      <SectionCard title="Packs activos">
+        <div className="space-y-3">
           {packsFiltrados.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-8 text-center text-sm text-zinc-500">
+            <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-center text-sm text-zinc-500">
               No hay packs que coincidan con los filtros actuales.
             </div>
           )}
+
+          {packsFiltrados.map((pack) => (
+            <PackCard
+              key={pack.id}
+              pack={pack}
+              liveStatus={liveStatus}
+              loading={loading}
+              onRotar={rotarPack}
+              onEvaluar={evaluarPack}
+              onPerder={marcarPerdida}
+              onFondear={marcarFondeada}
+              onSelectDaily={seleccionarCuentaParaDaily}
+              onSelectReplace={seleccionarSlotPendiente}
+              getLivePnlClass={getLivePnlClass}
+            />
+          ))}
         </div>
       </SectionCard>
 
       {pendingSlotOptions.length > 0 && (
-        <SectionCard
-          title="Incidencias y reemplazos"
-          description="Gestiona slots pendientes sin mezclarlo con el bloque principal de packs."
-        >
+        <SectionCard title="Incidencias y reemplazos">
           <div
             ref={reemplazoRef}
             className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_1fr]"
           >
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-              <h3 className="text-sm font-medium text-white">Resumen</h3>
-              <p className="mt-2 text-sm text-zinc-400">
+            <div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.07] p-4">
+              <p className="text-sm text-amber-50/90">
                 Hay {pendingSlotOptions.length} slots pendientes de reemplazo.
-              </p>
-              <p className="mt-3 text-sm text-zinc-500">
-                Puedes seleccionar un slot y asignarle una nueva cuenta desde este bloque.
               </p>
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 gap-3">
                 <div>
                   <FieldLabel>Slot pendiente</FieldLabel>
                   <Select
@@ -997,43 +949,37 @@ export default function DashboardPage() {
       )}
 
       {resultadosRevision.length > 0 && (
-        <SectionCard
-          title="Resultado de la revisión diaria"
-          description="Último resultado devuelto por la ejecución manual o automática."
-        >
+        <SectionCard title="Resultado de la revisión diaria">
           <div className="space-y-3">
             {resultadosRevision.map((resultado) => (
               <div
                 key={`${resultado.packId}-${resultado.packNombre}`}
-                className="rounded-2xl border border-white/10 bg-black/20 p-4"
+                className="rounded-2xl border border-white/10 bg-black/20 p-3.5"
               >
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <p className="text-sm font-medium text-white">{resultado.packNombre}</p>
                   <span
                     className={`rounded-full border px-3 py-1 text-xs ${
                       resultado.ok
-                        ? "border-white/10 bg-white/5 text-zinc-200"
-                        : "border-white/10 bg-white/5 text-zinc-400"
+                        ? "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-200"
+                        : "border-amber-300/20 bg-amber-300/[0.08] text-amber-200"
                     }`}
                   >
                     {resultado.ok ? "Correcto" : "Revisar"}
                   </span>
                 </div>
-                <p className="mt-3 text-sm text-zinc-400">{resultado.mensaje}</p>
+                <p className="mt-2 text-sm text-zinc-400">{resultado.mensaje}</p>
               </div>
             ))}
           </div>
         </SectionCard>
       )}
 
-      <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1.15fr_0.85fr]">
-        <SectionCard
-          title="Eventos recientes"
-          description="Historial reciente de movimientos y cambios de estado."
-        >
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <SectionCard title="Eventos recientes">
           <div className="space-y-3">
             {events.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-sm text-zinc-500">
+              <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-sm text-zinc-500">
                 No hay eventos recientes.
               </div>
             )}
@@ -1041,7 +987,7 @@ export default function DashboardPage() {
             {events.map((event) => (
               <div
                 key={event.id}
-                className="rounded-2xl border border-white/10 bg-black/20 p-4"
+                className="rounded-2xl border border-white/10 bg-black/20 p-3.5"
               >
                 <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                   <div className="space-y-1">
@@ -1056,19 +1002,16 @@ export default function DashboardPage() {
                 </div>
 
                 {event.descripcion ? (
-                  <p className="mt-3 text-sm leading-6 text-zinc-400">{event.descripcion}</p>
+                  <p className="mt-2 text-sm leading-6 text-zinc-400">{event.descripcion}</p>
                 ) : null}
               </div>
             ))}
           </div>
         </SectionCard>
 
-        <div className="space-y-8">
-          <SectionCard
-            title="Carga manual"
-            description="Bloque secundario para añadir daily results manualmente cuando haga falta."
-          >
-            <div ref={dailyResultRef} className="grid grid-cols-1 gap-4">
+        <div className="space-y-6">
+          <SectionCard title="Carga manual">
+            <div ref={dailyResultRef} className="grid grid-cols-1 gap-3">
               <div>
                 <FieldLabel>Cuenta activa</FieldLabel>
                 <Select
@@ -1084,7 +1027,7 @@ export default function DashboardPage() {
                 </Select>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div>
                   <FieldLabel>Fecha</FieldLabel>
                   <Input
@@ -1095,7 +1038,7 @@ export default function DashboardPage() {
                 </div>
 
                 <div>
-                  <FieldLabel>Número de trades</FieldLabel>
+                  <FieldLabel>Trades</FieldLabel>
                   <Input
                     value={dailyNumeroTrades}
                     onChange={(e) => setDailyNumeroTrades(e.target.value)}
@@ -1104,7 +1047,7 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div>
                   <FieldLabel>PnL USD</FieldLabel>
                   <Input
@@ -1131,9 +1074,6 @@ export default function DashboardPage() {
                   onChange={(e) => setDailyNotas(e.target.value)}
                   placeholder="Ej. Día rojo por noticia"
                 />
-                <p className="mt-2 text-xs text-zinc-500">
-                  Red day se calcula automáticamente si el PnL % es menor que -0.2.
-                </p>
               </div>
 
               <div>
@@ -1180,37 +1120,37 @@ function PackCard({
   onFondear: (accountId: number) => void;
   onSelectDaily: (accountId: number) => void;
   onSelectReplace: (slotId: number) => void;
-  getLivePnlClass: (value?: number) => string;
+  getLivePnlClass: (value?: number | null) => string;
 }) {
   const tieneIncidencia =
     pack.pack_slots?.some((slot) => slot.pendiente_reemplazo) ?? false;
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/20 p-4 md:p-5">
-      <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+    <div
+      className={`rounded-2xl border p-4 ${
+        tieneIncidencia
+          ? "border-amber-300/20 bg-amber-300/[0.04]"
+          : "border-white/10 bg-black/20"
+      }`}
+    >
+      <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-medium text-white">{pack.nombre}</h3>
+            <h3 className="text-base font-medium text-white">{pack.nombre}</h3>
             {tieneIncidencia ? (
-              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] text-zinc-300">
+              <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.10] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-amber-100">
                 Incidencia
               </span>
             ) : (
-              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] text-zinc-500">
+              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-500">
                 Estable
               </span>
             )}
           </div>
 
-          <p className="mt-2 text-sm text-zinc-400">
+          <p className="mt-1.5 text-sm text-zinc-400">
             Preset: {pack.presets?.nombre ?? "-"} · Tipo: {pack.tipo_pack}
           </p>
-
-          {tieneIncidencia ? (
-            <p className="mt-3 text-sm text-zinc-400">
-              Este pack tiene al menos una cuenta pendiente de reemplazo.
-            </p>
-          ) : null}
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -1232,7 +1172,7 @@ function PackCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2.5 xl:grid-cols-3">
         {pack.pack_slots
           ?.sort((a, b) => a.orden - b.orden)
           .map((slot) => {
@@ -1253,52 +1193,79 @@ function PackCard({
             return (
               <div
                 key={slot.id}
-                className={`rounded-2xl border p-4 ${
-                  slot.pendiente_reemplazo
-                    ? "border-white/15 bg-white/[0.04]"
+                className={`rounded-xl border p-3 ${
+                  slot.es_activa
+                    ? "border-sky-300/25 bg-sky-300/[0.07] shadow-[0_0_0_1px_rgba(125,211,252,0.08)]"
+                    : slot.pendiente_reemplazo
+                    ? "border-amber-300/20 bg-amber-300/[0.08]"
                     : "border-white/10 bg-black/20"
                 }`}
               >
-                <div className="mb-4 flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm uppercase tracking-[0.14em] text-zinc-500">
+                <div className="mb-2.5 flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
                       Slot {slot.slot}
                     </p>
-                    <p className="mt-2 text-base font-medium text-white">
+                    <p className="mt-1 truncate text-sm font-medium text-white">
                       {slot.accounts?.alias ?? "Sin cuenta"}
                     </p>
                   </div>
 
-                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-400">
+                  <span
+                    className={`rounded-full border px-2 py-1 text-[10px] ${
+                      slot.es_activa
+                        ? "border-sky-300/20 bg-sky-300/[0.12] text-sky-100"
+                        : "border-white/10 bg-white/5 text-zinc-400"
+                    }`}
+                  >
                     {slot.es_activa ? "Activa" : "Inactiva"}
                   </span>
                 </div>
 
-                <div className="space-y-2 text-sm text-zinc-400">
+                <div className="space-y-1 text-[12px] text-zinc-400">
                   <p>Número: {slot.accounts?.numero_cuenta ?? "-"}</p>
                   <p>Estado: {slot.accounts?.estado ?? "-"}</p>
                   <p>Tipo: {slot.accounts?.tipo_cuenta ?? "-"}</p>
 
-                  {slot.es_activa && (
-                    <p>
-                      PnL actual:{" "}
-                      <span className={getLivePnlClass(live?.pnl_actual)}>
+                  <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-white/5 bg-black/20 p-2">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                        PnL USD
+                      </p>
+                      <p className={`mt-1 text-sm font-medium ${getLivePnlClass(live?.pnl_actual)}`}>
                         {typeof live?.pnl_actual === "number"
                           ? live.pnl_actual.toFixed(2)
                           : "-"}
-                      </span>
-                    </p>
-                  )}
+                      </p>
+                    </div>
 
-                  <p>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                        PnL %
+                      </p>
+                      <p
+                        className={`mt-1 text-sm font-medium ${getLivePnlClass(
+                          live?.pnl_pct_actual
+                        )}`}
+                      >
+                        {formatPercent(live?.pnl_pct_actual)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="pt-1">
                     Pendiente reemplazo:{" "}
-                    <span className={slot.pendiente_reemplazo ? "text-zinc-200" : "text-zinc-500"}>
+                    <span
+                      className={
+                        slot.pendiente_reemplazo ? "text-amber-200" : "text-zinc-500"
+                      }
+                    >
                       {slot.pendiente_reemplazo ? "Sí" : "No"}
                     </span>
                   </p>
                 </div>
 
-                <div className="mt-5 flex flex-wrap gap-2">
+                <div className="mt-3 flex flex-wrap gap-1.5">
                   <ActionButton
                     onClick={() => slot.accounts?.id && onPerder(slot.accounts.id)}
                     disabled={loading || !puedePerder}
@@ -1321,7 +1288,7 @@ function PackCard({
                       disabled={loading}
                       variant="ghost"
                     >
-                      Cargar daily
+                      Daily
                     </ActionButton>
                   )}
 
@@ -1331,7 +1298,7 @@ function PackCard({
                       disabled={loading}
                       variant="secondary"
                     >
-                      Usar en reemplazo
+                      Reemplazo
                     </ActionButton>
                   )}
                 </div>
