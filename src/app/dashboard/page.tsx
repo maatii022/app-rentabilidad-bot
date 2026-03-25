@@ -55,11 +55,6 @@ type ResultadoRevisionDiaria = {
   mensaje: string;
 };
 
-type ActiveAccountOption = {
-  accountId: number;
-  label: string;
-};
-
 type LiveStatusItem = {
   preset?: string;
   pnl_actual?: number | null;
@@ -308,15 +303,7 @@ export default function DashboardPage() {
   const [resultadosRevision, setResultadosRevision] = useState<ResultadoRevisionDiaria[]>([]);
   const [liveStatus, setLiveStatus] = useState<LiveStatusMap>({});
 
-  const [dailyAccountId, setDailyAccountId] = useState("");
-  const [dailyFecha, setDailyFecha] = useState(new Date().toISOString().split("T")[0]);
-  const [dailyPnlUsd, setDailyPnlUsd] = useState("");
-  const [dailyPnlPorcentaje, setDailyPnlPorcentaje] = useState("");
-  const [dailyNumeroTrades, setDailyNumeroTrades] = useState("");
-  const [dailyNotas, setDailyNotas] = useState("");
-
   const reemplazoRef = useRef<HTMLDivElement | null>(null);
-  const dailyResultRef = useRef<HTMLDivElement | null>(null);
 
   function guardarLiveStatusEnCache(incoming: LiveStatusMap) {
     setLiveStatus((prev) => {
@@ -589,48 +576,6 @@ export default function DashboardPage() {
     }
   }
 
-  async function crearDailyResult() {
-    setLoading(true);
-
-    try {
-      const res = await fetch("/api/daily-results/crear", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          accountId: Number(dailyAccountId),
-          fecha: dailyFecha,
-          pnlUsd: Number(dailyPnlUsd),
-          pnlPorcentaje: Number(dailyPnlPorcentaje),
-          numeroTrades: Number(dailyNumeroTrades || 0),
-          notas: dailyNotas,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        alert(`Error al crear daily result: ${data?.error || "Error desconocido"}`);
-        return;
-      }
-
-      const mensajeRedDay = data?.redDay ? "Sí" : "No";
-
-      setDailyPnlUsd("");
-      setDailyPnlPorcentaje("");
-      setDailyNumeroTrades("");
-      setDailyNotas("");
-
-      await cargarDatos();
-      await cargarResumenHistorico();
-
-      alert(`Daily result guardado correctamente. Red day: ${mensajeRedDay}`);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   const pendingSlotOptions = useMemo<PendingSlotOption[]>(() => {
     const options: PendingSlotOption[] = [];
 
@@ -647,26 +592,6 @@ export default function DashboardPage() {
           options.push({
             slotId: slot.id,
             label,
-          });
-        });
-    });
-
-    return options;
-  }, [packs]);
-
-  const activeAccountOptions = useMemo<ActiveAccountOption[]>(() => {
-    const options: ActiveAccountOption[] = [];
-
-    packs.forEach((pack) => {
-      const presetNombre = pack.presets?.nombre ?? "Sin preset";
-
-      pack.pack_slots
-        ?.filter((slot) => slot.accounts?.id && slot.accounts?.estado === "activa")
-        .sort((a, b) => a.orden - b.orden)
-        .forEach((slot) => {
-          options.push({
-            accountId: slot.accounts!.id,
-            label: `${presetNombre}, ${pack.nombre}, slot ${slot.slot}, ${slot.accounts!.alias}, ${slot.accounts!.numero_cuenta}`,
           });
         });
     });
@@ -750,22 +675,15 @@ export default function DashboardPage() {
     };
   }, [packsFiltrados]);
 
+  const eventosRecientes = useMemo(() => {
+    return [...events].slice(0, 4);
+  }, [events]);
+
   function seleccionarSlotPendiente(slotId: number) {
     setSelectedPendingSlotId(String(slotId));
 
     setTimeout(() => {
       reemplazoRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }, 50);
-  }
-
-  function seleccionarCuentaParaDaily(accountId: number) {
-    setDailyAccountId(String(accountId));
-
-    setTimeout(() => {
-      dailyResultRef.current?.scrollIntoView({
         behavior: "smooth",
         block: "start",
       });
@@ -967,7 +885,6 @@ export default function DashboardPage() {
               onEvaluar={evaluarPack}
               onPerder={marcarPerdida}
               onFondear={marcarFondeada}
-              onSelectDaily={seleccionarCuentaParaDaily}
               onSelectReplace={seleccionarSlotPendiente}
               getLivePnlClass={getLivePnlClass}
             />
@@ -979,15 +896,21 @@ export default function DashboardPage() {
         <SectionCard title="Incidencias y reemplazos">
           <div
             ref={reemplazoRef}
-            className="grid grid-cols-1 gap-3 xl:grid-cols-[1.1fr_1fr]"
+            className="grid grid-cols-1 gap-3 xl:grid-cols-[0.85fr_1.15fr]"
           >
-            <div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.07] p-3">
-              <p className="text-sm text-amber-50/90">
-                Hay {pendingSlotOptions.length} slots pendientes de reemplazo.
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+                Pendientes
+              </p>
+              <p className="mt-2 text-3xl font-semibold text-white">
+                {pendingSlotOptions.length}
+              </p>
+              <p className="mt-2 text-sm text-zinc-400">
+                Slots pendientes de reemplazo.
               </p>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
               <div className="grid grid-cols-1 gap-2.5">
                 <div>
                   <FieldLabel>Slot pendiente</FieldLabel>
@@ -1064,126 +987,45 @@ export default function DashboardPage() {
         </SectionCard>
       )}
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-        <SectionCard title="Eventos recientes">
-          <div className="space-y-2.5">
-            {events.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-zinc-500">
-                No hay eventos recientes.
-              </div>
-            )}
-
-            {events.map((event) => (
-              <div
-                key={event.id}
-                className="rounded-2xl border border-white/10 bg-black/20 p-3"
-              >
-                <div className="flex flex-col gap-1.5 md:flex-row md:items-start md:justify-between">
-                  <div className="space-y-1">
-                    <p className={`text-sm font-medium ${getEventTone(event.tipo_evento)}`}>
-                      {event.tipo_evento}
-                    </p>
-                    <p className="text-sm text-zinc-400">
-                      {event.accounts?.alias ?? "-"} · {event.accounts?.numero_cuenta ?? "-"}
-                    </p>
-                  </div>
-                  <p className="text-xs text-zinc-500">{formatEventDate(event.fecha)}</p>
-                </div>
-
-                {event.descripcion ? (
-                  <p className="mt-2 text-sm leading-6 text-zinc-400">{event.descripcion}</p>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </SectionCard>
-
-        <div className="space-y-5">
-          <SectionCard title="Carga manual">
-            <div ref={dailyResultRef} className="grid grid-cols-1 gap-2.5">
-              <div>
-                <FieldLabel>Cuenta activa</FieldLabel>
-                <Select
-                  value={dailyAccountId}
-                  onChange={(e) => setDailyAccountId(e.target.value)}
-                >
-                  <option value="">Selecciona una cuenta</option>
-                  {activeAccountOptions.map((option) => (
-                    <option key={option.accountId} value={option.accountId}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
-                <div>
-                  <FieldLabel>Fecha</FieldLabel>
-                  <Input
-                    type="date"
-                    value={dailyFecha}
-                    onChange={(e) => setDailyFecha(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <FieldLabel>Trades</FieldLabel>
-                  <Input
-                    value={dailyNumeroTrades}
-                    onChange={(e) => setDailyNumeroTrades(e.target.value)}
-                    placeholder="Ej. 3"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
-                <div>
-                  <FieldLabel>PnL USD</FieldLabel>
-                  <Input
-                    value={dailyPnlUsd}
-                    onChange={(e) => setDailyPnlUsd(e.target.value)}
-                    placeholder="Ej. -120"
-                  />
-                </div>
-
-                <div>
-                  <FieldLabel>PnL %</FieldLabel>
-                  <Input
-                    value={dailyPnlPorcentaje}
-                    onChange={(e) => setDailyPnlPorcentaje(e.target.value)}
-                    placeholder="Ej. -0.25"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <FieldLabel>Notas</FieldLabel>
-                <Input
-                  value={dailyNotas}
-                  onChange={(e) => setDailyNotas(e.target.value)}
-                  placeholder="Ej. Día rojo por noticia"
-                />
-              </div>
-
-              <div>
-                <ActionButton
-                  onClick={crearDailyResult}
-                  disabled={
-                    loading ||
-                    !dailyAccountId ||
-                    !dailyFecha ||
-                    dailyPnlUsd === "" ||
-                    dailyPnlPorcentaje === ""
-                  }
-                  variant="secondary"
-                >
-                  Guardar daily result
-                </ActionButton>
-              </div>
+      <SectionCard
+        title="Actividad reciente"
+        right={
+          <ActionButton variant="ghost">
+            Ver todo
+          </ActionButton>
+        }
+      >
+        <div className="space-y-2.5">
+          {eventosRecientes.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-zinc-500">
+              No hay actividad reciente.
             </div>
-          </SectionCard>
+          )}
+
+          {eventosRecientes.map((event) => (
+            <div
+              key={event.id}
+              className="rounded-2xl border border-white/10 bg-black/20 p-3"
+            >
+              <div className="flex flex-col gap-1.5 md:flex-row md:items-start md:justify-between">
+                <div className="space-y-1">
+                  <p className={`text-sm font-medium ${getEventTone(event.tipo_evento)}`}>
+                    {event.tipo_evento}
+                  </p>
+                  <p className="text-sm text-zinc-400">
+                    {event.accounts?.alias ?? "-"} · {event.accounts?.numero_cuenta ?? "-"}
+                  </p>
+                </div>
+                <p className="text-xs text-zinc-500">{formatEventDate(event.fecha)}</p>
+              </div>
+
+              {event.descripcion ? (
+                <p className="mt-2 text-sm leading-6 text-zinc-400">{event.descripcion}</p>
+              ) : null}
+            </div>
+          ))}
         </div>
-      </div>
+      </SectionCard>
     </div>
   );
 }
@@ -1196,7 +1038,6 @@ function PackCard({
   onEvaluar,
   onPerder,
   onFondear,
-  onSelectDaily,
   onSelectReplace,
   getLivePnlClass,
 }: {
@@ -1207,7 +1048,6 @@ function PackCard({
   onEvaluar: (packId: number, packNombre: string) => void;
   onPerder: (accountId: number) => void;
   onFondear: (accountId: number) => void;
-  onSelectDaily: (accountId: number) => void;
   onSelectReplace: (slotId: number) => void;
   getLivePnlClass: (value?: number | null) => string;
 }) {
@@ -1386,16 +1226,6 @@ function PackCard({
                 >
                   Fondear
                 </ActionButton>
-
-                {slot.accounts?.id && slot.accounts?.estado === "activa" && (
-                  <ActionButton
-                    onClick={() => onSelectDaily(slot.accounts!.id)}
-                    disabled={loading}
-                    variant="ghost"
-                  >
-                    Daily
-                  </ActionButton>
-                )}
 
                 {slot.pendiente_reemplazo && (
                   <ActionButton
