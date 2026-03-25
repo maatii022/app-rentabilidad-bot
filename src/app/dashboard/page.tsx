@@ -582,16 +582,16 @@ export default function DashboardPage() {
     packs.forEach((pack) => {
       const presetNombre = pack.presets?.nombre ?? "Sin preset";
 
-      pack.pack_slots
-        ?.filter((slot) => slot.pendiente_reemplazo)
+      buildDisplaySlots(pack)
+        .filter((slot) => slot.pendiente_reemplazo || !slot.accounts?.id)
         .sort((a, b) => a.orden - b.orden)
         .forEach((slot) => {
-          const aliasCuenta = slot.accounts?.alias ?? "Sin alias";
-          const label = `${presetNombre}, ${pack.nombre}, slot ${slot.slot}, ${aliasCuenta}`;
+          const aliasCuenta = slot.accounts?.alias ?? "Sin cuenta";
+          const motivo = slot.pendiente_reemplazo ? "pendiente reemplazo" : "slot vacío";
 
           options.push({
             slotId: slot.id,
-            label,
+            label: `${presetNombre}, ${pack.nombre}, slot ${slot.slot}, ${aliasCuenta}, ${motivo}`,
           });
         });
     });
@@ -660,7 +660,11 @@ export default function DashboardPage() {
     }).length;
 
     const slotsPendientes = packsFiltrados.reduce((acc, pack) => {
-      return acc + (pack.pack_slots?.filter((slot) => slot.pendiente_reemplazo).length ?? 0);
+      return (
+        acc +
+        buildDisplaySlots(pack).filter((slot) => slot.pendiente_reemplazo || !slot.accounts?.id)
+          .length
+      );
     }, 0);
 
     const cuentasActivas = packsFiltrados.reduce((acc, pack) => {
@@ -989,11 +993,7 @@ export default function DashboardPage() {
 
       <SectionCard
         title="Actividad reciente"
-        right={
-          <ActionButton variant="ghost">
-            Ver todo
-          </ActionButton>
-        }
+        right={<ActionButton variant="ghost">Ver todo</ActionButton>}
       >
         <div className="space-y-2.5">
           {eventosRecientes.length === 0 && (
@@ -1227,7 +1227,7 @@ function PackCard({
                   Fondear
                 </ActionButton>
 
-                {slot.pendiente_reemplazo && (
+                {(slot.pendiente_reemplazo || !slot.accounts?.id) && (
                   <ActionButton
                     onClick={() => onSelectReplace(slot.id)}
                     disabled={loading}
