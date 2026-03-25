@@ -7,7 +7,7 @@ const VPS_LIVE_STATUS_URL = "http://5.134.118.153:5050/live-status";
 
 export async function GET() {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
+  const timeout = setTimeout(() => controller.abort(), 20000);
 
   try {
     const res = await fetch(VPS_LIVE_STATUS_URL, {
