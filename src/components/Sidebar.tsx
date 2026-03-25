@@ -49,13 +49,6 @@ export default function Sidebar() {
             expanded ? "p-3" : "p-2"
           }`}
         >
-          {expanded && (
-            <div className="mb-4 px-2">
-              <p className="text-[10px] uppercase tracking-[0.24em] text-zinc-500">
-                App rentabilidad bot
-              </p>
-            </div>
-          )}
 
           <nav className="space-y-1.5">
             {links.map((link) => {
