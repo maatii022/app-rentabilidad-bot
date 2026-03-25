@@ -10,6 +10,8 @@ type ResultadoOk = {
   anterior?: string;
   nuevo?: string;
   cuenta?: unknown;
+  slot?: unknown;
+  slotCreado?: boolean;
 };
 
 type ResultadoEvaluacionPack = {
@@ -18,6 +20,108 @@ type ResultadoEvaluacionPack = {
   ok: boolean;
   mensaje: string;
 };
+
+type ReemplazoInput = {
+  slotId?: number;
+  packId?: number;
+  slot?: string;
+  numeroCuenta: string;
+  alias: string;
+};
+
+function normalizarSlot(slot: string | undefined) {
+  return String(slot || "").trim().toUpperCase();
+}
+
+function getOrdenDesdeSlot(slot: string) {
+  if (slot === "A") return 1;
+  if (slot === "B") return 2;
+  if (slot === "C") return 3;
+  return 999;
+}
+
+async function obtenerOCrearSlotParaReemplazo({
+  slotId,
+  packId,
+  slot,
+}: {
+  slotId?: number;
+  packId?: number;
+  slot?: string;
+}) {
+  if (slotId && slotId > 0) {
+    const { data: slotExistente, error: errorSlotExistente } = await supabase
+      .from("pack_slots")
+      .select("*")
+      .eq("id", slotId)
+      .single();
+
+    if (errorSlotExistente || !slotExistente) {
+      return {
+        error: errorSlotExistente ?? { message: "No se encontró el slot" },
+      };
+    }
+
+    return {
+      slot: slotExistente,
+      slotCreado: false,
+    };
+  }
+
+  const slotNormalizado = normalizarSlot(slot);
+
+  if (!packId || !slotNormalizado) {
+    return {
+      error: {
+        message:
+          "Faltan datos para resolver el slot. Debes enviar slotId real o packId + slot",
+      },
+    };
+  }
+
+  const { data: slotPorPack, error: errorBusqueda } = await supabase
+    .from("pack_slots")
+    .select("*")
+    .eq("pack_id", packId)
+    .eq("slot", slotNormalizado)
+    .maybeSingle();
+
+  if (errorBusqueda) {
+    return { error: errorBusqueda };
+  }
+
+  if (slotPorPack) {
+    return {
+      slot: slotPorPack,
+      slotCreado: false,
+    };
+  }
+
+  const { data: nuevoSlot, error: errorCrearSlot } = await supabase
+    .from("pack_slots")
+    .insert({
+      pack_id: packId,
+      slot: slotNormalizado,
+      orden: getOrdenDesdeSlot(slotNormalizado),
+      es_activa: false,
+      pendiente_reemplazo: false,
+      account_id: null,
+    })
+    .select()
+    .single();
+
+  if (errorCrearSlot || !nuevoSlot) {
+    return {
+      error:
+        errorCrearSlot ?? { message: "No se pudo crear el slot faltante" },
+    };
+  }
+
+  return {
+    slot: nuevoSlot,
+    slotCreado: true,
+  };
+}
 
 export async function activarSiguienteSlot(
   packId: number
@@ -143,7 +247,11 @@ export async function evaluarSORD(
     .single();
 
   if (errorResultado) {
-    return { error: { message: "No hay daily result para la cuenta activa en esta fecha" } };
+    return {
+      error: {
+        message: "No hay daily result para la cuenta activa en esta fecha",
+      },
+    };
   }
 
   if (!resultado.red_day) {
@@ -496,31 +604,30 @@ export async function marcarCuentaFondeada(
 
 export async function reemplazarCuentaEnSlot({
   slotId,
+  packId,
+  slot,
   numeroCuenta,
   alias,
-}: {
-  slotId: number;
-  numeroCuenta: string;
-  alias: string;
-}): Promise<ResultadoError | ResultadoOk> {
+}: ReemplazoInput): Promise<ResultadoError | ResultadoOk> {
   const fechaHoy = new Date().toISOString().split("T")[0];
 
-  const { data: slot, error: errorSlot } = await supabase
-    .from("pack_slots")
-    .select("*")
-    .eq("id", slotId)
-    .single();
+  const slotResuelto = await obtenerOCrearSlotParaReemplazo({
+    slotId,
+    packId,
+    slot,
+  });
 
-  if (errorSlot || !slot) {
-    return {
-      error: errorSlot ?? { message: "No se encontró el slot" },
-    };
+  if ("error" in slotResuelto && slotResuelto.error) {
+    return { error: slotResuelto.error };
   }
+
+  const slotObjetivo = slotResuelto.slot;
+  const slotCreado = slotResuelto.slotCreado;
 
   const { data: pack, error: errorPack } = await supabase
     .from("packs")
     .select("*")
-    .eq("id", slot.pack_id)
+    .eq("id", slotObjetivo.pack_id)
     .single();
 
   if (errorPack || !pack) {
@@ -556,7 +663,7 @@ export async function reemplazarCuentaEnSlot({
       account_id: nuevaCuenta.id,
       pendiente_reemplazo: false,
     })
-    .eq("id", slotId);
+    .eq("id", slotObjetivo.id);
 
   if (errorUpdateSlot) {
     return { error: errorUpdateSlot };
@@ -566,10 +673,10 @@ export async function reemplazarCuentaEnSlot({
     .from("account_events")
     .insert({
       account_id: nuevaCuenta.id,
-      pack_id: slot.pack_id,
+      pack_id: slotObjetivo.pack_id,
       fecha: fechaHoy,
       tipo_evento: "reemplazo asignado",
-      descripcion: `Nueva cuenta asignada al slot ${slot.slot}`,
+      descripcion: `Nueva cuenta asignada al slot ${slotObjetivo.slot}`,
     });
 
   if (errorEvento) {
@@ -579,5 +686,10 @@ export async function reemplazarCuentaEnSlot({
   return {
     success: true,
     cuenta: nuevaCuenta,
+    slot: slotObjetivo,
+    slotCreado,
+    mensaje: slotCreado
+      ? `Se creó el slot ${slotObjetivo.slot} y se asignó la nueva cuenta`
+      : `Se asignó la nueva cuenta al slot ${slotObjetivo.slot}`,
   };
 }

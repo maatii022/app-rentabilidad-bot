@@ -4,10 +4,18 @@ import { reemplazarCuentaEnSlot } from "@/lib/sord";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { slotId, numeroCuenta, alias } = body;
+    const { slotId, packId, slot, numeroCuenta, alias } = body;
 
     const resultado = await reemplazarCuentaEnSlot({
-      slotId,
+      slotId:
+        typeof slotId === "number" && Number.isFinite(slotId) && slotId > 0
+          ? slotId
+          : undefined,
+      packId:
+        typeof packId === "number" && Number.isFinite(packId) && packId > 0
+          ? packId
+          : undefined,
+      slot: typeof slot === "string" ? slot : undefined,
       numeroCuenta,
       alias,
     });

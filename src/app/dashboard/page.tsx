@@ -39,7 +39,10 @@ type AccountEvent = {
 };
 
 type PendingSlotOption = {
-  slotId: number;
+  value: string;
+  slotId?: number;
+  packId: number;
+  slot: string;
   label: string;
 };
 
@@ -68,6 +71,12 @@ type LiveStatusItem = {
 };
 
 type LiveStatusMap = Record<string, LiveStatusItem>;
+
+type ReplaceTarget = {
+  slotId?: number;
+  packId: number;
+  slot: string;
+};
 
 const MONTH_OPTIONS = [
   { value: 1, label: "Enero" },
@@ -218,6 +227,30 @@ function normalizeSlotName(slot: string | undefined) {
   return String(slot || "").trim().toUpperCase();
 }
 
+function buildPendingSlotValue(target: ReplaceTarget) {
+  return `${target.packId}__${target.slot}__${target.slotId ?? ""}`;
+}
+
+function parsePendingSlotValue(value: string): ReplaceTarget | null {
+  if (!value) return null;
+
+  const [packIdRaw, slotRaw, slotIdRaw] = value.split("__");
+  const packId = Number(packIdRaw);
+  const slot = normalizeSlotName(slotRaw);
+
+  if (!Number.isFinite(packId) || packId <= 0 || !slot) {
+    return null;
+  }
+
+  const slotId = Number(slotIdRaw);
+
+  return {
+    packId,
+    slot,
+    slotId: Number.isFinite(slotId) && slotId > 0 ? slotId : undefined,
+  };
+}
+
 function getPackFlags(pack: Pack) {
   const slots = pack.pack_slots ?? [];
   const presentSlots = new Set(slots.map((slot) => normalizeSlotName(slot.slot)));
@@ -240,12 +273,15 @@ function buildDisplaySlots(pack: Pack): PackSlot[] {
 
   for (const requiredSlot of REQUIRED_SLOTS) {
     if (!existing.has(requiredSlot)) {
+      const orden =
+        requiredSlot === "A" ? 1 : requiredSlot === "B" ? 2 : 3;
+
       original.push({
-        id: -Math.floor(Math.random() * 1000000) - requiredSlot.charCodeAt(0),
+        id: -(pack.id * 100 + orden),
         slot: requiredSlot,
         es_activa: false,
         pendiente_reemplazo: false,
-        orden: requiredSlot === "A" ? 1 : requiredSlot === "B" ? 2 : 3,
+        orden,
       });
     }
   }
@@ -281,7 +317,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [loadingLive, setLoadingLive] = useState(false);
 
-  const [selectedPendingSlotId, setSelectedPendingSlotId] = useState("");
+  const [selectedPendingSlotValue, setSelectedPendingSlotValue] = useState("");
   const [numeroCuenta, setNumeroCuenta] = useState("");
   const [alias, setAlias] = useState("");
 
@@ -538,6 +574,13 @@ export default function DashboardPage() {
   }
 
   async function reemplazarCuenta() {
+    const target = parsePendingSlotValue(selectedPendingSlotValue);
+
+    if (!target) {
+      alert("Selecciona un slot pendiente válido");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -547,7 +590,9 @@ export default function DashboardPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          slotId: Number(selectedPendingSlotId),
+          slotId: target.slotId,
+          packId: target.packId,
+          slot: target.slot,
           numeroCuenta,
           alias,
         }),
@@ -564,7 +609,7 @@ export default function DashboardPage() {
         return;
       }
 
-      setSelectedPendingSlotId("");
+      setSelectedPendingSlotValue("");
       setNumeroCuenta("");
       setAlias("");
 
@@ -589,8 +634,17 @@ export default function DashboardPage() {
           const aliasCuenta = slot.accounts?.alias ?? "Sin cuenta";
           const motivo = slot.pendiente_reemplazo ? "pendiente reemplazo" : "slot vacío";
 
+          const target: ReplaceTarget = {
+            packId: pack.id,
+            slot: normalizeSlotName(slot.slot),
+            slotId: slot.id > 0 ? slot.id : undefined,
+          };
+
           options.push({
-            slotId: slot.id,
+            value: buildPendingSlotValue(target),
+            slotId: target.slotId,
+            packId: target.packId,
+            slot: target.slot,
             label: `${presetNombre}, ${pack.nombre}, slot ${slot.slot}, ${aliasCuenta}, ${motivo}`,
           });
         });
@@ -683,8 +737,8 @@ export default function DashboardPage() {
     return [...events].slice(0, 4);
   }, [events]);
 
-  function seleccionarSlotPendiente(slotId: number) {
-    setSelectedPendingSlotId(String(slotId));
+  function seleccionarSlotPendiente(target: ReplaceTarget) {
+    setSelectedPendingSlotValue(buildPendingSlotValue(target));
 
     setTimeout(() => {
       reemplazoRef.current?.scrollIntoView({
@@ -919,12 +973,12 @@ export default function DashboardPage() {
                 <div>
                   <FieldLabel>Slot pendiente</FieldLabel>
                   <Select
-                    value={selectedPendingSlotId}
-                    onChange={(e) => setSelectedPendingSlotId(e.target.value)}
+                    value={selectedPendingSlotValue}
+                    onChange={(e) => setSelectedPendingSlotValue(e.target.value)}
                   >
                     <option value="">Selecciona un slot pendiente</option>
                     {pendingSlotOptions.map((option) => (
-                      <option key={option.slotId} value={option.slotId}>
+                      <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
                     ))}
@@ -952,7 +1006,7 @@ export default function DashboardPage() {
                 <div>
                   <ActionButton
                     onClick={reemplazarCuenta}
-                    disabled={loading || !selectedPendingSlotId || !numeroCuenta || !alias}
+                    disabled={loading || !selectedPendingSlotValue || !numeroCuenta || !alias}
                     variant="primary"
                   >
                     Reemplazar cuenta
@@ -1048,7 +1102,7 @@ function PackCard({
   onEvaluar: (packId: number, packNombre: string) => void;
   onPerder: (accountId: number) => void;
   onFondear: (accountId: number) => void;
-  onSelectReplace: (slotId: number) => void;
+  onSelectReplace: (target: ReplaceTarget) => void;
   getLivePnlClass: (value?: number | null) => string;
 }) {
   const flags = getPackFlags(pack);
@@ -1229,7 +1283,13 @@ function PackCard({
 
                 {(slot.pendiente_reemplazo || !slot.accounts?.id) && (
                   <ActionButton
-                    onClick={() => onSelectReplace(slot.id)}
+                    onClick={() =>
+                      onSelectReplace({
+                        packId: pack.id,
+                        slot: normalizeSlotName(slot.slot),
+                        slotId: slot.id > 0 ? slot.id : undefined,
+                      })
+                    }
                     disabled={loading}
                     variant="secondary"
                   >
