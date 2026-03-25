@@ -82,7 +82,7 @@ type CalendarDayData = {
 
 const DAY_LABELS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
 
-function getAccountData(accounts: AccountRelation) {
+function getAccountData(accounts?: AccountRelation) {
   if (!accounts) return null;
   return Array.isArray(accounts) ? accounts[0] : accounts;
 }
