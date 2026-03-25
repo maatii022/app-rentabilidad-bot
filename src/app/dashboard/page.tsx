@@ -84,7 +84,123 @@ const MONTH_OPTIONS = [
   { value: 12, label: "Diciembre" },
 ];
 
-const LIVE_STATUS_URL = "/api/live-status";
+function SectionCard({
+  title,
+  description,
+  children,
+  right,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+  right?: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 md:p-6">
+      <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h2 className="text-lg font-medium text-white">{title}</h2>
+          {description ? (
+            <p className="mt-1 text-sm text-zinc-400">{description}</p>
+          ) : null}
+        </div>
+        {right ? <div className="flex flex-wrap gap-2">{right}</div> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: number | string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+      <p className="text-xs uppercase tracking-[0.12em] text-zinc-500">{label}</p>
+      <p className="mt-3 text-2xl font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+function ActionButton({
+  children,
+  onClick,
+  disabled,
+  variant = "primary",
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  variant?: "primary" | "secondary" | "danger" | "ghost";
+}) {
+  const styles = {
+    primary:
+      "border border-white/10 bg-white text-black hover:bg-zinc-200",
+    secondary:
+      "border border-white/10 bg-white/5 text-white hover:bg-white/10",
+    danger:
+      "border border-white/10 bg-zinc-800 text-white hover:bg-zinc-700",
+    ghost:
+      "border border-white/10 bg-transparent text-zinc-300 hover:bg-white/5",
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`rounded-xl px-4 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${styles[variant]}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <label className="mb-2 block text-sm text-zinc-400">{children}</label>;
+}
+
+function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <input
+      {...props}
+      className={`w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-white/20 focus:bg-black/30 ${props.className || ""}`}
+    />
+  );
+}
+
+function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <select
+      {...props}
+      className={`w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white outline-none transition focus:border-white/20 focus:bg-black/30 ${props.className || ""}`}
+    />
+  );
+}
+
+function formatEventDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleString("es-ES", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getEventTone(tipo: string) {
+  if (tipo === "SORD in") return "text-zinc-100";
+  if (tipo === "SORD out") return "text-zinc-300";
+  if (tipo === "perdida") return "text-zinc-300";
+  if (tipo === "fondeada") return "text-zinc-100";
+  return "text-zinc-200";
+}
 
 export default function DashboardPage() {
   const [packs, setPacks] = useState<Pack[]>([]);
@@ -158,31 +274,29 @@ export default function DashboardPage() {
   }
 
   async function recargarEstado() {
-  setLoadingLive(true);
+    setLoadingLive(true);
 
-  try {
-    const res = await fetch("/api/live-status", {
-      method: "GET",
-      cache: "no-store",
-    });
+    try {
+      const res = await fetch("/api/live-status", {
+        method: "GET",
+        cache: "no-store",
+      });
 
-    const json = await res.json();
+      const json = await res.json();
 
-    console.log("Respuesta /api/live-status:", json);
+      if (!res.ok || !json?.ok) {
+        alert(`No se pudo recargar el estado en vivo: ${json?.error || "Error desconocido"}`);
+        return;
+      }
 
-    if (!res.ok || !json?.ok) {
-      alert(`No se pudo recargar el estado en vivo: ${json?.error || "Error desconocido"}`);
-      return;
+      setLiveStatus(json.data || {});
+    } catch (error) {
+      console.error("Error recargando estado en vivo:", error);
+      alert("No se pudo recargar el estado en vivo");
+    } finally {
+      setLoadingLive(false);
     }
-
-    setLiveStatus(json.data || {});
-  } catch (error) {
-    console.error("Error recargando estado en vivo:", error);
-    alert("No se pudo recargar el estado en vivo");
-  } finally {
-    setLoadingLive(false);
   }
-}
 
   async function ejecutarRevisionDiaria() {
     setLoading(true);
@@ -197,7 +311,6 @@ export default function DashboardPage() {
       });
 
       const data = await res.json();
-      console.log("Respuesta revisión diaria:", data);
 
       if (!res.ok) {
         alert(`Error en revisión diaria: ${data?.error || "Error desconocido"}`);
@@ -502,23 +615,30 @@ export default function DashboardPage() {
     return packs.filter((pack) => {
       const presetNombre = pack.presets?.nombre ?? "";
 
-      const cumplePreset =
-        presetFilter === "todos" || presetNombre === presetFilter;
-
-      const cumpleTipo =
-        tipoFilter === "todos" || pack.tipo_pack === tipoFilter;
-
+      const cumplePreset = presetFilter === "todos" || presetNombre === presetFilter;
+      const cumpleTipo = tipoFilter === "todos" || pack.tipo_pack === tipoFilter;
       const tieneIncidencia =
         pack.pack_slots?.some((slot) => slot.pendiente_reemplazo) ?? false;
-
       const cumpleIncidencia = !soloIncidencias || tieneIncidencia;
 
       return cumplePreset && cumpleTipo && cumpleIncidencia;
     });
   }, [packs, presetFilter, tipoFilter, soloIncidencias]);
 
+  const packsConIncidencias = useMemo(() => {
+    return packsFiltrados.filter((pack) =>
+      pack.pack_slots?.some((slot) => slot.pendiente_reemplazo)
+    );
+  }, [packsFiltrados]);
+
+  const packsSinIncidencias = useMemo(() => {
+    return packsFiltrados.filter(
+      (pack) => !pack.pack_slots?.some((slot) => slot.pendiente_reemplazo)
+    );
+  }, [packsFiltrados]);
+
   const resumen = useMemo(() => {
-    const packsConIncidencias = packsFiltrados.filter((pack) =>
+    const packsConIncidenciasCount = packsFiltrados.filter((pack) =>
       pack.pack_slots?.some((slot) => slot.pendiente_reemplazo)
     ).length;
 
@@ -532,7 +652,7 @@ export default function DashboardPage() {
 
     return {
       packsVisibles: packsFiltrados.length,
-      packsConIncidencias,
+      packsConIncidencias: packsConIncidenciasCount,
       slotsPendientes,
       cuentasActivas,
     };
@@ -561,10 +681,10 @@ export default function DashboardPage() {
   }
 
   function getLivePnlClass(value?: number) {
-    if (typeof value !== "number") return "text-gray-400";
-    if (value > 0) return "text-green-400";
-    if (value < 0) return "text-red-400";
-    return "text-gray-300";
+    if (typeof value !== "number") return "text-zinc-500";
+    if (value > 0) return "text-zinc-100";
+    if (value < 0) return "text-zinc-300";
+    return "text-zinc-400";
   }
 
   useEffect(() => {
@@ -577,235 +697,119 @@ export default function DashboardPage() {
   }, [historicoModo, historicoAnio, historicoMes, presetFilter, tipoFilter]);
 
   return (
-    <div>
-      <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-
-        <div className="flex flex-wrap gap-3">
-          <button
-            onClick={recargarEstado}
-            disabled={loadingLive}
-            className="rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-50"
-          >
-            {loadingLive ? "Recargando..." : "Recargar estado"}
-          </button>
-
-          <button
-            onClick={ejecutarRevisionDiaria}
-            disabled={loading}
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
-          >
-            {loading ? "Procesando..." : "Ejecutar revisión diaria"}
-          </button>
-        </div>
-      </div>
-
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <label className="text-sm text-gray-300">Período histórico</label>
-
-        <select
-          value={historicoModo}
-          onChange={(e) => setHistoricoModo(e.target.value)}
-          className="rounded-lg border border-white/10 bg-[#111827] px-3 py-2 text-white outline-none"
-        >
-          <option value="todo">Todo</option>
-          <option value="anio">Año concreto</option>
-          <option value="mes">Mes concreto</option>
-        </select>
-
-        {(historicoModo === "anio" || historicoModo === "mes") && (
-          <select
-            value={historicoAnio}
-            onChange={(e) => setHistoricoAnio(e.target.value)}
-            className="rounded-lg border border-white/10 bg-[#111827] px-3 py-2 text-white outline-none"
-          >
-            {availableYears.map((year) => (
-              <option key={year} value={year}>
-                {year}
-              </option>
-            ))}
-          </select>
-        )}
-
-        {historicoModo === "mes" && (
-          <select
-            value={historicoMes}
-            onChange={(e) => setHistoricoMes(e.target.value)}
-            className="rounded-lg border border-white/10 bg-[#111827] px-3 py-2 text-white outline-none"
-          >
-            {MONTH_OPTIONS.map((month) => (
-              <option key={month.value} value={month.value}>
-                {month.label}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
-
-      <div className="mb-8 grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
-          <p className="text-sm text-gray-400">Packs visibles</p>
-          <p className="mt-2 text-2xl font-semibold">{resumen.packsVisibles}</p>
-        </div>
-
-        <div className="rounded-xl border border-yellow-400/40 bg-yellow-400/10 p-4">
-          <p className="text-sm text-yellow-300">Packs con incidencias</p>
-          <p className="mt-2 text-2xl font-semibold text-yellow-200">
-            {resumen.packsConIncidencias}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-orange-400/40 bg-orange-400/10 p-4">
-          <p className="text-sm text-orange-300">Slots pendientes</p>
-          <p className="mt-2 text-2xl font-semibold text-orange-200">
-            {resumen.slotsPendientes}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-green-400/40 bg-green-400/10 p-4">
-          <p className="text-sm text-green-300">Cuentas activas</p>
-          <p className="mt-2 text-2xl font-semibold text-green-200">
-            {resumen.cuentasActivas}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-purple-400/40 bg-purple-400/10 p-4">
-          <p className="text-sm text-purple-300">Fondeadas históricas</p>
-          <p className="mt-2 text-2xl font-semibold text-purple-200">
-            {summary.fondeadasHistoricas}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-red-400/40 bg-red-400/10 p-4">
-          <p className="text-sm text-red-300">Perdidas históricas</p>
-          <p className="mt-2 text-2xl font-semibold text-red-200">
-            {summary.perdidasHistoricas}
-          </p>
-        </div>
-      </div>
-
-      {resultadosRevision.length > 0 && (
-        <div className="mb-8 rounded-xl border border-white/10 bg-white/5 p-5">
-          <h2 className="mb-4 text-xl font-semibold">Resultado de la revisión diaria</h2>
-
-          <div className="space-y-3">
-            {resultadosRevision.map((resultado) => (
-              <div
-                key={`${resultado.packId}-${resultado.packNombre}`}
-                className="rounded-lg border border-white/10 bg-[#111827] p-4"
-              >
-                <p className="font-medium">{resultado.packNombre}</p>
-                <p className={resultado.ok ? "text-green-400" : "text-yellow-400"}>
-                  {resultado.mensaje}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div
-        ref={dailyResultRef}
-        className="mb-8 rounded-xl border border-white/10 bg-white/5 p-5"
-      >
-        <h2 className="mb-4 text-xl font-semibold">Cargar daily result manual</h2>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div>
-            <label className="mb-1 block text-sm text-gray-300">Cuenta activa</label>
-            <select
-              value={dailyAccountId}
-              onChange={(e) => setDailyAccountId(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-[#111827] px-3 py-2 text-white outline-none"
-            >
-              <option value="">Selecciona una cuenta</option>
-              {activeAccountOptions.map((option) => (
-                <option key={option.accountId} value={option.accountId}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm text-gray-300">Fecha</label>
-            <input
-              type="date"
-              value={dailyFecha}
-              onChange={(e) => setDailyFecha(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-[#111827] px-3 py-2 text-white outline-none"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm text-gray-300">PnL USD</label>
-            <input
-              value={dailyPnlUsd}
-              onChange={(e) => setDailyPnlUsd(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-[#111827] px-3 py-2 text-white outline-none"
-              placeholder="Ej. -120"
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm text-gray-300">PnL %</label>
-            <input
-              value={dailyPnlPorcentaje}
-              onChange={(e) => setDailyPnlPorcentaje(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-[#111827] px-3 py-2 text-white outline-none"
-              placeholder="Ej. -0.25"
-            />
-            <p className="mt-1 text-xs text-gray-400">
-              Red day se calcula automáticamente si el PnL % es menor que -0.2
+    <div className="space-y-8 text-white">
+      <section className="rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-white/[0.02] p-6 md:p-8">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+              App Rentabilidad Bot
+            </p>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white md:text-4xl">
+              Dashboard
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-zinc-400 md:text-base">
+              Vista operativa de packs, incidencias, revisión diaria y actividad reciente.
             </p>
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm text-gray-300">Número de trades</label>
-            <input
-              value={dailyNumeroTrades}
-              onChange={(e) => setDailyNumeroTrades(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-[#111827] px-3 py-2 text-white outline-none"
-              placeholder="Ej. 3"
-            />
-          </div>
+          <div className="flex flex-wrap gap-2">
+            <ActionButton
+              onClick={recargarEstado}
+              disabled={loadingLive}
+              variant="secondary"
+            >
+              {loadingLive ? "Recargando estado..." : "Recargar estado"}
+            </ActionButton>
 
-          <div>
-            <label className="mb-1 block text-sm text-gray-300">Notas</label>
-            <input
-              value={dailyNotas}
-              onChange={(e) => setDailyNotas(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-[#111827] px-3 py-2 text-white outline-none"
-              placeholder="Ej. Día rojo por noticia"
-            />
+            <ActionButton
+              onClick={ejecutarRevisionDiaria}
+              disabled={loading}
+              variant="primary"
+            >
+              {loading ? "Procesando..." : "Ejecutar revisión diaria"}
+            </ActionButton>
           </div>
         </div>
 
-        <button
-          onClick={crearDailyResult}
-          disabled={
-            loading ||
-            !dailyAccountId ||
-            !dailyFecha ||
-            dailyPnlUsd === "" ||
-            dailyPnlPorcentaje === ""
-          }
-          className="mt-4 rounded-lg bg-cyan-600 px-4 py-2 text-sm font-medium text-white hover:bg-cyan-500 disabled:opacity-50"
-        >
-          Guardar daily result
-        </button>
-      </div>
+        <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <StatCard label="Packs visibles" value={resumen.packsVisibles} />
+          <StatCard label="Packs con incidencias" value={resumen.packsConIncidencias} />
+          <StatCard label="Slots pendientes" value={resumen.slotsPendientes} />
+          <StatCard label="Cuentas activas" value={resumen.cuentasActivas} />
+          <StatCard label="Fondeadas históricas" value={summary.fondeadasHistoricas} />
+          <StatCard label="Perdidas históricas" value={summary.perdidasHistoricas} />
+        </div>
+      </section>
 
-      <div className="mb-8 rounded-xl border border-white/10 bg-white/5 p-5">
-        <h2 className="mb-4 text-xl font-semibold">Filtros</h2>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+      <SectionCard
+        title="Filtros"
+        description="Ajusta la vista del dashboard y del resumen histórico."
+        right={
+          <ActionButton
+            onClick={() => {
+              setPresetFilter("todos");
+              setTipoFilter("todos");
+              setSoloIncidencias(false);
+              setHistoricoModo("todo");
+              setHistoricoAnio(String(currentDate.getFullYear()));
+              setHistoricoMes(String(currentDate.getMonth() + 1));
+            }}
+            variant="ghost"
+          >
+            Limpiar filtros
+          </ActionButton>
+        }
+      >
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
           <div>
-            <label className="mb-1 block text-sm text-gray-300">Preset</label>
-            <select
+            <FieldLabel>Período histórico</FieldLabel>
+            <Select
+              value={historicoModo}
+              onChange={(e) => setHistoricoModo(e.target.value)}
+            >
+              <option value="todo">Todo</option>
+              <option value="anio">Año concreto</option>
+              <option value="mes">Mes concreto</option>
+            </Select>
+          </div>
+
+          {(historicoModo === "anio" || historicoModo === "mes") && (
+            <div>
+              <FieldLabel>Año</FieldLabel>
+              <Select
+                value={historicoAnio}
+                onChange={(e) => setHistoricoAnio(e.target.value)}
+              >
+                {availableYears.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+
+          {historicoModo === "mes" && (
+            <div>
+              <FieldLabel>Mes</FieldLabel>
+              <Select
+                value={historicoMes}
+                onChange={(e) => setHistoricoMes(e.target.value)}
+              >
+                {MONTH_OPTIONS.map((month) => (
+                  <option key={month.value} value={month.value}>
+                    {month.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+
+          <div>
+            <FieldLabel>Preset</FieldLabel>
+            <Select
               value={presetFilter}
               onChange={(e) => setPresetFilter(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-[#111827] px-3 py-2 text-white outline-none"
             >
               <option value="todos">Todos</option>
               {presetOptions.map((preset) => (
@@ -813,277 +817,527 @@ export default function DashboardPage() {
                   {preset}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div>
-            <label className="mb-1 block text-sm text-gray-300">Tipo de pack</label>
-            <select
+            <FieldLabel>Tipo de pack</FieldLabel>
+            <Select
               value={tipoFilter}
               onChange={(e) => setTipoFilter(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-[#111827] px-3 py-2 text-white outline-none"
             >
               <option value="todos">Todos</option>
               <option value="prueba">Prueba</option>
               <option value="fondeada">Fondeada</option>
-            </select>
+            </Select>
           </div>
 
-          <div className="flex items-end">
-            <label className="flex items-center gap-2 text-sm text-gray-300">
+          <div className="flex items-end xl:col-span-2">
+            <label className="inline-flex min-h-[44px] items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-4 py-2.5 text-sm text-zinc-300">
               <input
                 type="checkbox"
                 checked={soloIncidencias}
                 onChange={(e) => setSoloIncidencias(e.target.checked)}
+                className="h-4 w-4 rounded border-white/20 bg-transparent"
               />
               Solo packs con incidencias
             </label>
           </div>
-
-          <div className="flex items-end">
-            <button
-              onClick={() => {
-                setPresetFilter("todos");
-                setTipoFilter("todos");
-                setSoloIncidencias(false);
-              }}
-              className="rounded-lg bg-gray-700 px-4 py-2 text-sm text-white hover:bg-gray-600"
-            >
-              Limpiar filtros
-            </button>
-          </div>
         </div>
-      </div>
+      </SectionCard>
 
-      <div className="space-y-6">
-        {packsFiltrados.map((pack) => (
-          <div
-            key={pack.id}
-            className="rounded-xl border border-white/10 bg-white/5 p-5"
-          >
-            <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">{pack.nombre}</h2>
-                <p className="text-sm text-gray-400">
-                  Preset: {pack.presets?.nombre} | Tipo: {pack.tipo_pack}
-                </p>
-
-                {pack.pack_slots?.some((slot) => slot.pendiente_reemplazo) && (
-                  <p className="mt-2 text-sm text-yellow-400">
-                    Advertencia: este pack tiene al menos una cuenta pendiente de reemplazo.
-                  </p>
-                )}
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => rotarPack(pack.id, pack.nombre)}
-                  disabled={loading}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
-                >
-                  Rotar pack
-                </button>
-
-                <button
-                  onClick={() => evaluarPack(pack.id, pack.nombre)}
-                  disabled={loading}
-                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
-                >
-                  Evaluar SORD
-                </button>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              {pack.pack_slots
-                ?.sort((a, b) => a.orden - b.orden)
-                .map((slot) => {
-                  const estadoCuenta = slot.accounts?.estado ?? "";
-                  const puedePerder =
-                    slot.accounts?.id &&
-                    estadoCuenta !== "perdida" &&
-                    estadoCuenta !== "fondeada";
-
-                  const puedeFondear =
-                    slot.accounts?.id &&
-                    estadoCuenta !== "fondeada" &&
-                    estadoCuenta !== "perdida";
-
-                  const numeroCuenta = slot.accounts?.numero_cuenta ?? "";
-                  const live = numeroCuenta ? liveStatus[numeroCuenta] : undefined;
-
-                  return (
-                    <div
-                      key={slot.id}
-                      className={`rounded-lg border p-4 ${
-                        slot.pendiente_reemplazo
-                          ? "border-yellow-400 bg-[#2a2112]"
-                          : "border-white/10 bg-[#111827]"
-                      }`}
-                    >
-                      <p className="mb-2 text-lg font-semibold">Slot {slot.slot}</p>
-
-                      <p>Cuenta: {slot.accounts?.alias ?? "Sin cuenta"}</p>
-                      <p>Número: {slot.accounts?.numero_cuenta ?? "-"}</p>
-                      <p>Estado: {slot.accounts?.estado ?? "-"}</p>
-                      <p>Tipo: {slot.accounts?.tipo_cuenta ?? "-"}</p>
-
-                      <p className="mt-3">Activa: {slot.es_activa ? "Sí" : "No"}</p>
-
-                      {slot.es_activa && (
-  <p className="mt-2">
-    PnL actual:{" "}
-    <span className={getLivePnlClass(live?.pnl_actual)}>
-      {typeof live?.pnl_actual === "number"
-        ? live.pnl_actual.toFixed(2)
-        : "-"}
-    </span>
-  </p>
-)}
-
-                      <p>
-                        Pendiente reemplazo:{" "}
-                        <span
-                          className={slot.pendiente_reemplazo ? "text-yellow-400" : "text-white"}
-                        >
-                          {slot.pendiente_reemplazo ? "Sí" : "No"}
-                        </span>
-                      </p>
-
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        <button
-                          onClick={() => slot.accounts?.id && marcarPerdida(slot.accounts.id)}
-                          disabled={loading || !puedePerder}
-                          className="rounded-lg bg-yellow-600 px-3 py-2 text-xs font-medium text-white hover:bg-yellow-500 disabled:opacity-40"
-                        >
-                          Perder
-                        </button>
-
-                        <button
-                          onClick={() => slot.accounts?.id && marcarFondeada(slot.accounts.id)}
-                          disabled={loading || !puedeFondear}
-                          className="rounded-lg bg-purple-600 px-3 py-2 text-xs font-medium text-white hover:bg-purple-500 disabled:opacity-40"
-                        >
-                          Fondear
-                        </button>
-
-                        {slot.accounts?.id && slot.accounts?.estado === "activa" && (
-                          <button
-                            onClick={() => seleccionarCuentaParaDaily(slot.accounts!.id)}
-                            disabled={loading}
-                            className="rounded-lg bg-cyan-600 px-3 py-2 text-xs font-medium text-white hover:bg-cyan-500 disabled:opacity-40"
-                          >
-                            Cargar daily
-                          </button>
-                        )}
-
-                        {slot.pendiente_reemplazo && (
-                          <button
-                            onClick={() => seleccionarSlotPendiente(slot.id)}
-                            disabled={loading}
-                            className="rounded-lg bg-green-600 px-3 py-2 text-xs font-medium text-white hover:bg-green-500 disabled:opacity-40"
-                          >
-                            Usar en reemplazo
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div
-        ref={reemplazoRef}
-        className="mt-8 rounded-xl border border-white/10 bg-white/5 p-5"
+      <SectionCard
+        title="Packs activos"
+        description="Bloque principal de seguimiento y acciones por pack."
       >
-        <h2 className="mb-4 text-xl font-semibold">Reemplazar cuenta pendiente</h2>
+        <div className="space-y-8">
+          {packsConIncidencias.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-medium text-white">Con incidencias</h3>
+                  <p className="text-sm text-zinc-500">
+                    Packs con al menos una cuenta pendiente de reemplazo.
+                  </p>
+                </div>
+                <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-zinc-400">
+                  {packsConIncidencias.length} packs
+                </div>
+              </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <div>
-            <label className="mb-1 block text-sm text-gray-300">
-              Slot pendiente
-            </label>
-            <select
-              value={selectedPendingSlotId}
-              onChange={(e) => setSelectedPendingSlotId(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-[#111827] px-3 py-2 text-white outline-none"
-            >
-              <option value="">Selecciona un slot pendiente</option>
-              {pendingSlotOptions.map((option) => (
-                <option key={option.slotId} value={option.slotId}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+              <div className="space-y-4">
+                {packsConIncidencias.map((pack) => (
+                  <PackCard
+                    key={pack.id}
+                    pack={pack}
+                    liveStatus={liveStatus}
+                    loading={loading}
+                    onRotar={rotarPack}
+                    onEvaluar={evaluarPack}
+                    onPerder={marcarPerdida}
+                    onFondear={marcarFondeada}
+                    onSelectDaily={seleccionarCuentaParaDaily}
+                    onSelectReplace={seleccionarSlotPendiente}
+                    getLivePnlClass={getLivePnlClass}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {packsSinIncidencias.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-medium text-white">Sin incidencias</h3>
+                  <p className="text-sm text-zinc-500">
+                    Packs operativos sin pendientes de reemplazo.
+                  </p>
+                </div>
+                <div className="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-zinc-400">
+                  {packsSinIncidencias.length} packs
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {packsSinIncidencias.map((pack) => (
+                  <PackCard
+                    key={pack.id}
+                    pack={pack}
+                    liveStatus={liveStatus}
+                    loading={loading}
+                    onRotar={rotarPack}
+                    onEvaluar={evaluarPack}
+                    onPerder={marcarPerdida}
+                    onFondear={marcarFondeada}
+                    onSelectDaily={seleccionarCuentaParaDaily}
+                    onSelectReplace={seleccionarSlotPendiente}
+                    getLivePnlClass={getLivePnlClass}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {packsFiltrados.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-8 text-center text-sm text-zinc-500">
+              No hay packs que coincidan con los filtros actuales.
+            </div>
+          )}
+        </div>
+      </SectionCard>
+
+      {pendingSlotOptions.length > 0 && (
+        <SectionCard
+          title="Incidencias y reemplazos"
+          description="Gestiona slots pendientes sin mezclarlo con el bloque principal de packs."
+        >
+          <div
+            ref={reemplazoRef}
+            className="grid grid-cols-1 gap-4 xl:grid-cols-[1.2fr_1fr]"
+          >
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <h3 className="text-sm font-medium text-white">Resumen</h3>
+              <p className="mt-2 text-sm text-zinc-400">
+                Hay {pendingSlotOptions.length} slots pendientes de reemplazo.
+              </p>
+              <p className="mt-3 text-sm text-zinc-500">
+                Puedes seleccionar un slot y asignarle una nueva cuenta desde este bloque.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <FieldLabel>Slot pendiente</FieldLabel>
+                  <Select
+                    value={selectedPendingSlotId}
+                    onChange={(e) => setSelectedPendingSlotId(e.target.value)}
+                  >
+                    <option value="">Selecciona un slot pendiente</option>
+                    {pendingSlotOptions.map((option) => (
+                      <option key={option.slotId} value={option.slotId}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div>
+                  <FieldLabel>Número de cuenta</FieldLabel>
+                  <Input
+                    value={numeroCuenta}
+                    onChange={(e) => setNumeroCuenta(e.target.value)}
+                    placeholder="Ej. 128999"
+                  />
+                </div>
+
+                <div>
+                  <FieldLabel>Alias</FieldLabel>
+                  <Input
+                    value={alias}
+                    onChange={(e) => setAlias(e.target.value)}
+                    placeholder="Ej. Fernet B2"
+                  />
+                </div>
+
+                <div>
+                  <ActionButton
+                    onClick={reemplazarCuenta}
+                    disabled={loading || !selectedPendingSlotId || !numeroCuenta || !alias}
+                    variant="primary"
+                  >
+                    Reemplazar cuenta
+                  </ActionButton>
+                </div>
+              </div>
+            </div>
+          </div>
+        </SectionCard>
+      )}
+
+      {resultadosRevision.length > 0 && (
+        <SectionCard
+          title="Resultado de la revisión diaria"
+          description="Último resultado devuelto por la ejecución manual o automática."
+        >
+          <div className="space-y-3">
+            {resultadosRevision.map((resultado) => (
+              <div
+                key={`${resultado.packId}-${resultado.packNombre}`}
+                className="rounded-2xl border border-white/10 bg-black/20 p-4"
+              >
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <p className="text-sm font-medium text-white">{resultado.packNombre}</p>
+                  <span
+                    className={`rounded-full border px-3 py-1 text-xs ${
+                      resultado.ok
+                        ? "border-white/10 bg-white/5 text-zinc-200"
+                        : "border-white/10 bg-white/5 text-zinc-400"
+                    }`}
+                  >
+                    {resultado.ok ? "Correcto" : "Revisar"}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm text-zinc-400">{resultado.mensaje}</p>
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+      )}
+
+      <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1.15fr_0.85fr]">
+        <SectionCard
+          title="Eventos recientes"
+          description="Historial reciente de movimientos y cambios de estado."
+        >
+          <div className="space-y-3">
+            {events.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-6 text-sm text-zinc-500">
+                No hay eventos recientes.
+              </div>
+            )}
+
+            {events.map((event) => (
+              <div
+                key={event.id}
+                className="rounded-2xl border border-white/10 bg-black/20 p-4"
+              >
+                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                  <div className="space-y-1">
+                    <p className={`text-sm font-medium ${getEventTone(event.tipo_evento)}`}>
+                      {event.tipo_evento}
+                    </p>
+                    <p className="text-sm text-zinc-400">
+                      {event.accounts?.alias ?? "-"} · {event.accounts?.numero_cuenta ?? "-"}
+                    </p>
+                  </div>
+                  <p className="text-xs text-zinc-500">{formatEventDate(event.fecha)}</p>
+                </div>
+
+                {event.descripcion ? (
+                  <p className="mt-3 text-sm leading-6 text-zinc-400">{event.descripcion}</p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </SectionCard>
+
+        <div className="space-y-8">
+          <SectionCard
+            title="Carga manual"
+            description="Bloque secundario para añadir daily results manualmente cuando haga falta."
+          >
+            <div ref={dailyResultRef} className="grid grid-cols-1 gap-4">
+              <div>
+                <FieldLabel>Cuenta activa</FieldLabel>
+                <Select
+                  value={dailyAccountId}
+                  onChange={(e) => setDailyAccountId(e.target.value)}
+                >
+                  <option value="">Selecciona una cuenta</option>
+                  {activeAccountOptions.map((option) => (
+                    <option key={option.accountId} value={option.accountId}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <FieldLabel>Fecha</FieldLabel>
+                  <Input
+                    type="date"
+                    value={dailyFecha}
+                    onChange={(e) => setDailyFecha(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <FieldLabel>Número de trades</FieldLabel>
+                  <Input
+                    value={dailyNumeroTrades}
+                    onChange={(e) => setDailyNumeroTrades(e.target.value)}
+                    placeholder="Ej. 3"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <FieldLabel>PnL USD</FieldLabel>
+                  <Input
+                    value={dailyPnlUsd}
+                    onChange={(e) => setDailyPnlUsd(e.target.value)}
+                    placeholder="Ej. -120"
+                  />
+                </div>
+
+                <div>
+                  <FieldLabel>PnL %</FieldLabel>
+                  <Input
+                    value={dailyPnlPorcentaje}
+                    onChange={(e) => setDailyPnlPorcentaje(e.target.value)}
+                    placeholder="Ej. -0.25"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <FieldLabel>Notas</FieldLabel>
+                <Input
+                  value={dailyNotas}
+                  onChange={(e) => setDailyNotas(e.target.value)}
+                  placeholder="Ej. Día rojo por noticia"
+                />
+                <p className="mt-2 text-xs text-zinc-500">
+                  Red day se calcula automáticamente si el PnL % es menor que -0.2.
+                </p>
+              </div>
+
+              <div>
+                <ActionButton
+                  onClick={crearDailyResult}
+                  disabled={
+                    loading ||
+                    !dailyAccountId ||
+                    !dailyFecha ||
+                    dailyPnlUsd === "" ||
+                    dailyPnlPorcentaje === ""
+                  }
+                  variant="secondary"
+                >
+                  Guardar daily result
+                </ActionButton>
+              </div>
+            </div>
+          </SectionCard>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PackCard({
+  pack,
+  liveStatus,
+  loading,
+  onRotar,
+  onEvaluar,
+  onPerder,
+  onFondear,
+  onSelectDaily,
+  onSelectReplace,
+  getLivePnlClass,
+}: {
+  pack: Pack;
+  liveStatus: LiveStatusMap;
+  loading: boolean;
+  onRotar: (packId: number, packNombre: string) => void;
+  onEvaluar: (packId: number, packNombre: string) => void;
+  onPerder: (accountId: number) => void;
+  onFondear: (accountId: number) => void;
+  onSelectDaily: (accountId: number) => void;
+  onSelectReplace: (slotId: number) => void;
+  getLivePnlClass: (value?: number) => string;
+}) {
+  const tieneIncidencia =
+    pack.pack_slots?.some((slot) => slot.pendiente_reemplazo) ?? false;
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 p-4 md:p-5">
+      <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-lg font-medium text-white">{pack.nombre}</h3>
+            {tieneIncidencia ? (
+              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] text-zinc-300">
+                Incidencia
+              </span>
+            ) : (
+              <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] uppercase tracking-[0.12em] text-zinc-500">
+                Estable
+              </span>
+            )}
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm text-gray-300">Número de cuenta</label>
-            <input
-              value={numeroCuenta}
-              onChange={(e) => setNumeroCuenta(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-[#111827] px-3 py-2 text-white outline-none"
-              placeholder="Ej. 128999"
-            />
-          </div>
+          <p className="mt-2 text-sm text-zinc-400">
+            Preset: {pack.presets?.nombre ?? "-"} · Tipo: {pack.tipo_pack}
+          </p>
 
-          <div>
-            <label className="mb-1 block text-sm text-gray-300">Alias</label>
-            <input
-              value={alias}
-              onChange={(e) => setAlias(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-[#111827] px-3 py-2 text-white outline-none"
-              placeholder="Ej. Fernet B2"
-            />
-          </div>
+          {tieneIncidencia ? (
+            <p className="mt-3 text-sm text-zinc-400">
+              Este pack tiene al menos una cuenta pendiente de reemplazo.
+            </p>
+          ) : null}
         </div>
 
-        <button
-          onClick={reemplazarCuenta}
-          disabled={loading || !selectedPendingSlotId || !numeroCuenta || !alias}
-          className="mt-4 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-500 disabled:opacity-50"
-        >
-          Reemplazar cuenta
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <ActionButton
+            onClick={() => onRotar(pack.id, pack.nombre)}
+            disabled={loading}
+            variant="secondary"
+          >
+            Rotar pack
+          </ActionButton>
+
+          <ActionButton
+            onClick={() => onEvaluar(pack.id, pack.nombre)}
+            disabled={loading}
+            variant="danger"
+          >
+            Evaluar SORD
+          </ActionButton>
+        </div>
       </div>
 
-      <div className="mt-8">
-        <h2 className="mb-4 text-xl font-semibold">Eventos recientes</h2>
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+        {pack.pack_slots
+          ?.sort((a, b) => a.orden - b.orden)
+          .map((slot) => {
+            const estadoCuenta = slot.accounts?.estado ?? "";
+            const puedePerder =
+              slot.accounts?.id &&
+              estadoCuenta !== "perdida" &&
+              estadoCuenta !== "fondeada";
 
-        <div className="space-y-3">
-          {events.map((event) => (
-            <div
-              key={event.id}
-              className="rounded-lg border border-white/10 bg-white/5 p-4"
-            >
-              <p>Fecha: {event.fecha}</p>
-              <p>
-                Tipo:{" "}
-                <span
-                  className={
-                    event.tipo_evento === "SORD in"
-                      ? "text-green-400"
-                      : event.tipo_evento === "SORD out"
-                      ? "text-red-400"
-                      : event.tipo_evento === "perdida"
-                      ? "text-yellow-400"
-                      : event.tipo_evento === "fondeada"
-                      ? "text-purple-400"
-                      : "text-white"
-                  }
-                >
-                  {event.tipo_evento}
-                </span>
-              </p>
-              <p>Cuenta: {event.accounts?.alias ?? "-"}</p>
-              <p>Número: {event.accounts?.numero_cuenta ?? "-"}</p>
-              <p>Descripción: {event.descripcion ?? "-"}</p>
-            </div>
-          ))}
-        </div>
+            const puedeFondear =
+              slot.accounts?.id &&
+              estadoCuenta !== "fondeada" &&
+              estadoCuenta !== "perdida";
+
+            const numeroCuenta = slot.accounts?.numero_cuenta ?? "";
+            const live = numeroCuenta ? liveStatus[numeroCuenta] : undefined;
+
+            return (
+              <div
+                key={slot.id}
+                className={`rounded-2xl border p-4 ${
+                  slot.pendiente_reemplazo
+                    ? "border-white/15 bg-white/[0.04]"
+                    : "border-white/10 bg-black/20"
+                }`}
+              >
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm uppercase tracking-[0.14em] text-zinc-500">
+                      Slot {slot.slot}
+                    </p>
+                    <p className="mt-2 text-base font-medium text-white">
+                      {slot.accounts?.alias ?? "Sin cuenta"}
+                    </p>
+                  </div>
+
+                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[11px] text-zinc-400">
+                    {slot.es_activa ? "Activa" : "Inactiva"}
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-sm text-zinc-400">
+                  <p>Número: {slot.accounts?.numero_cuenta ?? "-"}</p>
+                  <p>Estado: {slot.accounts?.estado ?? "-"}</p>
+                  <p>Tipo: {slot.accounts?.tipo_cuenta ?? "-"}</p>
+
+                  {slot.es_activa && (
+                    <p>
+                      PnL actual:{" "}
+                      <span className={getLivePnlClass(live?.pnl_actual)}>
+                        {typeof live?.pnl_actual === "number"
+                          ? live.pnl_actual.toFixed(2)
+                          : "-"}
+                      </span>
+                    </p>
+                  )}
+
+                  <p>
+                    Pendiente reemplazo:{" "}
+                    <span className={slot.pendiente_reemplazo ? "text-zinc-200" : "text-zinc-500"}>
+                      {slot.pendiente_reemplazo ? "Sí" : "No"}
+                    </span>
+                  </p>
+                </div>
+
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <ActionButton
+                    onClick={() => slot.accounts?.id && onPerder(slot.accounts.id)}
+                    disabled={loading || !puedePerder}
+                    variant="ghost"
+                  >
+                    Perder
+                  </ActionButton>
+
+                  <ActionButton
+                    onClick={() => slot.accounts?.id && onFondear(slot.accounts.id)}
+                    disabled={loading || !puedeFondear}
+                    variant="ghost"
+                  >
+                    Fondear
+                  </ActionButton>
+
+                  {slot.accounts?.id && slot.accounts?.estado === "activa" && (
+                    <ActionButton
+                      onClick={() => onSelectDaily(slot.accounts!.id)}
+                      disabled={loading}
+                      variant="ghost"
+                    >
+                      Cargar daily
+                    </ActionButton>
+                  )}
+
+                  {slot.pendiente_reemplazo && (
+                    <ActionButton
+                      onClick={() => onSelectReplace(slot.id)}
+                      disabled={loading}
+                      variant="secondary"
+                    >
+                      Usar en reemplazo
+                    </ActionButton>
+                  )}
+                </div>
+              </div>
+            );
+          })}
       </div>
     </div>
   );
