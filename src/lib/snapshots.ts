@@ -7,6 +7,9 @@ function getTodayDate() {
 type AccountRow = {
   id: number;
   estado: string | null;
+  baseline_balance?: number | null;
+  baseline_profit_total_usd?: number | null;
+  baseline_profit_total_pct?: number | null;
 };
 
 type DailyResultRow = {
@@ -22,7 +25,9 @@ export async function syncDailySnapshots() {
 
   const { data: accounts, error: accountsError } = await supabaseAdmin
     .from("accounts")
-    .select("id, estado");
+    .select(
+      "id, estado, baseline_balance, baseline_profit_total_usd, baseline_profit_total_pct"
+    );
 
   if (accountsError) {
     throw new Error("Error cargando accounts: " + accountsError.message);
@@ -44,17 +49,17 @@ export async function syncDailySnapshots() {
   const typedResults = (allResults ?? []) as DailyResultRow[];
 
   const todayResultsMap = new Map<number, DailyResultRow>();
-  const totalPctMap = new Map<number, number>();
+  const historicalPctMap = new Map<number, number>();
 
   for (const row of typedResults) {
     const accountId = row.account_id;
     const pnlPct = Number(row.pnl_porcentaje ?? 0);
 
-    totalPctMap.set(accountId, (totalPctMap.get(accountId) ?? 0) + pnlPct);
-
     if (row.fecha === today) {
       todayResultsMap.set(accountId, row);
     }
+
+    historicalPctMap.set(accountId, (historicalPctMap.get(accountId) ?? 0) + pnlPct);
   }
 
   const snapshots = typedAccounts.map((acc) => {
@@ -63,7 +68,11 @@ export async function syncDailySnapshots() {
     const pnlHoyUsd = Number(todayResult?.pnl_usd ?? 0);
     const pnlHoyPct = Number(todayResult?.pnl_porcentaje ?? 0);
     const tradesAbiertos = Number(todayResult?.numero_trades ?? 0);
-    const profitTotalPct = Number(totalPctMap.get(acc.id) ?? 0);
+
+    const baselineProfitTotalPct = Number(acc.baseline_profit_total_pct ?? 0);
+    const dailyResultsAccumulatedPct = Number(historicalPctMap.get(acc.id) ?? 0);
+
+    const profitTotalPct = baselineProfitTotalPct + dailyResultsAccumulatedPct;
 
     return {
       account_id: acc.id,
