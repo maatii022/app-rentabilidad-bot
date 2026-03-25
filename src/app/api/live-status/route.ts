@@ -9,8 +9,12 @@ type RawLiveStatusItem = {
   preset?: unknown;
   pnl_actual?: unknown;
   pnl_pct_actual?: unknown;
+  pnl_hoy_usd?: unknown;
+  pnl_hoy_pct?: unknown;
+  profit_total_pct?: unknown;
   trades_abiertos?: unknown;
   balance?: unknown;
+  account_size_inferred?: unknown;
   error?: unknown;
 };
 
@@ -18,8 +22,12 @@ type NormalizedLiveStatusItem = {
   preset?: string;
   pnl_actual?: number | null;
   pnl_pct_actual?: number | null;
+  pnl_hoy_usd?: number | null;
+  pnl_hoy_pct?: number | null;
+  profit_total_pct?: number | null;
   trades_abiertos?: number | null;
   balance?: number | null;
+  account_size_inferred?: number | null;
   error?: string;
 };
 
@@ -39,21 +47,33 @@ function toStringOrUndefined(value: unknown): string | undefined {
 function normalizeItem(item: RawLiveStatusItem): NormalizedLiveStatusItem {
   const pnlActual = toNumberOrNull(item.pnl_actual);
   const pnlPctActualDirect = toNumberOrNull(item.pnl_pct_actual);
+  const pnlHoyUsd = toNumberOrNull(item.pnl_hoy_usd);
+  const pnlHoyPctDirect = toNumberOrNull(item.pnl_hoy_pct);
+  const profitTotalPct = toNumberOrNull(item.profit_total_pct);
   const balance = toNumberOrNull(item.balance);
   const tradesAbiertos = toNumberOrNull(item.trades_abiertos);
+  const accountSizeInferred = toNumberOrNull(item.account_size_inferred);
 
-  let pnlPctActual: number | null = pnlPctActualDirect;
-
+  let pnlPctActual = pnlPctActualDirect;
   if (pnlPctActual === null && pnlActual !== null && balance !== null && balance > 0) {
     pnlPctActual = (pnlActual / balance) * 100;
+  }
+
+  let pnlHoyPct = pnlHoyPctDirect;
+  if (pnlHoyPct === null && pnlHoyUsd !== null && balance !== null && balance > 0) {
+    pnlHoyPct = (pnlHoyUsd / balance) * 100;
   }
 
   return {
     preset: toStringOrUndefined(item.preset),
     pnl_actual: pnlActual,
     pnl_pct_actual: pnlPctActual,
+    pnl_hoy_usd: pnlHoyUsd,
+    pnl_hoy_pct: pnlHoyPct,
+    profit_total_pct: profitTotalPct,
     trades_abiertos: tradesAbiertos,
     balance,
+    account_size_inferred: accountSizeInferred,
     error: toStringOrUndefined(item.error),
   };
 }
