@@ -61,7 +61,10 @@ type ResultadoRevisionDiaria = {
 type LiveStatusItem = {
   preset?: string;
   balance?: number | null;
+  equity?: number | null;
   account_size_inferred?: number | null;
+  pnl_realizado_hoy?: number | null;
+  pnl_abierto?: number | null;
   pnl_actual?: number | null;
   pnl_hoy_usd?: number | null;
   pnl_pct_actual?: number | null;
@@ -349,37 +352,17 @@ function resolveDisplayTotalPct(
   const live = liveStatus[numeroCuenta];
   const persisted = persistedPerformance[numeroCuenta];
 
-  const persistedTotal = isValidNumber(persisted?.total_pct)
-    ? persisted!.total_pct!
-    : null;
-
-  const persistedToday = isValidNumber(persisted?.today_pct)
-    ? persisted!.today_pct!
-    : 0;
-
-  const liveToday = isValidNumber(live?.pnl_hoy_pct)
-    ? live!.pnl_hoy_pct!
-    : isValidNumber(live?.pnl_pct_actual)
-    ? live!.pnl_pct_actual!
-    : null;
-
-  const tradesAbiertos = isValidNumber(live?.trades_abiertos)
-    ? live!.trades_abiertos!
-    : 0;
-
-  if (
-    tradesAbiertos > 0 &&
-    isValidNumber(live?.profit_total_pct_current)
-  ) {
+  if (isValidNumber(live?.profit_total_pct_current)) {
     return live!.profit_total_pct_current!;
   }
 
-  if (persistedTotal !== null && liveToday !== null && tradesAbiertos > 0) {
-    return persistedTotal - persistedToday + liveToday;
+  if (isValidNumber(persisted?.total_pct)) {
+    return persisted!.total_pct!;
   }
 
-  if (isValidNumber(live?.profit_total_pct)) return live!.profit_total_pct!;
-  if (persistedTotal !== null) return persistedTotal;
+  if (isValidNumber(live?.profit_total_pct)) {
+    return live!.profit_total_pct!;
+  }
 
   return null;
 }

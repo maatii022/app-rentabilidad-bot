@@ -1,144 +1,88 @@
 import { NextResponse } from "next/server";
 
-export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const VPS_LIVE_STATUS_URL = "http://5.134.118.153:5050/live-status";
-
-type RawLiveStatusItem = {
-  preset?: unknown;
-  pnl_actual?: unknown;
-  pnl_pct_actual?: unknown;
-  pnl_hoy_usd?: unknown;
-  pnl_hoy_pct?: unknown;
-  profit_total_pct?: unknown;
-  trades_abiertos?: unknown;
-  balance?: unknown;
-  account_size_inferred?: unknown;
-  error?: unknown;
-};
-
-type NormalizedLiveStatusItem = {
+type UpstreamLiveStatusItem = {
   preset?: string;
+  balance?: number | null;
+  equity?: number | null;
+  account_size_inferred?: number | null;
+  pnl_realizado_hoy?: number | null;
+  pnl_abierto?: number | null;
   pnl_actual?: number | null;
-  pnl_pct_actual?: number | null;
   pnl_hoy_usd?: number | null;
+  pnl_pct_actual?: number | null;
   pnl_hoy_pct?: number | null;
   profit_total_pct?: number | null;
+  profit_total_pct_current?: number | null;
   trades_abiertos?: number | null;
-  balance?: number | null;
-  account_size_inferred?: number | null;
   error?: string;
 };
 
-function toNumberOrNull(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim() !== "") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-  return null;
-}
+type UpstreamResponse = Record<string, UpstreamLiveStatusItem>;
 
-function toStringOrUndefined(value: unknown): string | undefined {
-  return typeof value === "string" ? value : undefined;
-}
+function getLiveStatusUrl() {
+  const base =
+    process.env.LIVE_STATUS_SERVER_URL ||
+    process.env.NEXT_PUBLIC_LIVE_STATUS_SERVER_URL ||
+    "";
 
-function normalizeItem(item: RawLiveStatusItem): NormalizedLiveStatusItem {
-  const pnlActual = toNumberOrNull(item.pnl_actual);
-  const pnlPctActualDirect = toNumberOrNull(item.pnl_pct_actual);
-  const pnlHoyUsd = toNumberOrNull(item.pnl_hoy_usd);
-  const pnlHoyPctDirect = toNumberOrNull(item.pnl_hoy_pct);
-  const profitTotalPct = toNumberOrNull(item.profit_total_pct);
-  const balance = toNumberOrNull(item.balance);
-  const tradesAbiertos = toNumberOrNull(item.trades_abiertos);
-  const accountSizeInferred = toNumberOrNull(item.account_size_inferred);
-
-  let pnlPctActual = pnlPctActualDirect;
-  if (pnlPctActual === null && pnlActual !== null && balance !== null && balance > 0) {
-    pnlPctActual = (pnlActual / balance) * 100;
+  if (!base) {
+    throw new Error("Falta LIVE_STATUS_SERVER_URL");
   }
 
-  let pnlHoyPct = pnlHoyPctDirect;
-  if (pnlHoyPct === null && pnlHoyUsd !== null && balance !== null && balance > 0) {
-    pnlHoyPct = (pnlHoyUsd / balance) * 100;
-  }
-
-  return {
-    preset: toStringOrUndefined(item.preset),
-    pnl_actual: pnlActual,
-    pnl_pct_actual: pnlPctActual,
-    pnl_hoy_usd: pnlHoyUsd,
-    pnl_hoy_pct: pnlHoyPct,
-    profit_total_pct: profitTotalPct,
-    trades_abiertos: tradesAbiertos,
-    balance,
-    account_size_inferred: accountSizeInferred,
-    error: toStringOrUndefined(item.error),
-  };
+  return `${base.replace(/\/+$/, "")}/live-status`;
 }
 
 export async function GET() {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20000);
-
   try {
-    const res = await fetch(VPS_LIVE_STATUS_URL, {
+    const url = getLiveStatusUrl();
+
+    const response = await fetch(url, {
       method: "GET",
       cache: "no-store",
-      signal: controller.signal,
     });
 
-    clearTimeout(timeout);
-
-    if (!res.ok) {
+    if (!response.ok) {
       return NextResponse.json(
         {
           ok: false,
-          error: `Error consultando VPS: HTTP ${res.status}`,
+          error: `Upstream live-status respondió ${response.status}`,
         },
-        { status: 500 }
+        { status: 502 }
       );
     }
 
-    const data = await res.json();
+    const upstreamJson = (await response.json()) as UpstreamResponse;
 
-    if (!data || typeof data !== "object" || Array.isArray(data)) {
-      return NextResponse.json(
-        {
-          ok: false,
-          error: "La respuesta de la VPS no tiene el formato esperado",
-        },
-        { status: 500 }
-      );
+    const data: Record<string, UpstreamLiveStatusItem> = {};
+
+    for (const [accountNumber, item] of Object.entries(upstreamJson ?? {})) {
+      data[accountNumber] = {
+        preset: item?.preset ?? undefined,
+        balance: item?.balance ?? null,
+        equity: item?.equity ?? null,
+        account_size_inferred: item?.account_size_inferred ?? null,
+        pnl_realizado_hoy: item?.pnl_realizado_hoy ?? null,
+        pnl_abierto: item?.pnl_abierto ?? null,
+        pnl_actual: item?.pnl_actual ?? null,
+        pnl_hoy_usd: item?.pnl_hoy_usd ?? null,
+        pnl_pct_actual: item?.pnl_pct_actual ?? null,
+        pnl_hoy_pct: item?.pnl_hoy_pct ?? null,
+        profit_total_pct: item?.profit_total_pct ?? null,
+        profit_total_pct_current: item?.profit_total_pct_current ?? null,
+        trades_abiertos: item?.trades_abiertos ?? null,
+        error: item?.error ?? undefined,
+      };
     }
 
-    const normalized = Object.fromEntries(
-      Object.entries(data).map(([accountNumber, rawItem]) => {
-        const item = (rawItem ?? {}) as RawLiveStatusItem;
-        return [accountNumber, normalizeItem(item)];
-      })
-    );
-
-    return NextResponse.json(
-      {
-        ok: true,
-        data: normalized,
-      },
-      {
-        status: 200,
-        headers: {
-          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-        },
-      }
-    );
+    return NextResponse.json({
+      ok: true,
+      data,
+    });
   } catch (error) {
-    clearTimeout(timeout);
-
     const message =
-      error instanceof Error ? error.message : "Error desconocido en live-status";
-
-    console.error("Error en /api/live-status:", message);
+      error instanceof Error ? error.message : "Error inesperado";
 
     return NextResponse.json(
       {
