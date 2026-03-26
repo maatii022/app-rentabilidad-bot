@@ -338,15 +338,15 @@ function resolveDisplayDayPct(
   const persisted = persistedPerformance[numeroCuenta];
 
   if (isValidNumber(live?.pnl_hoy_pct)) {
-    return live!.pnl_hoy_pct!;
+    return live.pnl_hoy_pct;
   }
 
   if (isValidNumber(live?.pnl_pct_actual)) {
-    return live!.pnl_pct_actual!;
+    return live.pnl_pct_actual;
   }
 
   if (isValidNumber(persisted?.today_pct)) {
-    return persisted!.today_pct!;
+    return persisted.today_pct;
   }
 
   return null;
@@ -361,15 +361,15 @@ function resolveDisplayTotalPct(
   const persisted = persistedPerformance[numeroCuenta];
 
   if (isValidNumber(live?.profit_total_pct_current)) {
-    return live!.profit_total_pct_current!;
+    return live.profit_total_pct_current;
   }
 
   if (isValidNumber(live?.profit_total_pct)) {
-    return live!.profit_total_pct!;
+    return live.profit_total_pct;
   }
 
   if (isValidNumber(persisted?.total_pct)) {
-    return persisted!.total_pct!;
+    return persisted.total_pct;
   }
 
   return null;
@@ -1173,6 +1173,8 @@ function PackCard({
 
           const numeroCuenta = slot.accounts?.numero_cuenta ?? "";
           const missingAccount = !slot.accounts?.id;
+          const live = numeroCuenta ? liveStatus[numeroCuenta] : undefined;
+          const hasOpenTrade = (live?.trades_abiertos ?? 0) > 0;
 
           const displayHoyPct = numeroCuenta
             ? resolveDisplayDayPct(numeroCuenta, persistedPerformance, liveStatus)
@@ -1233,7 +1235,7 @@ function PackCard({
                 <p>Estado: {slot.accounts?.estado ?? "-"}</p>
                 <p>Tipo: {slot.accounts?.tipo_cuenta ?? "-"}</p>
 
-                <div className="mt-3 grid grid-cols-2 gap-2 rounded-xl border border-white/5 bg-black/20 p-2.5 shadow-[0_10px_22px_rgba(0,0,0,0.16)]">
+                <div className="mt-3 grid grid-cols-[1fr_1fr_auto] items-center gap-2 rounded-xl border border-white/5 bg-black/20 p-2.5 shadow-[0_10px_22px_rgba(0,0,0,0.16)]">
                   <div>
                     <p className="text-[9px] uppercase tracking-[0.12em] text-zinc-500">
                       Total %
@@ -1258,6 +1260,20 @@ function PackCard({
                     >
                       {formatPercent(displayHoyPct)}
                     </p>
+                  </div>
+
+                  <div className="flex items-center justify-end">
+                    {hasOpenTrade ? (
+                      <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-400/[0.08] px-2.5 py-1 shadow-[0_8px_18px_rgba(16,185,129,0.10)]">
+                        <span className="relative flex h-2.5 w-2.5">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.8)]" />
+                        </span>
+                        <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-emerald-200">
+                          En curso
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -1291,7 +1307,7 @@ function PackCard({
                     disabled={loading}
                     variant="secondary"
                   >
-                    Reemplazo.
+                    Reemplazo
                   </ActionButton>
                 )}
               </div>
