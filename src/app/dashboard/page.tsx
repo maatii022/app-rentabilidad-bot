@@ -67,6 +67,7 @@ type LiveStatusItem = {
   pnl_pct_actual?: number | null;
   pnl_hoy_pct?: number | null;
   profit_total_pct?: number | null;
+  profit_total_pct_current?: number | null;
   trades_abiertos?: number | null;
   error?: string;
 };
@@ -365,6 +366,13 @@ function resolveDisplayTotalPct(
   const tradesAbiertos = isValidNumber(live?.trades_abiertos)
     ? live!.trades_abiertos!
     : 0;
+
+  if (
+    tradesAbiertos > 0 &&
+    isValidNumber(live?.profit_total_pct_current)
+  ) {
+    return live!.profit_total_pct_current!;
+  }
 
   if (persistedTotal !== null && liveToday !== null && tradesAbiertos > 0) {
     return persistedTotal - persistedToday + liveToday;
