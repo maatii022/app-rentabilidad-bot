@@ -44,6 +44,7 @@ type AccountItem = {
 
 type TypeFilter = "todos" | "prueba" | "fondeada";
 type StatusFilter = "all" | "activa" | "fondeada" | "perdida";
+type ViewMode = "overview" | "overview-exit" | "detail" | "detail-exit";
 
 function normalizeText(value: string | null | undefined) {
   return String(value || "").trim();
@@ -266,12 +267,12 @@ function MetricSurface({
   enabled?: boolean;
   onClick?: () => void;
 }) {
-  const base =
+  const baseClass =
     "relative overflow-hidden rounded-[18px] border border-white/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.075),rgba(255,255,255,0.028))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.10),inset_0_-1px_0_rgba(255,255,255,0.03),0_14px_30px_rgba(0,0,0,0.24)]";
 
   if (!enabled) {
     return (
-      <div className={base}>
+      <div className={baseClass}>
         <span className="pointer-events-none absolute inset-x-3 top-0 h-px bg-white/14 opacity-80" />
         <div className="relative z-10">
           <p className="text-center text-[10px] uppercase tracking-[0.14em] text-zinc-400">
@@ -289,7 +290,7 @@ function MetricSurface({
     <button
       type="button"
       onClick={onClick}
-      className={`metric-button-pulse group cursor-pointer transition-all duration-200 hover:-translate-y-[2px] hover:border-white/20 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.04))] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(255,255,255,0.04),0_18px_34px_rgba(0,0,0,0.28)] active:scale-[0.985] ${base}`}
+      className={`metric-button-pulse group cursor-pointer transition-all duration-200 hover:-translate-y-[2px] hover:border-white/20 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.04))] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(255,255,255,0.04),0_18px_34px_rgba(0,0,0,0.28)] active:scale-[0.985] ${baseClass}`}
     >
       <span className="pointer-events-none absolute inset-x-3 top-0 h-px bg-white/14 opacity-80" />
       <div className="relative z-10">
@@ -497,10 +498,11 @@ export default function PresetsClient({
     useState<PersistedPerformanceMap>({});
   const [liveStatus, setLiveStatus] = useState<LiveStatusMap>({});
   const [tipoFilter, setTipoFilter] = useState<TypeFilter>("todos");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [showInactive, setShowInactive] = useState(false);
   const [packMode, setPackMode] = useState(false);
   const [packFilter, setPackFilter] = useState<string>("todos");
-  const [transitionState, setTransitionState] = useState<"overview" | "opening" | "detail" | "closing">("overview");
+  const [viewMode, setViewMode] = useState<ViewMode>("overview");
 
   useEffect(() => {
     async function cargarPerformance() {
@@ -607,12 +609,15 @@ export default function PresetsClient({
       const matchesTipo =
         tipoFilter === "todos" || normalizeKey(item.tipoCuenta) === tipoFilter;
 
+      const matchesStatus =
+        statusFilter === "all" || normalizeKey(item.estado) === statusFilter;
+
       const matchesPack =
         packFilter === "todos" || item.packNombre === packFilter;
 
-      return matchesTipo && matchesPack;
+      return matchesTipo && matchesStatus && matchesPack;
     });
-  }, [selectedPresetAccounts, tipoFilter, packFilter]);
+  }, [selectedPresetAccounts, tipoFilter, statusFilter, packFilter]);
 
   const filteredInactiveAccounts = useMemo(() => {
     return selectedPresetAccounts.filter((item) => {
@@ -621,41 +626,46 @@ export default function PresetsClient({
       const matchesTipo =
         tipoFilter === "todos" || normalizeKey(item.tipoCuenta) === tipoFilter;
 
+      const matchesStatus =
+        statusFilter === "all" || normalizeKey(item.estado) === statusFilter;
+
       const matchesPack =
         packFilter === "todos" || item.packNombre === packFilter;
 
-      return matchesTipo && matchesPack;
+      return matchesTipo && matchesStatus && matchesPack;
     });
-  }, [selectedPresetAccounts, tipoFilter, packFilter]);
+  }, [selectedPresetAccounts, tipoFilter, statusFilter, packFilter]);
 
-  function handleSelectPreset(presetId: number) {
-    if (transitionState !== "overview") return;
-
-    setSelectedPresetId(presetId);
+  function resetDetailFilters() {
     setTipoFilter("todos");
+    setStatusFilter("all");
     setShowInactive(false);
     setPackMode(false);
     setPackFilter("todos");
-    setTransitionState("opening");
+  }
+
+  function handleSelectPreset(presetId: number) {
+    if (viewMode !== "overview") return;
+
+    setViewMode("overview-exit");
 
     window.setTimeout(() => {
-      setTransitionState("detail");
-    }, 420);
+      setSelectedPresetId(presetId);
+      resetDetailFilters();
+      setViewMode("detail");
+    }, 260);
   }
 
   function handleBack() {
-    if (transitionState !== "detail") return;
+    if (viewMode !== "detail") return;
 
-    setTransitionState("closing");
+    setViewMode("detail-exit");
 
     window.setTimeout(() => {
       setSelectedPresetId(null);
-      setTransitionState("overview");
-      setTipoFilter("todos");
-      setShowInactive(false);
-      setPackMode(false);
-      setPackFilter("todos");
-    }, 420);
+      resetDetailFilters();
+      setViewMode("overview");
+    }, 260);
   }
 
   function handleMetricClick(key: "packs" | "activa" | "all" | "fondeada" | "perdida") {
@@ -668,20 +678,24 @@ export default function PresetsClient({
     setPackFilter("todos");
 
     if (key === "activa") {
+      setStatusFilter("activa");
       setShowInactive(false);
       return;
     }
 
     if (key === "all") {
+      setStatusFilter("all");
       setShowInactive(true);
       return;
     }
 
     if (key === "fondeada") {
+      setStatusFilter("fondeada");
       setShowInactive(true);
       return;
     }
 
+    setStatusFilter("perdida");
     setShowInactive(true);
   }
 
@@ -726,6 +740,17 @@ export default function PresetsClient({
           }
         }
 
+        @keyframes hintDrop {
+          0% {
+            opacity: 0;
+            transform: translate(-50%, -26px);
+          }
+          100% {
+            opacity: 1;
+            transform: translate(-50%, 0);
+          }
+        }
+
         .preset-overview-pulse {
           animation: presetCardPulse 5.8s ease-in-out infinite;
           animation-delay: var(--pulse-delay, 0s);
@@ -738,6 +763,10 @@ export default function PresetsClient({
         .account-card-enter {
           animation: accountEnter 0.42s cubic-bezier(0.2, 0.9, 0.2, 1) both;
           animation-delay: var(--enter-delay, 0ms);
+        }
+
+        .hint-enter {
+          animation: hintDrop 420ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
         }
       `}</style>
 
@@ -767,66 +796,60 @@ export default function PresetsClient({
           </h2>
         </div>
 
-        <div
-          className={`pointer-events-none absolute left-1/2 top-3 z-20 w-full max-w-[340px] -translate-x-1/2 transition-all duration-500 ${
-            selectedPreset || transitionState === "opening"
-              ? "-translate-y-10 opacity-0"
-              : "translate-y-0 opacity-100"
-          }`}
-        >
-          <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] px-4 py-3 shadow-[0_16px_34px_rgba(0,0,0,0.24)] backdrop-blur-xl">
-            <p className="text-center text-[10px] uppercase tracking-[0.16em] text-zinc-500">
-              Detalle interactivo
-            </p>
-            <p className="mt-2 text-center text-sm leading-6 text-zinc-200">
-              Pulsa un preset para ver todas sus cuentas y activar sus filtros.
-            </p>
-          </div>
-        </div>
-
-        <div
-          className={`transition-all duration-500 ${
-            transitionState === "overview"
-              ? "translate-y-0 scale-100 opacity-100"
-              : "pointer-events-none -translate-y-4 scale-[0.985] opacity-0"
-          }`}
-        >
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-            {metrics.map((preset, index) => (
-              <button
-                key={preset.id}
-                type="button"
-                onClick={() => handleSelectPreset(preset.id)}
-                className="preset-overview-pulse text-left"
-                style={{ ["--pulse-delay" as string]: `${index * 0.35}s` }}
-              >
-                <PresetCard preset={preset} />
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {selectedPreset ? (
-          <div
-            className={`mx-auto max-w-[590px] transition-all duration-500 ${
-              transitionState === "detail"
-                ? "translate-y-0 scale-100 opacity-100"
-                : transitionState === "opening"
-                ? "translate-y-3 scale-[0.96] opacity-0"
-                : "translate-y-3 scale-[0.96] opacity-0"
-            }`}
-          >
-            <PresetCard
-              preset={selectedPreset}
-              interactive
-              onBack={handleBack}
-              onMetricClick={handleMetricClick}
-            />
+        {!selectedPreset && viewMode === "overview" ? (
+          <div className="pointer-events-none absolute left-1/2 top-3 z-20 hint-enter w-full max-w-[340px] -translate-x-1/2 px-4">
+            <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] px-4 py-3 shadow-[0_16px_34px_rgba(0,0,0,0.24)] backdrop-blur-xl">
+              <p className="text-center text-[10px] uppercase tracking-[0.16em] text-zinc-500">
+                Detalle interactivo
+              </p>
+              <p className="mt-2 text-center text-sm leading-6 text-zinc-200">
+                Pulsa un preset para ver todas sus cuentas y activar sus filtros.
+              </p>
+            </div>
           </div>
         ) : null}
 
-        {selectedPreset && transitionState === "detail" ? (
-          <div className="mt-5 space-y-4">
+        {(viewMode === "overview" || viewMode === "overview-exit") && (
+          <div
+            className={`transition-all duration-300 ${
+              viewMode === "overview"
+                ? "translate-y-0 scale-100 opacity-100"
+                : "-translate-y-4 scale-[0.985] opacity-0"
+            }`}
+          >
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+              {metrics.map((preset, index) => (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => handleSelectPreset(preset.id)}
+                  className="preset-overview-pulse text-left"
+                  style={{ ["--pulse-delay" as string]: `${index * 0.35}s` }}
+                >
+                  <PresetCard preset={preset} />
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {(viewMode === "detail" || viewMode === "detail-exit") && selectedPreset && (
+          <div
+            className={`space-y-5 transition-all duration-300 ${
+              viewMode === "detail"
+                ? "translate-y-0 scale-100 opacity-100"
+                : "translate-y-4 scale-[0.985] opacity-0"
+            }`}
+          >
+            <div className="mx-auto max-w-[590px]">
+              <PresetCard
+                preset={selectedPreset}
+                interactive
+                onBack={handleBack}
+                onMetricClick={handleMetricClick}
+              />
+            </div>
+
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="flex flex-wrap gap-2">
                 <FilterPill
@@ -934,7 +957,7 @@ export default function PresetsClient({
               </div>
             ) : null}
           </div>
-        ) : null}
+        )}
       </section>
     </div>
   );
