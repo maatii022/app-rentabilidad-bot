@@ -741,15 +741,15 @@ export default function PresetsClient({
         }
 
         @keyframes hintDrop {
-          0% {
-            opacity: 0;
-            transform: translate(-50%, -26px);
-          }
-          100% {
-            opacity: 1;
-            transform: translate(-50%, 0);
-          }
-        }
+  0% {
+    opacity: 0;
+    transform: translateY(-22px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
         .preset-overview-pulse {
           animation: presetCardPulse 5.8s ease-in-out infinite;
@@ -796,18 +796,20 @@ export default function PresetsClient({
           </h2>
         </div>
 
-        {!selectedPreset && viewMode === "overview" ? (
-          <div className="pointer-events-none absolute left-1/2 top-3 z-20 hint-enter w-full max-w-[340px] -translate-x-1/2 px-4">
-            <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] px-4 py-3 shadow-[0_16px_34px_rgba(0,0,0,0.24)] backdrop-blur-xl">
-              <p className="text-center text-[10px] uppercase tracking-[0.16em] text-zinc-500">
-                Detalle interactivo
-              </p>
-              <p className="mt-2 text-center text-sm leading-6 text-zinc-200">
-                Pulsa un preset para ver todas sus cuentas y activar sus filtros.
-              </p>
-            </div>
-          </div>
-        ) : null}
+        <div className="relative mb-4 flex min-h-[72px] items-start justify-center">
+  {!selectedPreset && viewMode === "overview" ? (
+    <div className="pointer-events-none hint-enter w-full max-w-[340px] px-4">
+      <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] px-4 py-3 shadow-[0_16px_34px_rgba(0,0,0,0.24)] backdrop-blur-xl">
+        <p className="text-center text-[10px] uppercase tracking-[0.16em] text-zinc-500">
+          Detalle interactivo
+        </p>
+        <p className="mt-2 text-center text-sm leading-6 text-zinc-200">
+          Pulsa un preset para ver todas sus cuentas y activar sus filtros.
+        </p>
+      </div>
+    </div>
+  ) : null}
+</div>
 
         {(viewMode === "overview" || viewMode === "overview-exit") && (
           <div
