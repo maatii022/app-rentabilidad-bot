@@ -1,21 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AccountRow, Pack, Preset } from "./page";
 
 type LiveStatusItem = {
   profit_total_pct?: number | null;
   profit_total_pct_current?: number | null;
   pnl_pct_actual?: number | null;
-  error?: string;
 };
 
 type LiveStatusMap = Record<string, LiveStatusItem>;
 
 type PersistedPerformanceItem = {
   total_pct?: number;
-  today_pct?: number;
-  live_status?: string | null;
 };
 
 type PersistedPerformanceMap = Record<string, PersistedPerformanceItem>;
@@ -46,20 +43,7 @@ type AccountItem = {
 };
 
 type TypeFilter = "todos" | "prueba" | "fondeada";
-
-type OverlayAnimation = {
-  preset: PresetMetric;
-  from: RectShape;
-  to: RectShape;
-  mode: "in" | "out";
-};
-
-type RectShape = {
-  top: number;
-  left: number;
-  width: number;
-  height: number;
-};
+type StatusFilter = "all" | "activa" | "fondeada" | "perdida";
 
 function normalizeText(value: string | null | undefined) {
   return String(value || "").trim();
@@ -271,32 +255,10 @@ function FilterPill({
   );
 }
 
-function StaticMetricSurface({
+function MetricSurface({
   label,
   value,
-}: {
-  label: string;
-  value: number | string;
-}) {
-  return (
-    <div className="relative overflow-hidden rounded-[18px] border border-white/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.075),rgba(255,255,255,0.028))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.10),inset_0_-1px_0_rgba(255,255,255,0.03),0_14px_30px_rgba(0,0,0,0.24)]">
-      <span className="pointer-events-none absolute inset-x-3 top-0 h-px bg-white/14 opacity-80" />
-      <div className="relative z-10">
-        <p className="text-center text-[10px] uppercase tracking-[0.14em] text-zinc-400">
-          {label}
-        </p>
-        <p className="mt-2 text-center text-xl font-semibold leading-none text-white">
-          {value}
-        </p>
-      </div>
-    </div>
-  );
-}
-
-function MetricButton({
-  label,
-  value,
-  enabled,
+  enabled = false,
   onClick,
 }: {
   label: string;
@@ -304,15 +266,30 @@ function MetricButton({
   enabled?: boolean;
   onClick?: () => void;
 }) {
+  const base =
+    "relative overflow-hidden rounded-[18px] border border-white/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.075),rgba(255,255,255,0.028))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.10),inset_0_-1px_0_rgba(255,255,255,0.03),0_14px_30px_rgba(0,0,0,0.24)]";
+
   if (!enabled) {
-    return <StaticMetricSurface label={label} value={value} />;
+    return (
+      <div className={base}>
+        <span className="pointer-events-none absolute inset-x-3 top-0 h-px bg-white/14 opacity-80" />
+        <div className="relative z-10">
+          <p className="text-center text-[10px] uppercase tracking-[0.14em] text-zinc-400">
+            {label}
+          </p>
+          <p className="mt-2 text-center text-xl font-semibold leading-none text-white">
+            {value}
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className="metric-button-pulse group relative cursor-pointer overflow-hidden rounded-[18px] border border-white/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.085),rgba(255,255,255,0.03))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.10),inset_0_-1px_0_rgba(255,255,255,0.03),0_14px_30px_rgba(0,0,0,0.24)] transition-all duration-200 hover:-translate-y-[2px] hover:border-white/20 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.04))] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(255,255,255,0.04),0_18px_34px_rgba(0,0,0,0.28)] active:scale-[0.985] active:translate-y-0"
+      className={`metric-button-pulse group cursor-pointer transition-all duration-200 hover:-translate-y-[2px] hover:border-white/20 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.04))] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(255,255,255,0.04),0_18px_34px_rgba(0,0,0,0.28)] active:scale-[0.985] ${base}`}
     >
       <span className="pointer-events-none absolute inset-x-3 top-0 h-px bg-white/14 opacity-80" />
       <div className="relative z-10">
@@ -430,30 +407,27 @@ function AccountCard({
   );
 }
 
-function PresetCardBody({
+function PresetCard({
   preset,
-  metricButtonsEnabled,
-  onQuickFilter,
+  interactive = false,
   onBack,
-  showBack,
+  onMetricClick,
 }: {
   preset: PresetMetric;
-  metricButtonsEnabled?: boolean;
-  onQuickFilter?: (key: "packs" | "activa" | "all" | "fondeada" | "perdida") => void;
+  interactive?: boolean;
   onBack?: () => void;
-  showBack?: boolean;
+  onMetricClick?: (key: "packs" | "activa" | "all" | "fondeada" | "perdida") => void;
 }) {
   return (
     <article className="overflow-hidden rounded-[24px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.05),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.022),rgba(255,255,255,0.012))] shadow-[0_18px_38px_rgba(0,0,0,0.20)]">
       <div className="border-b border-white/8 px-4 py-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            {showBack ? (
+            {interactive ? (
               <ActionButton onClick={onBack} variant="ghost">
                 ← Volver
               </ActionButton>
             ) : null}
-
             <p className="truncate text-xl font-semibold tracking-tight text-white">
               {preset.nombre}
             </p>
@@ -467,35 +441,35 @@ function PresetCardBody({
 
       <div className="p-4">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-          <MetricButton
+          <MetricSurface
             label="Packs"
             value={preset.packs}
-            enabled={metricButtonsEnabled}
-            onClick={() => onQuickFilter?.("packs")}
+            enabled={interactive}
+            onClick={() => onMetricClick?.("packs")}
           />
-          <MetricButton
+          <MetricSurface
             label="Activas"
             value={preset.cuentasActivas}
-            enabled={metricButtonsEnabled}
-            onClick={() => onQuickFilter?.("activa")}
+            enabled={interactive}
+            onClick={() => onMetricClick?.("activa")}
           />
-          <MetricButton
+          <MetricSurface
             label="Totales"
             value={preset.cuentasTotales}
-            enabled={metricButtonsEnabled}
-            onClick={() => onQuickFilter?.("all")}
+            enabled={interactive}
+            onClick={() => onMetricClick?.("all")}
           />
-          <MetricButton
+          <MetricSurface
             label="Fondeadas"
             value={preset.fondeadas}
-            enabled={metricButtonsEnabled}
-            onClick={() => onQuickFilter?.("fondeada")}
+            enabled={interactive}
+            onClick={() => onMetricClick?.("fondeada")}
           />
-          <MetricButton
+          <MetricSurface
             label="Perdidas"
             value={preset.perdidas}
-            enabled={metricButtonsEnabled}
-            onClick={() => onQuickFilter?.("perdida")}
+            enabled={interactive}
+            onClick={() => onMetricClick?.("perdida")}
           />
         </div>
 
@@ -526,15 +500,7 @@ export default function PresetsClient({
   const [showInactive, setShowInactive] = useState(false);
   const [packMode, setPackMode] = useState(false);
   const [packFilter, setPackFilter] = useState<string>("todos");
-
-  const [overlayAnimation, setOverlayAnimation] = useState<OverlayAnimation | null>(null);
-  const [overlayStyle, setOverlayStyle] = useState<React.CSSProperties | null>(null);
-  const [viewState, setViewState] = useState<"overview" | "transitioning-in" | "detail" | "transitioning-out">("overview");
-
-  const sectionRef = useRef<HTMLElement | null>(null);
-  const detailAnchorRef = useRef<HTMLDivElement | null>(null);
-  const detailCardRef = useRef<HTMLDivElement | null>(null);
-  const presetButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
+  const [transitionState, setTransitionState] = useState<"overview" | "opening" | "detail" | "closing">("overview");
 
   useEffect(() => {
     async function cargarPerformance() {
@@ -568,55 +534,6 @@ export default function PresetsClient({
 
     void cargarPerformance();
   }, []);
-
-  useEffect(() => {
-    if (!overlayAnimation) return;
-
-    const fromStyle: React.CSSProperties = {
-      position: "fixed",
-      top: overlayAnimation.from.top,
-      left: overlayAnimation.from.left,
-      width: overlayAnimation.from.width,
-      height: overlayAnimation.from.height,
-      zIndex: 70,
-      transition: "all 480ms cubic-bezier(0.2, 0.9, 0.2, 1)",
-      pointerEvents: "none",
-    };
-
-    const toStyle: React.CSSProperties = {
-      position: "fixed",
-      top: overlayAnimation.to.top,
-      left: overlayAnimation.to.left,
-      width: overlayAnimation.to.width,
-      height: overlayAnimation.to.height,
-      zIndex: 70,
-      transition: "all 480ms cubic-bezier(0.2, 0.9, 0.2, 1)",
-      pointerEvents: "none",
-    };
-
-    setOverlayStyle(fromStyle);
-
-    const raf = requestAnimationFrame(() => {
-      setOverlayStyle(toStyle);
-    });
-
-    const timeout = window.setTimeout(() => {
-      if (overlayAnimation.mode === "in") {
-        setViewState("detail");
-      } else {
-        setSelectedPresetId(null);
-        setViewState("overview");
-      }
-
-      setOverlayAnimation(null);
-      setOverlayStyle(null);
-    }, 500);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      window.clearTimeout(timeout);
-    };
-  }, [overlayAnimation]);
 
   const accountItems = useMemo<AccountItem[]>(() => {
     const presetNameMap = new Map<number, string>(
@@ -711,95 +628,37 @@ export default function PresetsClient({
     });
   }, [selectedPresetAccounts, tipoFilter, packFilter]);
 
-  function buildTargetRect(originRect: DOMRect): RectShape | null {
-    const anchor = detailAnchorRef.current;
-    if (!anchor) return null;
-
-    const anchorRect = anchor.getBoundingClientRect();
-    const width = originRect.width;
-    const height = originRect.height;
-
-    return {
-      top: anchorRect.top,
-      left: anchorRect.left + (anchorRect.width - width) / 2,
-      width,
-      height,
-    };
-  }
-
   function handleSelectPreset(presetId: number) {
-    const preset = metrics.find((item) => item.id === presetId);
-    const sourceNode = presetButtonRefs.current[presetId];
-
-    if (!preset || !sourceNode || viewState !== "overview") return;
-
-    const sourceRect = sourceNode.getBoundingClientRect();
-    const targetRect = buildTargetRect(sourceRect);
-
-    if (!targetRect) {
-      setSelectedPresetId(presetId);
-      setViewState("detail");
-      return;
-    }
+    if (transitionState !== "overview") return;
 
     setSelectedPresetId(presetId);
     setTipoFilter("todos");
     setShowInactive(false);
     setPackMode(false);
     setPackFilter("todos");
-    setViewState("transitioning-in");
+    setTransitionState("opening");
 
-    setOverlayAnimation({
-      preset,
-      from: {
-        top: sourceRect.top,
-        left: sourceRect.left,
-        width: sourceRect.width,
-        height: sourceRect.height,
-      },
-      to: targetRect,
-      mode: "in",
-    });
+    window.setTimeout(() => {
+      setTransitionState("detail");
+    }, 420);
   }
 
   function handleBack() {
-    if (!selectedPreset || !detailCardRef.current || viewState !== "detail") {
+    if (transitionState !== "detail") return;
+
+    setTransitionState("closing");
+
+    window.setTimeout(() => {
       setSelectedPresetId(null);
-      setViewState("overview");
-      return;
-    }
-
-    const targetNode = presetButtonRefs.current[selectedPreset.id];
-    if (!targetNode) {
-      setSelectedPresetId(null);
-      setViewState("overview");
-      return;
-    }
-
-    const detailRect = detailCardRef.current.getBoundingClientRect();
-    const targetRect = targetNode.getBoundingClientRect();
-
-    setViewState("transitioning-out");
-
-    setOverlayAnimation({
-      preset: selectedPreset,
-      from: {
-        top: detailRect.top,
-        left: detailRect.left,
-        width: detailRect.width,
-        height: detailRect.height,
-      },
-      to: {
-        top: targetRect.top,
-        left: targetRect.left,
-        width: targetRect.width,
-        height: targetRect.height,
-      },
-      mode: "out",
-    });
+      setTransitionState("overview");
+      setTipoFilter("todos");
+      setShowInactive(false);
+      setPackMode(false);
+      setPackFilter("todos");
+    }, 420);
   }
 
-  function handleQuickFilter(key: "packs" | "activa" | "all" | "fondeada" | "perdida") {
+  function handleMetricClick(key: "packs" | "activa" | "all" | "fondeada" | "perdida") {
     if (key === "packs") {
       setPackMode((prev) => !prev);
       return;
@@ -901,10 +760,7 @@ export default function PresetsClient({
         </div>
       </section>
 
-      <section
-        ref={sectionRef}
-        className="relative rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.05),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.22)]"
-      >
+      <section className="relative rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.05),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-sm font-medium text-white">
             {selectedPreset ? `Preset seleccionado · ${selectedPreset.nombre}` : "Presets activos"}
@@ -912,9 +768,9 @@ export default function PresetsClient({
         </div>
 
         <div
-          className={`pointer-events-none absolute left-1/2 top-4 z-20 w-full max-w-[340px] -translate-x-1/2 transform px-4 transition-all duration-500 ${
-            selectedPreset || viewState === "transitioning-in"
-              ? "-translate-y-8 opacity-0"
+          className={`pointer-events-none absolute left-1/2 top-3 z-20 w-full max-w-[340px] -translate-x-1/2 transition-all duration-500 ${
+            selectedPreset || transitionState === "opening"
+              ? "-translate-y-10 opacity-0"
               : "translate-y-0 opacity-100"
           }`}
         >
@@ -929,71 +785,48 @@ export default function PresetsClient({
         </div>
 
         <div
-          className={`grid grid-cols-1 gap-4 transition-all duration-500 xl:grid-cols-3 ${
-            selectedPreset || viewState === "transitioning-in" || viewState === "transitioning-out"
-              ? "opacity-100"
-              : "opacity-100"
+          className={`transition-all duration-500 ${
+            transitionState === "overview"
+              ? "translate-y-0 scale-100 opacity-100"
+              : "pointer-events-none -translate-y-4 scale-[0.985] opacity-0"
           }`}
         >
-          {metrics.map((preset, index) => {
-            const isSelected = selectedPresetId === preset.id;
-            const hideOthers =
-              (viewState === "transitioning-in" || viewState === "detail" || viewState === "transitioning-out") &&
-              selectedPresetId !== null;
-
-            return (
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            {metrics.map((preset, index) => (
               <button
                 key={preset.id}
-                ref={(node) => {
-                  presetButtonRefs.current[preset.id] = node;
-                }}
                 type="button"
                 onClick={() => handleSelectPreset(preset.id)}
-                className={`preset-overview-pulse text-left transition-all duration-500 ${
-                  hideOthers
-                    ? isSelected
-                      ? "opacity-0"
-                      : "pointer-events-none translate-y-6 scale-[0.96] opacity-0"
-                    : "opacity-100"
-                }`}
+                className="preset-overview-pulse text-left"
                 style={{ ["--pulse-delay" as string]: `${index * 0.35}s` }}
               >
-                <PresetCardBody preset={preset} />
+                <PresetCard preset={preset} />
               </button>
-            );
-          })}
+            ))}
+          </div>
         </div>
 
-        <div
-          ref={detailAnchorRef}
-          className={`pointer-events-none absolute left-0 right-0 top-[56px] z-30 flex justify-center px-4 transition-all duration-500 ${
-            viewState === "detail" || viewState === "transitioning-out"
-              ? "opacity-100"
-              : "opacity-0"
-          }`}
-        >
-          {selectedPreset ? (
-            <div
-              ref={detailCardRef}
-              className={`w-full max-w-[590px] transition-all duration-500 ${
-                viewState === "detail" ? "scale-100 opacity-100" : "scale-[0.98] opacity-0"
-              }`}
-            >
-              <PresetCardBody
-                preset={selectedPreset}
-                metricButtonsEnabled
-                onQuickFilter={handleQuickFilter}
-                onBack={handleBack}
-                showBack
-              />
-            </div>
-          ) : null}
-        </div>
+        {selectedPreset ? (
+          <div
+            className={`mx-auto max-w-[590px] transition-all duration-500 ${
+              transitionState === "detail"
+                ? "translate-y-0 scale-100 opacity-100"
+                : transitionState === "opening"
+                ? "translate-y-3 scale-[0.96] opacity-0"
+                : "translate-y-3 scale-[0.96] opacity-0"
+            }`}
+          >
+            <PresetCard
+              preset={selectedPreset}
+              interactive
+              onBack={handleBack}
+              onMetricClick={handleMetricClick}
+            />
+          </div>
+        ) : null}
 
-        <div className="mt-4 min-h-[320px]" />
-
-        {selectedPreset && viewState === "detail" ? (
-          <div className="space-y-4">
+        {selectedPreset && transitionState === "detail" ? (
+          <div className="mt-5 space-y-4">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div className="flex flex-wrap gap-2">
                 <FilterPill
@@ -1100,12 +933,6 @@ export default function PresetsClient({
                 )}
               </div>
             ) : null}
-          </div>
-        ) : null}
-
-        {overlayAnimation && overlayStyle ? (
-          <div style={overlayStyle}>
-            <PresetCardBody preset={overlayAnimation.preset} />
           </div>
         ) : null}
       </section>
