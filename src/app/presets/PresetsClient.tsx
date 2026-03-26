@@ -767,17 +767,6 @@ export default function PresetsClient({
           }
         }
 
-        @keyframes hintDrop {
-  0% {
-    opacity: 0;
-    transform: translateY(-22px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
         .preset-overview-pulse {
           animation: presetCardPulse 5.8s ease-in-out infinite;
           animation-delay: var(--pulse-delay, 0s);
