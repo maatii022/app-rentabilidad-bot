@@ -102,7 +102,7 @@ function MetricButton({
   return (
     <button
       type="button"
-      className="group relative cursor-pointer overflow-hidden rounded-[18px] border border-white/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.09),rgba(255,255,255,0.035))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(255,255,255,0.03),0_14px_30px_rgba(0,0,0,0.24)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-[2px] hover:border-white/24 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.05))] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.18),inset_0_-1px_0_rgba(255,255,255,0.04),0_18px_34px_rgba(0,0,0,0.30)] active:translate-y-0 active:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_10px_20px_rgba(0,0,0,0.22)]"
+      className="group relative cursor-pointer overflow-hidden rounded-[18px] border border-white/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.09),rgba(255,255,255,0.035))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(255,255,255,0.03),0_14px_30px_rgba(0,0,0,0.24)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-[2px] hover:border-white/24 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.05))] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.18),inset_0_-1px_0_rgba(255,255,255,0.04),0_18px_34px_rgba(0,0,0,0.30)] active:scale-[0.985] active:translate-y-0 active:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_10px_20px_rgba(0,0,0,0.22)]"
       title="Más adelante abrirá la página de cuentas con este filtro"
     >
       <span className="pointer-events-none absolute inset-x-3 top-0 h-px bg-white/20 opacity-80" />
@@ -113,9 +113,10 @@ function MetricButton({
         <p className="text-center text-[10px] uppercase tracking-[0.14em] text-zinc-400 transition-colors duration-200 group-hover:text-zinc-300">
           {label}
         </p>
-        <p className="mt-2 text-center text-xl font-semibold leading-none text-white transition-transform duration-200 group-hover:scale-[1.03]">
-  {value}
-</p>
+
+        <p className="mt-2 text-center text-xl font-semibold leading-none text-white transition-transform duration-200 group-hover:scale-[1.03] group-active:scale-[0.98]">
+          {value}
+        </p>
       </div>
     </button>
   );
@@ -164,9 +165,11 @@ function PresetCard({ preset }: { preset: PresetMetric }) {
           <MetricButton label="Perdidas" value={preset.perdidas} />
         </div>
 
-        <div className="mt-3">
-          <WinratePanel label="Funded winrate" value={preset.fundedWinrate} />
-        </div>
+        <div className="mt-3 flex justify-center">
+  <div className="w-full max-w-[420px]">
+    <WinratePanel label="Funded winrate" value={preset.fundedWinrate} />
+  </div>
+</div>
       </div>
     </article>
   );
