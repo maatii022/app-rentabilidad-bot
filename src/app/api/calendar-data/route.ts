@@ -5,11 +5,14 @@ export const dynamic = "force-dynamic";
 
 type AccountRow = {
   id: number;
+  alias: string | null;
+  numero_cuenta: string | null;
   preset_id: number | null;
   tipo_cuenta: string | null;
 };
 
 type DailyResultRow = {
+  id: number;
   account_id: number;
   fecha: string;
   pnl_usd: number | null;
@@ -19,6 +22,7 @@ type DailyResultRow = {
 };
 
 type AccountEventRow = {
+  id: number;
   account_id: number;
   fecha: string;
   tipo_evento: string | null;
@@ -31,6 +35,16 @@ type DayBucket = {
   pnl_pct: number;
   trades: number;
   red_day: boolean;
+  results: Array<{
+    id: number;
+    account_id: number;
+    alias: string;
+    numero_cuenta: string;
+    pnl_usd: number;
+    pnl_pct: number;
+    red_day: boolean;
+    numero_trades: number;
+  }>;
   events: {
     perdida: number;
     fondeada: number;
@@ -39,9 +53,12 @@ type DayBucket = {
     sord_out: number;
     otros: number;
     items: Array<{
+      id: number;
       tipo: string;
       descripcion: string | null;
       account_id: number;
+      alias: string;
+      numero_cuenta: string;
     }>;
   };
 };
@@ -132,7 +149,7 @@ export async function GET(request: NextRequest) {
 
     let accountsQuery = supabaseAdmin
       .from("accounts")
-      .select("id, preset_id, tipo_cuenta");
+      .select("id, alias, numero_cuenta, preset_id, tipo_cuenta");
 
     if (presetId !== null) {
       accountsQuery = accountsQuery.eq("preset_id", presetId);
@@ -163,17 +180,22 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const accountMap = new Map<number, AccountRow>();
+    accounts.forEach((account) => {
+      accountMap.set(account.id, account);
+    });
+
     const range = getDateRange(year, month);
 
     let dailyResultsQuery = supabaseAdmin
       .from("daily_results")
-      .select("account_id, fecha, pnl_usd, pnl_porcentaje, numero_trades, red_day")
+      .select("id, account_id, fecha, pnl_usd, pnl_porcentaje, numero_trades, red_day")
       .in("account_id", accountIds)
       .order("fecha", { ascending: true });
 
     let accountEventsQuery = supabaseAdmin
       .from("account_events")
-      .select("account_id, fecha, tipo_evento, descripcion")
+      .select("id, account_id, fecha, tipo_evento, descripcion")
       .in("account_id", accountIds)
       .order("fecha", { ascending: true });
 
@@ -208,6 +230,7 @@ export async function GET(request: NextRequest) {
 
     for (const row of dailyResults) {
       const fecha = row.fecha;
+      const account = accountMap.get(row.account_id);
 
       if (!byDate[fecha]) {
         byDate[fecha] = {
@@ -216,6 +239,7 @@ export async function GET(request: NextRequest) {
           pnl_pct: 0,
           trades: 0,
           red_day: false,
+          results: [],
           events: {
             perdida: 0,
             fondeada: 0,
@@ -235,11 +259,23 @@ export async function GET(request: NextRequest) {
       if (row.red_day === true) {
         byDate[fecha].red_day = true;
       }
+
+      byDate[fecha].results.push({
+        id: row.id,
+        account_id: row.account_id,
+        alias: account?.alias ?? "-",
+        numero_cuenta: account?.numero_cuenta ?? "-",
+        pnl_usd: toNumber(row.pnl_usd),
+        pnl_pct: toNumber(row.pnl_porcentaje),
+        red_day: row.red_day === true,
+        numero_trades: toNumber(row.numero_trades),
+      });
     }
 
     for (const event of accountEvents) {
       const fecha = event.fecha;
       const tipoNormalizado = normalizeEventType(event.tipo_evento);
+      const account = accountMap.get(event.account_id);
 
       if (!byDate[fecha]) {
         byDate[fecha] = {
@@ -248,6 +284,7 @@ export async function GET(request: NextRequest) {
           pnl_pct: 0,
           trades: 0,
           red_day: false,
+          results: [],
           events: {
             perdida: 0,
             fondeada: 0,
@@ -262,9 +299,12 @@ export async function GET(request: NextRequest) {
 
       byDate[fecha].events[tipoNormalizado] += 1;
       byDate[fecha].events.items.push({
+        id: event.id,
         tipo: event.tipo_evento ?? "otros",
         descripcion: event.descripcion ?? null,
         account_id: event.account_id,
+        alias: account?.alias ?? "-",
+        numero_cuenta: account?.numero_cuenta ?? "-",
       });
     }
 
@@ -274,6 +314,11 @@ export async function GET(request: NextRequest) {
         ...day,
         pnl_usd: Number(day.pnl_usd.toFixed(2)),
         pnl_pct: Number(day.pnl_pct.toFixed(4)),
+        results: [...day.results].sort((a, b) => a.alias.localeCompare(b.alias)),
+        events: {
+          ...day.events,
+          items: [...day.events.items].sort((a, b) => a.tipo.localeCompare(b.tipo)),
+        },
       }));
 
     return NextResponse.json({

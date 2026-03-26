@@ -83,10 +83,24 @@ type CalendarDayData = {
 type TradingMode = "pnl" | "events";
 type CuentaTipoFiltro = "prueba" | "fondeada";
 
+type CalendarApiResultItem = {
+  id: number;
+  account_id: number;
+  alias: string;
+  numero_cuenta: string;
+  pnl_usd: number;
+  pnl_pct: number;
+  red_day: boolean;
+  numero_trades: number;
+};
+
 type CalendarApiEventItem = {
+  id: number;
   tipo: string;
   descripcion: string | null;
   account_id: number;
+  alias: string;
+  numero_cuenta: string;
 };
 
 type CalendarApiDay = {
@@ -95,6 +109,7 @@ type CalendarApiDay = {
   pnl_pct: number;
   trades: number;
   red_day: boolean;
+  results: CalendarApiResultItem[];
   events: {
     perdida: number;
     fondeada: number;
@@ -110,7 +125,6 @@ type CalendarApiResponse = {
   ok: boolean;
   error?: string;
   days?: CalendarApiDay[];
-  byDate?: Record<string, CalendarApiDay>;
 };
 
 const DAY_LABELS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -170,16 +184,23 @@ function mapEventKind(tipo: string): CalendarEventItem["kind"] {
   return "otro";
 }
 
-function buildEventLabelFromTipo(tipo: string) {
+function isImportantEvent(tipo: string) {
   const normalized = tipo.toLowerCase();
+  return (
+    normalized.includes("perdida") ||
+    normalized.includes("fondeada") ||
+    normalized.includes("reemplazo")
+  );
+}
 
-  if (normalized === "perdida") return "Cuenta perdida";
-  if (normalized === "fondeada") return "Cuenta fondeada";
-  if (normalized.includes("reemplazo")) return "Reemplazo";
-  if (normalized === "sord in") return "SORD in";
-  if (normalized === "sord out") return "SORD out";
+function buildEventLabel(tipoEvento: string) {
+  const tipo = tipoEvento.toLowerCase();
 
-  return tipo;
+  if (tipo === "perdida") return "Cuenta perdida";
+  if (tipo === "fondeada") return "Cuenta fondeada";
+  if (tipo.includes("reemplazo")) return "Reemplazo";
+
+  return tipoEvento;
 }
 
 function buildCalendarMatrix(currentMonth: Date) {
@@ -340,7 +361,13 @@ export default function CalendarioPage() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
 
-  async function cargarMetadatos() {
+  async function cargarDatos() {
+    setLoading(true);
+    setError("");
+
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth() + 1;
+
     const presetsQuery = supabase
       .from("presets")
       .select("id, nombre")
@@ -373,15 +400,48 @@ export default function CalendarioPage() {
       `)
       .order("pack_id", { ascending: true });
 
-    const [presetsResponse, accountsResponse, packSlotsResponse] = await Promise.all([
+    const calendarQuery = fetch(
+      `/api/calendar-data?year=${year}&month=${month}`,
+      {
+        cache: "no-store",
+      }
+    ).then((res) => res.json() as Promise<CalendarApiResponse>);
+
+    const [
+      presetsResponse,
+      accountsResponse,
+      packSlotsResponse,
+      calendarResponse,
+    ] = await Promise.all([
       presetsQuery,
       accountsQuery,
       packSlotsQuery,
+      calendarQuery,
     ]);
 
-    if (presetsResponse.error) throw new Error(presetsResponse.error.message);
-    if (accountsResponse.error) throw new Error(accountsResponse.error.message);
-    if (packSlotsResponse.error) throw new Error(packSlotsResponse.error.message);
+    if (presetsResponse.error) {
+      setError(presetsResponse.error.message);
+      setLoading(false);
+      return;
+    }
+
+    if (accountsResponse.error) {
+      setError(accountsResponse.error.message);
+      setLoading(false);
+      return;
+    }
+
+    if (packSlotsResponse.error) {
+      setError(packSlotsResponse.error.message);
+      setLoading(false);
+      return;
+    }
+
+    if (!calendarResponse.ok) {
+      setError(calendarResponse.error || "Error cargando calendar-data");
+      setLoading(false);
+      return;
+    }
 
     const mappedAccounts = (accountsResponse.data || []) as AccountOption[];
 
@@ -412,64 +472,16 @@ export default function CalendarioPage() {
       a.nombre.localeCompare(b.nombre)
     );
 
+    setCalendarDays(calendarResponse.days || []);
     setPresets((presetsResponse.data || []) as PresetOption[]);
     setAccounts(mappedAccounts);
     setPacks(mappedPacks);
-  }
-
-  async function cargarCalendario() {
-    const params = new URLSearchParams({
-      tipo: selectedCuentaTipo,
-      year: String(currentMonth.getFullYear()),
-      month: String(currentMonth.getMonth() + 1),
-    });
-
-    const selectedSinglePresetId =
-      selectedPresetIds.includes("all") || selectedPresetIds.length !== 1
-        ? null
-        : Number(selectedPresetIds[0]);
-
-    if (selectedSinglePresetId !== null) {
-      const preset = presets.find((item) => item.id === selectedSinglePresetId);
-      if (preset) {
-        params.set("preset", preset.nombre);
-      }
-    } else {
-      params.set("preset", "todos");
-    }
-
-    const response = await fetch(`/api/calendar-data?${params.toString()}`, {
-      method: "GET",
-      cache: "no-store",
-    });
-
-    const json = (await response.json()) as CalendarApiResponse;
-
-    if (!response.ok || !json.ok) {
-      throw new Error(json.error || "No se pudo cargar el calendario");
-    }
-
-    setCalendarDays(json.days || []);
-  }
-
-  async function cargarDatos() {
-    setLoading(true);
-    setError("");
-
-    try {
-      await Promise.all([cargarMetadatos(), cargarCalendario()]);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : "Error cargando calendario";
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
+    setLoading(false);
   }
 
   useEffect(() => {
     void cargarDatos();
-  }, [currentMonth, selectedCuentaTipo, selectedPresetIds, presets.length]);
+  }, [currentMonth]);
 
   useEffect(() => {
     setSelectedPackId(null);
@@ -642,61 +654,57 @@ export default function CalendarioPage() {
     return allowedIds;
   }, [accounts, isAllSelected, selectedCuentaTipo, selectedPack, selectedPresetIds, selectedSlots]);
 
-  const accountMap = useMemo(() => {
-    return new Map(
-      accounts.map((account) => [
-        account.id,
-        {
-          alias: account.alias,
-          numeroCuenta: account.numero_cuenta,
-        },
-      ])
-    );
-  }, [accounts]);
-
   const dailyMap = useMemo(() => {
     const resultMap = new Map<string, CalendarDayData>();
 
     calendarDays.forEach((day) => {
-      const filteredEventItems = (day.events?.items || []).filter((item) => {
-        return allowedAccountIds.has(item.account_id);
-      });
+      const filteredResults = (day.results || []).filter((result) =>
+        allowedAccountIds.has(result.account_id)
+      );
 
-      const resultCount = Array.from(allowedAccountIds).reduce((acc, accountId) => {
-        return acc + 0;
-      }, 0);
+      const importantItems = (day.events?.items || []).filter(
+        (event) => allowedAccountIds.has(event.account_id) && isImportantEvent(event.tipo)
+      );
 
-      const resultDetails = Array.from(allowedAccountIds)
-        .map((accountId) => {
-          return null;
-        })
-        .filter(Boolean);
+      const totalUsd = filteredResults.reduce((acc, item) => acc + Number(item.pnl_usd || 0), 0);
+      const totalPct = filteredResults.reduce((acc, item) => acc + Number(item.pnl_pct || 0), 0);
+      const redDayCount = filteredResults.filter((item) => item.red_day).length;
 
-      const mappedEventDetails = filteredEventItems.map((event, index) => {
-        const account = accountMap.get(event.account_id);
+      const resultDetails = filteredResults
+        .map((result) => ({
+          id: result.id,
+          accountId: result.account_id,
+          alias: result.alias ?? "-",
+          numeroCuenta: result.numero_cuenta ?? "-",
+          pnlUsd: Number(result.pnl_usd || 0),
+          pnlPct: Number(result.pnl_pct || 0),
+          redDay: !!result.red_day,
+        }))
+        .sort((a, b) => a.alias.localeCompare(b.alias));
 
-        return {
-          id: index + 1,
-          tipo: buildEventLabelFromTipo(event.tipo),
+      const eventDetails = importantItems
+        .map((event) => ({
+          id: `${event.id}`,
+          tipo: buildEventLabel(event.tipo),
           descripcion: event.descripcion ?? "",
-          alias: account?.alias ?? "-",
-          numeroCuenta: account?.numeroCuenta ?? "-",
-        };
-      });
+          alias: event.alias ?? "-",
+          numeroCuenta: event.numero_cuenta ?? "-",
+        }))
+        .sort((a, b) => a.tipo.localeCompare(b.tipo));
 
-      const groupedEvents = new Map<string, CalendarEventItem>();
+      const grouped = new Map<string, CalendarEventItem>();
 
-      filteredEventItems.forEach((event, index) => {
+      importantItems.forEach((event) => {
         const kind = mapEventKind(event.tipo);
-        const label = buildEventLabelFromTipo(event.tipo);
+        const label = buildEventLabel(event.tipo);
         const key = `${kind}_${label}`;
-        const existing = groupedEvents.get(key);
+        const existing = grouped.get(key);
 
         if (existing) {
           existing.count = (existing.count ?? 1) + 1;
         } else {
-          groupedEvents.set(key, {
-            id: `${day.fecha}_${index}_${key}`,
+          grouped.set(key, {
+            id: `${event.id}`,
             kind,
             label,
             count: 1,
@@ -704,7 +712,7 @@ export default function CalendarioPage() {
         }
       });
 
-      const events = Array.from(groupedEvents.values())
+      const events = Array.from(grouped.values())
         .map((event) => ({
           ...event,
           label:
@@ -714,22 +722,20 @@ export default function CalendarioPage() {
         }))
         .slice(0, 4);
 
-      const dayData: CalendarDayData = {
+      resultMap.set(day.fecha, {
         fecha: day.fecha,
-        totalUsd: Number(day.pnl_usd || 0),
-        totalPct: Number(day.pnl_pct || 0),
-        resultCount: Number(day.trades || 0) > 0 ? 1 : 0,
-        redDayCount: day.red_day ? 1 : 0,
+        totalUsd,
+        totalPct,
+        resultCount: resultDetails.length,
+        redDayCount,
         events,
-        resultDetails: [],
-        eventDetails: mappedEventDetails,
-      };
-
-      resultMap.set(day.fecha, dayData);
+        resultDetails,
+        eventDetails,
+      });
     });
 
     return resultMap;
-  }, [calendarDays, allowedAccountIds, accountMap]);
+  }, [calendarDays, allowedAccountIds]);
 
   const calendarCells = useMemo(() => buildCalendarMatrix(currentMonth), [currentMonth]);
 
@@ -752,7 +758,7 @@ export default function CalendarioPage() {
         const dayData = dailyMap.get(toDateKey(date));
 
         if (!dayData) return false;
-        if (Math.abs(dayData.totalUsd) > 0) return true;
+        if (dayData.resultCount > 0) return true;
         if (dayData.events.length > 0) return true;
 
         return false;
@@ -1025,7 +1031,7 @@ export default function CalendarioPage() {
                       const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
                       const dayData = dailyMap.get(dateKey);
                       const hasVisibleContent =
-                        (viewMode === "pnl" && !!dayData && (Math.abs(dayData.totalUsd) > 0 || dayData.resultCount > 0)) ||
+                        (viewMode === "pnl" && !!dayData?.resultCount) ||
                         (viewMode === "events" && !!dayData?.events.length);
 
                       return (
