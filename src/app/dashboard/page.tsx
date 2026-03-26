@@ -58,20 +58,6 @@ type ResultadoRevisionDiaria = {
   mensaje: string;
 };
 
-type LiveStatusItem = {
-  preset?: string;
-  pnl_actual?: number | null;
-  pnl_pct_actual?: number | null;
-  pnl_hoy_usd?: number | null;
-  pnl_hoy_pct?: number | null;
-  profit_total_pct?: number | null;
-  trades_abiertos?: number | null;
-  balance?: number | null;
-  error?: string;
-};
-
-type LiveStatusMap = Record<string, LiveStatusItem>;
-
 type SnapshotItem = {
   pnl_hoy_usd?: number | null;
   pnl_hoy_pct?: number | null;
@@ -88,7 +74,6 @@ type ReplaceTarget = {
   slot: string;
 };
 
-const LIVE_STATUS_CACHE_KEY = "app_rentabilidad_bot_live_status_cache_v1";
 const REQUIRED_SLOTS = ["A", "B", "C"];
 
 function SectionCard({
@@ -323,94 +308,22 @@ function buildDisplaySlots(pack: Pack): PackSlot[] {
   return original.sort((a, b) => a.orden - b.orden);
 }
 
-function readLiveStatusCache(): LiveStatusMap {
-  if (typeof window === "undefined") return {};
-
-  try {
-    const raw = window.localStorage.getItem(LIVE_STATUS_CACHE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-    return parsed as LiveStatusMap;
-  } catch {
-    return {};
-  }
-}
-
-function writeLiveStatusCache(data: LiveStatusMap) {
-  if (typeof window === "undefined") return;
-
-  try {
-    window.localStorage.setItem(LIVE_STATUS_CACHE_KEY, JSON.stringify(data));
-  } catch {}
-}
-
-function isValidNumber(value: unknown): value is number {
-  return typeof value === "number" && !Number.isNaN(value);
-}
-
-function getLiveOverlayDayPct(live: LiveStatusItem | undefined) {
-  if (!live) return null;
-
-  if (isValidNumber(live.pnl_hoy_pct)) {
-    return live.pnl_hoy_pct;
-  }
-
-  if ((live.trades_abiertos ?? 0) > 0 && isValidNumber(live.pnl_pct_actual)) {
-    return live.pnl_pct_actual;
-  }
-
-  return null;
-}
-
-function getSnapshotDayPct(snapshot: SnapshotItem | undefined) {
-  if (!snapshot) return null;
-  return isValidNumber(snapshot.pnl_hoy_pct) ? snapshot.pnl_hoy_pct : null;
-}
-
-function getSnapshotTotalPct(snapshot: SnapshotItem | undefined) {
-  if (!snapshot) return null;
-  return isValidNumber(snapshot.profit_total_pct) ? snapshot.profit_total_pct : null;
-}
-
-function resolveDisplayDayPct(
-  numeroCuenta: string,
-  live: LiveStatusItem | undefined,
-  snapshots: SnapshotMap
-) {
+function resolveDisplayDayPct(numeroCuenta: string, snapshots: SnapshotMap) {
   const snapshot = snapshots[numeroCuenta];
-  const liveOverlay = getLiveOverlayDayPct(live);
-  const snapshotDay = getSnapshotDayPct(snapshot);
-
-  return liveOverlay ?? snapshotDay;
+  return typeof snapshot?.pnl_hoy_pct === "number" ? snapshot.pnl_hoy_pct : null;
 }
 
-function resolveDisplayTotalPct(
-  numeroCuenta: string,
-  live: LiveStatusItem | undefined,
-  snapshots: SnapshotMap
-) {
+function resolveDisplayTotalPct(numeroCuenta: string, snapshots: SnapshotMap) {
   const snapshot = snapshots[numeroCuenta];
-  const baseTotalPct = getSnapshotTotalPct(snapshot);
-  const snapshotDayPct = getSnapshotDayPct(snapshot) ?? 0;
-  const liveOverlayDayPct = getLiveOverlayDayPct(live);
-
-  if (liveOverlayDayPct === null) {
-    return baseTotalPct;
-  }
-
-  if (baseTotalPct === null) {
-    return liveOverlayDayPct;
-  }
-
-  return baseTotalPct - snapshotDayPct + liveOverlayDayPct;
+  return typeof snapshot?.profit_total_pct === "number"
+    ? snapshot.profit_total_pct
+    : null;
 }
 
 export default function DashboardPage() {
   const [packs, setPacks] = useState<Pack[]>([]);
   const [events, setEvents] = useState<AccountEvent[]>([]);
   const [loading, setLoading] = useState(false);
-  const [loadingLive, setLoadingLive] = useState(false);
   const [loadingSnapshots, setLoadingSnapshots] = useState(false);
 
   const [selectedPendingSlotValue, setSelectedPendingSlotValue] = useState("");
@@ -427,28 +340,16 @@ export default function DashboardPage() {
   });
 
   const [resultadosRevision, setResultadosRevision] = useState<ResultadoRevisionDiaria[]>([]);
-  const [liveStatus, setLiveStatus] = useState<LiveStatusMap>({});
   const [todaySnapshots, setTodaySnapshots] = useState<SnapshotMap>({});
 
   const reemplazoRef = useRef<HTMLDivElement | null>(null);
 
-  function guardarLiveStatusEnCache(incoming: LiveStatusMap) {
-    setLiveStatus((prev) => {
-      const merged = {
-        ...prev,
-        ...incoming,
-      };
-      writeLiveStatusCache(merged);
-      return merged;
-    });
-  }
-
   async function cargarDatos() {
-    const res = await fetch("/api/dashboard-packs");
+    const res = await fetch("/api/dashboard-packs", { cache: "no-store" });
     const data = await res.json();
     setPacks(data.packs || []);
 
-    const resEventos = await fetch("/api/account-events");
+    const resEventos = await fetch("/api/account-events", { cache: "no-store" });
     const dataEventos = await resEventos.json();
     setEvents(dataEventos.events || []);
   }
@@ -460,7 +361,9 @@ export default function DashboardPage() {
       tipo: tipoFilter,
     });
 
-    const res = await fetch(`/api/dashboard-summary?${params.toString()}`);
+    const res = await fetch(`/api/dashboard-summary?${params.toString()}`, {
+      cache: "no-store",
+    });
     const data = await res.json();
 
     setSummary({
@@ -495,29 +398,7 @@ export default function DashboardPage() {
   }
 
   async function recargarEstado() {
-    setLoadingLive(true);
-
-    try {
-      const res = await fetch("/api/live-status", {
-        method: "GET",
-        cache: "no-store",
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json?.ok) {
-        alert(`No se pudo recargar el estado en vivo: ${json?.error || "Error desconocido"}`);
-        return;
-      }
-
-      guardarLiveStatusEnCache(json.data || {});
-      await cargarSnapshotsHoy();
-    } catch (error) {
-      console.error("Error recargando estado en vivo:", error);
-      alert("No se pudo recargar el estado en vivo");
-    } finally {
-      setLoadingLive(false);
-    }
+    await cargarSnapshotsHoy();
   }
 
   async function ejecutarRevisionDiaria() {
@@ -543,6 +424,7 @@ export default function DashboardPage() {
       await cargarDatos();
       await cargarResumenHistorico();
       await cargarSnapshotsHoy();
+
       alert(`Revisión diaria ejecutada para fecha de negocio ${data?.fecha}`);
     } finally {
       setLoading(false);
@@ -834,15 +716,12 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    setLiveStatus(readLiveStatusCache());
-
     async function init() {
       await Promise.all([
         cargarDatos(),
         cargarResumenHistorico(),
         cargarSnapshotsHoy(),
       ]);
-      await recargarEstado();
     }
 
     void init();
@@ -871,10 +750,10 @@ export default function DashboardPage() {
           <div className="flex flex-wrap gap-2">
             <ActionButton
               onClick={recargarEstado}
-              disabled={loadingLive || loadingSnapshots}
+              disabled={loadingSnapshots}
               variant="secondary"
             >
-              {loadingLive || loadingSnapshots ? "Recargando..." : "Recargar estado"}
+              {loadingSnapshots ? "Recargando..." : "Recargar estado"}
             </ActionButton>
 
             <ActionButton
@@ -955,7 +834,6 @@ export default function DashboardPage() {
             <PackCard
               key={pack.id}
               pack={pack}
-              liveStatus={liveStatus}
               todaySnapshots={todaySnapshots}
               loading={loading}
               onRotar={rotarPack}
@@ -1102,7 +980,6 @@ export default function DashboardPage() {
 
 function PackCard({
   pack,
-  liveStatus,
   todaySnapshots,
   loading,
   onRotar,
@@ -1113,7 +990,6 @@ function PackCard({
   getLivePnlClass,
 }: {
   pack: Pack;
-  liveStatus: LiveStatusMap;
   todaySnapshots: SnapshotMap;
   loading: boolean;
   onRotar: (packId: number, packNombre: string) => void;
@@ -1197,15 +1073,14 @@ function PackCard({
             estadoCuenta !== "perdida";
 
           const numeroCuenta = slot.accounts?.numero_cuenta ?? "";
-          const live = numeroCuenta ? liveStatus[numeroCuenta] : undefined;
           const missingAccount = !slot.accounts?.id;
 
           const displayHoyPct = numeroCuenta
-            ? resolveDisplayDayPct(numeroCuenta, live, todaySnapshots)
+            ? resolveDisplayDayPct(numeroCuenta, todaySnapshots)
             : null;
 
           const displayTotalPct = numeroCuenta
-            ? resolveDisplayTotalPct(numeroCuenta, live, todaySnapshots)
+            ? resolveDisplayTotalPct(numeroCuenta, todaySnapshots)
             : null;
 
           return (
