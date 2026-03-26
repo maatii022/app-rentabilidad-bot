@@ -10,7 +10,7 @@ type AccountRow = {
   alias: string | null;
   tipo_cuenta: string | null;
   estado: string | null;
-  activa_en_filtro: boolean | null;
+  activa_en_filtros: boolean | null;
   presets:
     | {
         nombre: string | null;
@@ -442,7 +442,7 @@ export default function CuentasPage() {
           alias,
           tipo_cuenta,
           estado,
-          activa_en_filtro,
+          activa_en_filtros,
           presets (
             nombre
           ),
@@ -473,7 +473,7 @@ export default function CuentasPage() {
           presetNombre: getPresetName(item.presets),
           tipoCuenta: normalizeText(item.tipo_cuenta) || "-",
           estado: normalizeText(item.estado) || "-",
-          activaEnFiltro: Boolean(item.activa_en_filtro),
+          activaEnFiltro: Boolean(item.activa_en_filtros),
           packId: packData.packId,
           packNombre: packData.packNombre,
         };
