@@ -73,15 +73,13 @@ type LiveStatusItem = {
 
 type LiveStatusMap = Record<string, LiveStatusItem>;
 
-type SnapshotItem = {
-  pnl_hoy_usd?: number | null;
-  pnl_hoy_pct?: number | null;
-  profit_total_pct?: number | null;
-  trades_abiertos?: number | null;
+type PersistedPerformanceItem = {
+  total_pct?: number;
+  today_pct?: number;
   live_status?: string | null;
 };
 
-type SnapshotMap = Record<string, SnapshotItem>;
+type PersistedPerformanceMap = Record<string, PersistedPerformanceItem>;
 
 type ReplaceTarget = {
   slotId?: number;
@@ -329,29 +327,29 @@ function isValidNumber(value: unknown): value is number {
 
 function resolveDisplayDayPct(
   numeroCuenta: string,
-  persistedSnapshots: SnapshotMap,
+  persistedPerformance: PersistedPerformanceMap,
   liveStatus: LiveStatusMap
 ) {
   const live = liveStatus[numeroCuenta];
-  const persisted = persistedSnapshots[numeroCuenta];
+  const persisted = persistedPerformance[numeroCuenta];
 
   if (isValidNumber(live?.pnl_hoy_pct)) return live!.pnl_hoy_pct!;
   if (isValidNumber(live?.pnl_pct_actual)) return live!.pnl_pct_actual!;
-  if (isValidNumber(persisted?.pnl_hoy_pct)) return persisted!.pnl_hoy_pct!;
+  if (isValidNumber(persisted?.today_pct)) return persisted!.today_pct!;
 
   return null;
 }
 
 function resolveDisplayTotalPct(
   numeroCuenta: string,
-  persistedSnapshots: SnapshotMap,
+  persistedPerformance: PersistedPerformanceMap,
   liveStatus: LiveStatusMap
 ) {
   const live = liveStatus[numeroCuenta];
-  const persisted = persistedSnapshots[numeroCuenta];
+  const persisted = persistedPerformance[numeroCuenta];
 
   if (isValidNumber(live?.profit_total_pct)) return live!.profit_total_pct!;
-  if (isValidNumber(persisted?.profit_total_pct)) return persisted!.profit_total_pct!;
+  if (isValidNumber(persisted?.total_pct)) return persisted!.total_pct!;
 
   return null;
 }
@@ -360,7 +358,7 @@ export default function DashboardPage() {
   const [packs, setPacks] = useState<Pack[]>([]);
   const [events, setEvents] = useState<AccountEvent[]>([]);
   const [loading, setLoading] = useState(false);
-  const [loadingSnapshots, setLoadingSnapshots] = useState(false);
+  const [loadingPerformance, setLoadingPerformance] = useState(false);
   const [loadingLive, setLoadingLive] = useState(false);
 
   const [selectedPendingSlotValue, setSelectedPendingSlotValue] = useState("");
@@ -377,7 +375,7 @@ export default function DashboardPage() {
   });
 
   const [resultadosRevision, setResultadosRevision] = useState<ResultadoRevisionDiaria[]>([]);
-  const [persistedSnapshots, setPersistedSnapshots] = useState<SnapshotMap>({});
+  const [persistedPerformance, setPersistedPerformance] = useState<PersistedPerformanceMap>({});
   const [liveStatus, setLiveStatus] = useState<LiveStatusMap>({});
 
   const reemplazoRef = useRef<HTMLDivElement | null>(null);
@@ -410,11 +408,11 @@ export default function DashboardPage() {
     });
   }
 
-  async function cargarSnapshotsPersistidosHoy() {
-    setLoadingSnapshots(true);
+  async function cargarPerformancePersistida() {
+    setLoadingPerformance(true);
 
     try {
-      const res = await fetch("/api/snapshots/persisted-today", {
+      const res = await fetch("/api/accounts/performance-map", {
         method: "GET",
         cache: "no-store",
       });
@@ -422,16 +420,16 @@ export default function DashboardPage() {
       const json = await res.json();
 
       if (!res.ok || !json?.ok) {
-        alert(`No se pudieron cargar los snapshots persistidos: ${json?.error || "Error desconocido"}`);
+        alert(`No se pudo cargar la performance persistida: ${json?.error || "Error desconocido"}`);
         return;
       }
 
-      setPersistedSnapshots(json.data || {});
+      setPersistedPerformance(json.data || {});
     } catch (error) {
-      console.error("Error cargando snapshots persistidos:", error);
-      alert("No se pudieron cargar los snapshots persistidos");
+      console.error("Error cargando performance persistida:", error);
+      alert("No se pudo cargar la performance persistida");
     } finally {
-      setLoadingSnapshots(false);
+      setLoadingPerformance(false);
     }
   }
 
@@ -462,7 +460,7 @@ export default function DashboardPage() {
 
   async function recargarEstado() {
     await Promise.all([
-      cargarSnapshotsPersistidosHoy(),
+      cargarPerformancePersistida(),
       cargarLiveStatus(),
     ]);
   }
@@ -786,7 +784,7 @@ export default function DashboardPage() {
       await Promise.all([
         cargarDatos(),
         cargarResumenHistorico(),
-        cargarSnapshotsPersistidosHoy(),
+        cargarPerformancePersistida(),
         cargarLiveStatus(),
       ]);
     }
@@ -817,10 +815,10 @@ export default function DashboardPage() {
           <div className="flex flex-wrap gap-2">
             <ActionButton
               onClick={recargarEstado}
-              disabled={loadingSnapshots || loadingLive}
+              disabled={loadingPerformance || loadingLive}
               variant="secondary"
             >
-              {loadingSnapshots || loadingLive ? "Recargando..." : "Recargar estado"}
+              {loadingPerformance || loadingLive ? "Recargando..." : "Recargar estado"}
             </ActionButton>
 
             <ActionButton
@@ -901,7 +899,7 @@ export default function DashboardPage() {
             <PackCard
               key={pack.id}
               pack={pack}
-              persistedSnapshots={persistedSnapshots}
+              persistedPerformance={persistedPerformance}
               liveStatus={liveStatus}
               loading={loading}
               onRotar={rotarPack}
@@ -1048,7 +1046,7 @@ export default function DashboardPage() {
 
 function PackCard({
   pack,
-  persistedSnapshots,
+  persistedPerformance,
   liveStatus,
   loading,
   onRotar,
@@ -1059,7 +1057,7 @@ function PackCard({
   getLivePnlClass,
 }: {
   pack: Pack;
-  persistedSnapshots: SnapshotMap;
+  persistedPerformance: PersistedPerformanceMap;
   liveStatus: LiveStatusMap;
   loading: boolean;
   onRotar: (packId: number, packNombre: string) => void;
@@ -1146,11 +1144,11 @@ function PackCard({
           const missingAccount = !slot.accounts?.id;
 
           const displayHoyPct = numeroCuenta
-            ? resolveDisplayDayPct(numeroCuenta, persistedSnapshots, liveStatus)
+            ? resolveDisplayDayPct(numeroCuenta, persistedPerformance, liveStatus)
             : null;
 
           const displayTotalPct = numeroCuenta
-            ? resolveDisplayTotalPct(numeroCuenta, persistedSnapshots, liveStatus)
+            ? resolveDisplayTotalPct(numeroCuenta, persistedPerformance, liveStatus)
             : null;
 
           return (
