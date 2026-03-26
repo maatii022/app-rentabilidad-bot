@@ -683,14 +683,14 @@ export default function CalendarioPage() {
         .sort((a, b) => a.alias.localeCompare(b.alias));
 
       const eventDetails = importantItems
-        .map((event) => ({
-          id: `${event.id}`,
-          tipo: buildEventLabel(event.tipo),
-          descripcion: event.descripcion ?? "",
-          alias: event.alias ?? "-",
-          numeroCuenta: event.numero_cuenta ?? "-",
-        }))
-        .sort((a, b) => a.tipo.localeCompare(b.tipo));
+  .map((event) => ({
+    id: event.id,
+    tipo: buildEventLabel(event.tipo),
+    descripcion: event.descripcion ?? "",
+    alias: event.alias ?? "-",
+    numeroCuenta: event.numero_cuenta ?? "-",
+  }))
+  .sort((a, b) => a.tipo.localeCompare(b.tipo));
 
       const grouped = new Map<string, CalendarEventItem>();
 
