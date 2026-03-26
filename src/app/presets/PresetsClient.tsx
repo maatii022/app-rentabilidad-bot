@@ -290,7 +290,7 @@ function MetricSurface({
     <button
       type="button"
       onClick={onClick}
-      className={`metric-button-pulse group cursor-pointer transition-all duration-200 hover:-translate-y-[2px] hover:border-white/20 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.04))] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(255,255,255,0.04),0_18px_34px_rgba(0,0,0,0.28)] active:scale-[0.985] ${baseClass}`}
+      className={`metric-button-pulse group cursor-pointer transition-all duration-200 hover:-translate-y-[2px] hover:scale-[1.01] hover:border-white/20 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.04))] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(255,255,255,0.04),0_18px_34px_rgba(0,0,0,0.28)] active:scale-[0.985] ${baseClass}`}
     >
       <span className="pointer-events-none absolute inset-x-3 top-0 h-px bg-white/14 opacity-80" />
       <div className="relative z-10">
@@ -503,6 +503,8 @@ export default function PresetsClient({
   const [packMode, setPackMode] = useState(false);
   const [packFilter, setPackFilter] = useState<string>("todos");
   const [viewMode, setViewMode] = useState<ViewMode>("overview");
+  const [showHint, setShowHint] = useState(true);
+  const [hintClosing, setHintClosing] = useState(false);
 
   useEffect(() => {
     async function cargarPerformance() {
@@ -647,13 +649,18 @@ export default function PresetsClient({
   function handleSelectPreset(presetId: number) {
     if (viewMode !== "overview") return;
 
-    setViewMode("overview-exit");
+    setHintClosing(true);
 
     window.setTimeout(() => {
-      setSelectedPresetId(presetId);
-      resetDetailFilters();
-      setViewMode("detail");
-    }, 260);
+      setShowHint(false);
+      setViewMode("overview-exit");
+
+      window.setTimeout(() => {
+        setSelectedPresetId(presetId);
+        resetDetailFilters();
+        setViewMode("detail");
+      }, 260);
+    }, 320);
   }
 
   function handleBack() {
@@ -664,6 +671,8 @@ export default function PresetsClient({
     window.setTimeout(() => {
       setSelectedPresetId(null);
       resetDetailFilters();
+      setShowHint(true);
+      setHintClosing(false);
       setViewMode("overview");
     }, 260);
   }
@@ -700,35 +709,27 @@ export default function PresetsClient({
   }
 
   return (
-  <div className="space-y-5 text-white">
-    {!selectedPreset && viewMode === "overview" ? (
-      <div className="pointer-events-none fixed left-1/2 top-3 z-[90] w-full max-w-[360px] -translate-x-1/2 px-4 hint-floating-in">
-        <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.035))] px-4 py-3 shadow-[0_18px_40px_rgba(0,0,0,0.28)] backdrop-blur-xl">
-          <p className="text-center text-[10px] uppercase tracking-[0.16em] text-zinc-500">
-            Detalle interactivo
-          </p>
-          <p className="mt-2 text-center text-sm leading-6 text-zinc-200">
-            Pulsa un preset para ver todas sus cuentas y activar sus filtros.
-          </p>
+    <div className="space-y-5 text-white">
+      {showHint && !selectedPreset && viewMode === "overview" ? (
+        <div className="pointer-events-none fixed inset-x-0 top-3 z-[90] flex justify-center px-4">
+          <div
+            className={`w-full max-w-[360px] ${
+              hintClosing ? "hint-floating-out" : "hint-floating"
+            }`}
+          >
+            <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.035))] px-4 py-3 shadow-[0_18px_40px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+              <p className="text-center text-[10px] uppercase tracking-[0.16em] text-zinc-500">
+                Detalle interactivo
+              </p>
+              <p className="mt-2 text-center text-sm leading-6 text-zinc-200">
+                Pulsa un preset para ver todas sus cuentas y activar sus filtros.
+              </p>
+            </div>
+          </div>
         </div>
-      </div>
-    ) : null}
+      ) : null}
+
       <style jsx global>{`
-      @keyframes floatingHintIn {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -110px);
-  }
-  100% {
-    opacity: 1;
-    transform: translate(-50%, 0);
-  }
-}
-
-.hint-floating-in {
-  animation: floatingHintIn 520ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
-}
-
         @keyframes presetCardPulse {
           0%, 100% {
             transform: scale(1);
@@ -767,6 +768,28 @@ export default function PresetsClient({
           }
         }
 
+        @keyframes floatingHintIn {
+          0% {
+            opacity: 0;
+            transform: translateY(-80px) scale(0.96);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+
+        @keyframes floatingHintOut {
+          0% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+          100% {
+            opacity: 0;
+            transform: translateY(-80px) scale(0.96);
+          }
+        }
+
         .preset-overview-pulse {
           animation: presetCardPulse 5.8s ease-in-out infinite;
           animation-delay: var(--pulse-delay, 0s);
@@ -781,8 +804,12 @@ export default function PresetsClient({
           animation-delay: var(--enter-delay, 0ms);
         }
 
-        .hint-enter {
-          animation: hintDrop 420ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+        .hint-floating {
+          animation: floatingHintIn 520ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+        }
+
+        .hint-floating-out {
+          animation: floatingHintOut 380ms cubic-bezier(0.4, 0, 0.2, 1) both;
         }
       `}</style>
 
@@ -824,10 +851,10 @@ export default function PresetsClient({
               {metrics.map((preset, index) => (
                 <button
                   key={preset.id}
-  type="button"
-  onClick={() => handleSelectPreset(preset.id)}
-  className="preset-overview-pulse text-left transition-all duration-300 hover:-translate-y-[3px] hover:scale-[1.01] hover:brightness-105"
-  style={{ ["--pulse-delay" as string]: `${index * 0.35}s` }}
+                  type="button"
+                  onClick={() => handleSelectPreset(preset.id)}
+                  className="preset-overview-pulse text-left transition-all duration-300 hover:-translate-y-[3px] hover:scale-[1.01] hover:brightness-105"
+                  style={{ ["--pulse-delay" as string]: `${index * 0.35}s` }}
                 >
                   <PresetCard preset={preset} />
                 </button>
@@ -837,68 +864,68 @@ export default function PresetsClient({
         )}
 
         {(viewMode === "detail" || viewMode === "detail-exit") && selectedPreset && (
-  <div
-    className={`space-y-4 transition-all duration-300 ${
-      viewMode === "detail"
-        ? "translate-y-0 scale-100 opacity-100"
-        : "translate-y-4 scale-[0.985] opacity-0"
-    }`}
-  >
-    <div className="mx-auto flex w-full max-w-[760px] flex-col gap-3">
-      <PresetCard
-        preset={selectedPreset}
-        interactive
-        onBack={handleBack}
-        onMetricClick={handleMetricClick}
-      />
-
-      <div className="flex flex-col gap-3 rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.012))] p-3 shadow-[0_14px_30px_rgba(0,0,0,0.18)] md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-wrap gap-2">
-          <FilterPill
-            label="Todos los tipos"
-            active={tipoFilter === "todos"}
-            onClick={() => setTipoFilter("todos")}
-          />
-          <FilterPill
-            label="Prueba"
-            active={tipoFilter === "prueba"}
-            onClick={() => setTipoFilter("prueba")}
-          />
-          <FilterPill
-            label="Fondeada"
-            active={tipoFilter === "fondeada"}
-            onClick={() => setTipoFilter("fondeada")}
-          />
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <ActionButton
-            onClick={() => setShowInactive((prev) => !prev)}
-            variant="secondary"
+          <div
+            className={`space-y-4 transition-all duration-300 ${
+              viewMode === "detail"
+                ? "translate-y-0 scale-100 opacity-100"
+                : "translate-y-4 scale-[0.985] opacity-0"
+            }`}
           >
-            {showInactive ? "Ocultar inactivas" : "Mostrar inactivas"}
-          </ActionButton>
-        </div>
-      </div>
+            <div className="mx-auto flex w-full max-w-[760px] flex-col gap-3">
+              <PresetCard
+                preset={selectedPreset}
+                interactive
+                onBack={handleBack}
+                onMetricClick={handleMetricClick}
+              />
 
-      {packMode && packOptions.length > 0 ? (
-        <div className="flex flex-wrap gap-2 rounded-[20px] border border-white/10 bg-white/[0.02] p-3">
-          <FilterPill
-            label="Todos los packs"
-            active={packFilter === "todos"}
-            onClick={() => setPackFilter("todos")}
-          />
-          {packOptions.map((pack) => (
-            <FilterPill
-              key={pack}
-              label={pack}
-              active={packFilter === pack}
-              onClick={() => setPackFilter(pack)}
-            />
-          ))}
-        </div>
-      ) : null}
-    </div>
+              <div className="flex flex-col gap-3 rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.012))] p-3 shadow-[0_14px_30px_rgba(0,0,0,0.18)] md:flex-row md:items-center md:justify-between">
+                <div className="flex flex-wrap gap-2">
+                  <FilterPill
+                    label="Todos los tipos"
+                    active={tipoFilter === "todos"}
+                    onClick={() => setTipoFilter("todos")}
+                  />
+                  <FilterPill
+                    label="Prueba"
+                    active={tipoFilter === "prueba"}
+                    onClick={() => setTipoFilter("prueba")}
+                  />
+                  <FilterPill
+                    label="Fondeada"
+                    active={tipoFilter === "fondeada"}
+                    onClick={() => setTipoFilter("fondeada")}
+                  />
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <ActionButton
+                    onClick={() => setShowInactive((prev) => !prev)}
+                    variant="secondary"
+                  >
+                    {showInactive ? "Ocultar inactivas" : "Mostrar inactivas"}
+                  </ActionButton>
+                </div>
+              </div>
+
+              {packMode && packOptions.length > 0 ? (
+                <div className="flex flex-wrap gap-2 rounded-[20px] border border-white/10 bg-white/[0.02] p-3">
+                  <FilterPill
+                    label="Todos los packs"
+                    active={packFilter === "todos"}
+                    onClick={() => setPackFilter("todos")}
+                  />
+                  {packOptions.map((pack) => (
+                    <FilterPill
+                      key={pack}
+                      label={pack}
+                      active={packFilter === pack}
+                      onClick={() => setPackFilter(pack)}
+                    />
+                  ))}
+                </div>
+              ) : null}
+            </div>
 
             <div>
               <div className="mb-3 flex items-center justify-between gap-3">
