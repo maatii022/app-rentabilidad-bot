@@ -763,10 +763,20 @@ export default function DashboardPage() {
   }, [packs, presetFilter, tipoFilter, soloIncidencias]);
 
   const resumen = useMemo(() => {
-    const packsConIncidencias = packsFiltrados.filter((pack) => {
-      const flags = getPackFlags(pack);
-      return flags.hasPendingReplacement || flags.isIncomplete;
-    }).length;
+    let cuentasConAlertas = 0;
+
+    packsFiltrados.forEach((pack) => {
+      const displaySlots = buildDisplaySlots(pack);
+
+      displaySlots.forEach((slot) => {
+        const missingAccount = !slot.accounts?.id;
+        const hasAlert = slot.pendiente_reemplazo || missingAccount;
+
+        if (hasAlert) {
+          cuentasConAlertas += 1;
+        }
+      });
+    });
 
     const cuentasActivas = packsFiltrados.reduce((acc, pack) => {
       return acc + (pack.pack_slots?.filter((slot) => slot.accounts?.estado === "activa").length ?? 0);
@@ -774,8 +784,8 @@ export default function DashboardPage() {
 
     return {
       packsVisibles: packsFiltrados.length,
-      packsConIncidencias,
       cuentasActivas,
+      cuentasConAlertas,
     };
   }, [packsFiltrados]);
 
@@ -855,8 +865,8 @@ export default function DashboardPage() {
 
         <div className="mt-6 grid grid-cols-2 gap-2.5 xl:grid-cols-5">
           <StatCard label="Packs" value={resumen.packsVisibles} tone="blue" />
-          <StatCard label="Con alertas" value={resumen.packsConIncidencias} tone="amber" />
           <StatCard label="Cuentas activas" value={resumen.cuentasActivas} tone="green" />
+          <StatCard label="Cuentas con alertas" value={resumen.cuentasConAlertas} tone="amber" />
           <StatCard label="Fondeadas" value={summary.fondeadasHistoricas} tone="violet" />
           <StatCard label="Perdidas" value={summary.perdidasHistoricas} tone="red" />
         </div>
@@ -1179,10 +1189,8 @@ function PackCard({
               className={`rounded-2xl border p-3 transition-all duration-300 hover:-translate-y-[1px] ${
                 slot.es_activa
                   ? "border-sky-300/25 bg-[linear-gradient(180deg,rgba(56,189,248,0.10),rgba(56,189,248,0.05))] shadow-[0_0_0_1px_rgba(125,211,252,0.06),0_14px_30px_rgba(56,189,248,0.08)]"
-                  : slot.pendiente_reemplazo
+                  : slot.pendiente_reemplazo || missingAccount
                   ? "border-amber-300/20 bg-amber-300/[0.08] shadow-[0_14px_30px_rgba(251,191,36,0.06)]"
-                  : missingAccount
-                  ? "border-white/10 bg-black/10 shadow-[0_12px_26px_rgba(255,255,255,0.02)]"
                   : "border-white/10 bg-black/20 shadow-[0_12px_26px_rgba(255,255,255,0.02)]"
               }`}
             >
@@ -1214,7 +1222,7 @@ function PackCard({
                   )}
 
                   {missingAccount && !slot.pendiente_reemplazo && (
-                    <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[10px] text-zinc-400 shadow-[0_8px_18px_rgba(255,255,255,0.03)]">
+                    <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.10] px-2 py-0.5 text-[10px] text-amber-100 shadow-[0_8px_18px_rgba(251,191,36,0.08)]">
                       Sin cuenta
                     </span>
                   )}
