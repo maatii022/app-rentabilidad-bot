@@ -3,9 +3,7 @@ import { supabase } from "@/lib/supabase";
 type Preset = {
   id: number;
   nombre: string;
-  descripcion: string | null;
   activo: boolean | null;
-  created_at: string | null;
 };
 
 type Pack = {
@@ -30,7 +28,8 @@ type PresetMetric = {
   nombre: string;
   activo: boolean;
   packs: number;
-  cuentas: number;
+  cuentasActivas: number;
+  cuentasTotales: number;
   fondeadas: number;
   perdidas: number;
   tradesWinrate: number | null;
@@ -85,6 +84,10 @@ function buildPresetMetrics(
   return presets.map((preset) => {
     const presetAccounts = accountsByPreset.get(preset.id) ?? [];
 
+    const cuentasActivas = presetAccounts.filter(
+      (account) => normalizeEstado(account.estado) === "activa"
+    ).length;
+
     const fondeadas = presetAccounts.filter(
       (account) => normalizeEstado(account.estado) === "fondeada"
     ).length;
@@ -112,7 +115,8 @@ function buildPresetMetrics(
       nombre: preset.nombre,
       activo: Boolean(preset.activo),
       packs: packsByPreset.get(preset.id) ?? 0,
-      cuentas: presetAccounts.length,
+      cuentasActivas,
+      cuentasTotales: presetAccounts.length,
       fondeadas,
       perdidas,
       tradesWinrate,
@@ -121,7 +125,7 @@ function buildPresetMetrics(
   });
 }
 
-function MetricChip({
+function StatPill({
   label,
   value,
 }: {
@@ -129,11 +133,11 @@ function MetricChip({
   value: number | string;
 }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 shadow-[0_10px_24px_rgba(0,0,0,0.16)]">
-      <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
+    <div className="rounded-xl border border-white/10 bg-white/[0.025] px-3 py-3 shadow-[0_10px_24px_rgba(255,255,255,0.025)]">
+      <p className="text-center text-[10px] uppercase tracking-[0.14em] text-zinc-500">
         {label}
       </p>
-      <p className="mt-1.5 text-lg font-semibold leading-none text-white">
+      <p className="mt-2 text-center text-xl font-semibold leading-none text-white">
         {value}
       </p>
     </div>
@@ -143,23 +147,16 @@ function MetricChip({
 function WinratePanel({
   label,
   value,
-  accent = "blue",
 }: {
   label: string;
   value: number | null;
-  accent?: "blue" | "violet";
 }) {
-  const accentClass =
-    accent === "violet"
-      ? "border-violet-400/15 bg-[linear-gradient(180deg,rgba(167,139,250,0.08),rgba(167,139,250,0.02))] shadow-[0_14px_30px_rgba(167,139,250,0.06)]"
-      : "border-sky-400/15 bg-[linear-gradient(180deg,rgba(56,189,248,0.08),rgba(56,189,248,0.02))] shadow-[0_14px_30px_rgba(56,189,248,0.06)]";
-
   return (
-    <div className={`rounded-2xl border px-4 py-4 ${accentClass}`}>
-      <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
+    <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.012))] px-4 py-4 shadow-[0_12px_28px_rgba(0,0,0,0.18)]">
+      <p className="text-center text-[10px] uppercase tracking-[0.16em] text-zinc-500">
         {label}
       </p>
-      <p className="mt-3 text-3xl font-semibold leading-none text-white">
+      <p className="mt-3 text-center text-3xl font-semibold leading-none text-white">
         {formatPercent(value)}
       </p>
     </div>
@@ -168,40 +165,31 @@ function WinratePanel({
 
 function PresetCard({ preset }: { preset: PresetMetric }) {
   return (
-    <article className="overflow-hidden rounded-[24px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.05),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.022),rgba(255,255,255,0.012))] shadow-[0_18px_38px_rgba(0,0,0,0.20)] transition-all duration-300 hover:shadow-[0_22px_44px_rgba(0,0,0,0.24)]">
+    <article className="overflow-hidden rounded-[24px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.04),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.022),rgba(255,255,255,0.012))] shadow-[0_18px_38px_rgba(0,0,0,0.20)] transition-all duration-300 hover:shadow-[0_22px_44px_rgba(0,0,0,0.24)]">
       <div className="border-b border-white/8 px-4 py-4">
         <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="truncate text-xl font-semibold tracking-tight text-white">
-              {preset.nombre}
-            </p>
-          </div>
+          <p className="truncate text-xl font-semibold tracking-tight text-white">
+            {preset.nombre}
+          </p>
 
-          <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-300 shadow-[0_8px_18px_rgba(255,255,255,0.03)]">
+          <span className="rounded-full border border-sky-300/15 bg-sky-300/[0.08] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-sky-100 shadow-[0_8px_18px_rgba(56,189,248,0.06)]">
             Activo
           </span>
         </div>
       </div>
 
       <div className="p-4">
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          <MetricChip label="Packs" value={preset.packs} />
-          <MetricChip label="Cuentas" value={preset.cuentas} />
-          <MetricChip label="Fondeadas" value={preset.fondeadas} />
-          <MetricChip label="Perdidas" value={preset.perdidas} />
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+          <StatPill label="Packs" value={preset.packs} />
+          <StatPill label="Activas" value={preset.cuentasActivas} />
+          <StatPill label="Totales" value={preset.cuentasTotales} />
+          <StatPill label="Fondeadas" value={preset.fondeadas} />
+          <StatPill label="Perdidas" value={preset.perdidas} />
         </div>
 
         <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <WinratePanel
-            label="Trades winrate"
-            value={preset.tradesWinrate}
-            accent="blue"
-          />
-          <WinratePanel
-            label="Funded winrate"
-            value={preset.fundedWinrate}
-            accent="violet"
-          />
+          <WinratePanel label="Trades winrate" value={preset.tradesWinrate} />
+          <WinratePanel label="Funded winrate" value={preset.fundedWinrate} />
         </div>
       </div>
     </article>
@@ -217,7 +205,7 @@ export default async function PresetsPage() {
   ] = await Promise.all([
     supabase
       .from("presets")
-      .select("id, nombre, descripcion, activo, created_at")
+      .select("id, nombre, activo")
       .eq("activo", true)
       .order("nombre", { ascending: true }),
 
@@ -282,7 +270,7 @@ export default async function PresetsPage() {
         </div>
       </section>
 
-      <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.06),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
+      <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.05),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-sm font-medium text-white">Presets activos</h2>
         </div>
