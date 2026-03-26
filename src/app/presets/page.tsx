@@ -113,9 +113,9 @@ function MetricButton({
         <p className="text-center text-[10px] uppercase tracking-[0.14em] text-zinc-400 transition-colors duration-200 group-hover:text-zinc-300">
           {label}
         </p>
-        <p className="mt-2 text-center text-xl font-semibold leading-none text-white">
-          {value}
-        </p>
+        <p className="mt-2 text-center text-xl font-semibold leading-none text-white transition-transform duration-200 group-hover:scale-[1.03]">
+  {value}
+</p>
       </div>
     </button>
   );
