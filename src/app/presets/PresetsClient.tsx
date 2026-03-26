@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AccountRow, Pack, Preset } from "./page";
 
 type LiveStatusItem = {
@@ -45,8 +45,21 @@ type AccountItem = {
   packNombre: string | null;
 };
 
-type StatusFilter = "all" | "activa" | "fondeada" | "perdida";
 type TypeFilter = "todos" | "prueba" | "fondeada";
+
+type OverlayAnimation = {
+  preset: PresetMetric;
+  from: RectShape;
+  to: RectShape;
+  mode: "in" | "out";
+};
+
+type RectShape = {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+};
 
 function normalizeText(value: string | null | undefined) {
   return String(value || "").trim();
@@ -266,9 +279,8 @@ function StaticMetricSurface({
   value: number | string;
 }) {
   return (
-    <div className="relative overflow-hidden rounded-[18px] border border-white/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.09),rgba(255,255,255,0.035))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(255,255,255,0.03),0_14px_30px_rgba(0,0,0,0.24)] backdrop-blur-xl">
-      <span className="pointer-events-none absolute inset-x-3 top-0 h-px bg-white/20 opacity-80" />
-      <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),transparent_58%)] opacity-70" />
+    <div className="relative overflow-hidden rounded-[18px] border border-white/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.075),rgba(255,255,255,0.028))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.10),inset_0_-1px_0_rgba(255,255,255,0.03),0_14px_30px_rgba(0,0,0,0.24)]">
+      <span className="pointer-events-none absolute inset-x-3 top-0 h-px bg-white/14 opacity-80" />
       <div className="relative z-10">
         <p className="text-center text-[10px] uppercase tracking-[0.14em] text-zinc-400">
           {label}
@@ -300,11 +312,9 @@ function MetricButton({
     <button
       type="button"
       onClick={onClick}
-      className="metric-button-pulse group relative cursor-pointer overflow-hidden rounded-[18px] border border-white/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.09),rgba(255,255,255,0.035))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(255,255,255,0.03),0_14px_30px_rgba(0,0,0,0.24)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-[2px] hover:border-white/24 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.05))] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.18),inset_0_-1px_0_rgba(255,255,255,0.04),0_18px_34px_rgba(0,0,0,0.30)] active:scale-[0.985] active:translate-y-0 active:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_10px_20px_rgba(0,0,0,0.22)]"
+      className="metric-button-pulse group relative cursor-pointer overflow-hidden rounded-[18px] border border-white/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.085),rgba(255,255,255,0.03))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.10),inset_0_-1px_0_rgba(255,255,255,0.03),0_14px_30px_rgba(0,0,0,0.24)] transition-all duration-200 hover:-translate-y-[2px] hover:border-white/20 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.04))] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(255,255,255,0.04),0_18px_34px_rgba(0,0,0,0.28)] active:scale-[0.985] active:translate-y-0"
     >
-      <span className="pointer-events-none absolute inset-x-3 top-0 h-px bg-white/20 opacity-80" />
-      <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),transparent_58%)] opacity-70 transition-opacity duration-200 group-hover:opacity-100" />
-      <span className="pointer-events-none absolute -left-10 top-0 h-full w-16 rotate-[18deg] bg-white/6 blur-md transition-all duration-300 group-hover:left-[110%]" />
+      <span className="pointer-events-none absolute inset-x-3 top-0 h-px bg-white/14 opacity-80" />
       <div className="relative z-10">
         <p className="text-center text-[10px] uppercase tracking-[0.14em] text-zinc-400 transition-colors duration-200 group-hover:text-zinc-300">
           {label}
@@ -420,70 +430,29 @@ function AccountCard({
   );
 }
 
-function PresetOverviewCard({
+function PresetCardBody({
   preset,
-  onSelect,
-  pulseDelay,
-}: {
-  preset: PresetMetric;
-  onSelect: () => void;
-  pulseDelay: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      className="preset-overview-pulse group w-full overflow-hidden rounded-[24px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.05),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.022),rgba(255,255,255,0.012))] text-left shadow-[0_18px_38px_rgba(0,0,0,0.20)] transition-all duration-300 hover:-translate-y-[2px] hover:shadow-[0_22px_44px_rgba(0,0,0,0.24)]"
-      style={{ ["--pulse-delay" as string]: pulseDelay }}
-    >
-      <div className="border-b border-white/8 px-4 py-4">
-        <div className="flex items-center justify-between gap-3">
-          <p className="truncate text-xl font-semibold tracking-tight text-white">
-            {preset.nombre}
-          </p>
-
-          <span className="rounded-full border border-sky-300/18 bg-sky-300/[0.10] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-sky-100 shadow-[0_8px_18px_rgba(56,189,248,0.06)]">
-            Activo
-          </span>
-        </div>
-      </div>
-
-      <div className="p-4">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-          <StaticMetricSurface label="Packs" value={preset.packs} />
-          <StaticMetricSurface label="Activas" value={preset.cuentasActivas} />
-          <StaticMetricSurface label="Totales" value={preset.cuentasTotales} />
-          <StaticMetricSurface label="Fondeadas" value={preset.fondeadas} />
-          <StaticMetricSurface label="Perdidas" value={preset.perdidas} />
-        </div>
-
-        <div className="mt-3 flex justify-center">
-          <div className="w-full max-w-[420px]">
-            <WinratePanel label="Funded winrate" value={preset.fundedWinrate} />
-          </div>
-        </div>
-      </div>
-    </button>
-  );
-}
-
-function PresetDetailCard({
-  preset,
-  onBack,
+  metricButtonsEnabled,
   onQuickFilter,
+  onBack,
+  showBack,
 }: {
   preset: PresetMetric;
-  onBack: () => void;
-  onQuickFilter: (key: "packs" | "activa" | "all" | "fondeada" | "perdida") => void;
+  metricButtonsEnabled?: boolean;
+  onQuickFilter?: (key: "packs" | "activa" | "all" | "fondeada" | "perdida") => void;
+  onBack?: () => void;
+  showBack?: boolean;
 }) {
   return (
-    <article className="preset-pop overflow-hidden rounded-[24px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.05),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.022),rgba(255,255,255,0.012))] shadow-[0_22px_48px_rgba(0,0,0,0.24)]">
+    <article className="overflow-hidden rounded-[24px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.05),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.022),rgba(255,255,255,0.012))] shadow-[0_18px_38px_rgba(0,0,0,0.20)]">
       <div className="border-b border-white/8 px-4 py-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <ActionButton onClick={onBack} variant="ghost">
-              ← Volver
-            </ActionButton>
+            {showBack ? (
+              <ActionButton onClick={onBack} variant="ghost">
+                ← Volver
+              </ActionButton>
+            ) : null}
 
             <p className="truncate text-xl font-semibold tracking-tight text-white">
               {preset.nombre}
@@ -498,11 +467,36 @@ function PresetDetailCard({
 
       <div className="p-4">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-          <MetricButton label="Packs" value={preset.packs} enabled onClick={() => onQuickFilter("packs")} />
-          <MetricButton label="Activas" value={preset.cuentasActivas} enabled onClick={() => onQuickFilter("activa")} />
-          <MetricButton label="Totales" value={preset.cuentasTotales} enabled onClick={() => onQuickFilter("all")} />
-          <MetricButton label="Fondeadas" value={preset.fondeadas} enabled onClick={() => onQuickFilter("fondeada")} />
-          <MetricButton label="Perdidas" value={preset.perdidas} enabled onClick={() => onQuickFilter("perdida")} />
+          <MetricButton
+            label="Packs"
+            value={preset.packs}
+            enabled={metricButtonsEnabled}
+            onClick={() => onQuickFilter?.("packs")}
+          />
+          <MetricButton
+            label="Activas"
+            value={preset.cuentasActivas}
+            enabled={metricButtonsEnabled}
+            onClick={() => onQuickFilter?.("activa")}
+          />
+          <MetricButton
+            label="Totales"
+            value={preset.cuentasTotales}
+            enabled={metricButtonsEnabled}
+            onClick={() => onQuickFilter?.("all")}
+          />
+          <MetricButton
+            label="Fondeadas"
+            value={preset.fondeadas}
+            enabled={metricButtonsEnabled}
+            onClick={() => onQuickFilter?.("fondeada")}
+          />
+          <MetricButton
+            label="Perdidas"
+            value={preset.perdidas}
+            enabled={metricButtonsEnabled}
+            onClick={() => onQuickFilter?.("perdida")}
+          />
         </div>
 
         <div className="mt-3 flex justify-center">
@@ -529,10 +523,18 @@ export default function PresetsClient({
     useState<PersistedPerformanceMap>({});
   const [liveStatus, setLiveStatus] = useState<LiveStatusMap>({});
   const [tipoFilter, setTipoFilter] = useState<TypeFilter>("todos");
-  const [estadoFilter, setEstadoFilter] = useState<StatusFilter>("all");
-  const [packFilter, setPackFilter] = useState<string>("todos");
   const [showInactive, setShowInactive] = useState(false);
   const [packMode, setPackMode] = useState(false);
+  const [packFilter, setPackFilter] = useState<string>("todos");
+
+  const [overlayAnimation, setOverlayAnimation] = useState<OverlayAnimation | null>(null);
+  const [overlayStyle, setOverlayStyle] = useState<React.CSSProperties | null>(null);
+  const [viewState, setViewState] = useState<"overview" | "transitioning-in" | "detail" | "transitioning-out">("overview");
+
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const detailAnchorRef = useRef<HTMLDivElement | null>(null);
+  const detailCardRef = useRef<HTMLDivElement | null>(null);
+  const presetButtonRefs = useRef<Record<number, HTMLButtonElement | null>>({});
 
   useEffect(() => {
     async function cargarPerformance() {
@@ -567,13 +569,65 @@ export default function PresetsClient({
     void cargarPerformance();
   }, []);
 
+  useEffect(() => {
+    if (!overlayAnimation) return;
+
+    const fromStyle: React.CSSProperties = {
+      position: "fixed",
+      top: overlayAnimation.from.top,
+      left: overlayAnimation.from.left,
+      width: overlayAnimation.from.width,
+      height: overlayAnimation.from.height,
+      zIndex: 70,
+      transition: "all 480ms cubic-bezier(0.2, 0.9, 0.2, 1)",
+      pointerEvents: "none",
+    };
+
+    const toStyle: React.CSSProperties = {
+      position: "fixed",
+      top: overlayAnimation.to.top,
+      left: overlayAnimation.to.left,
+      width: overlayAnimation.to.width,
+      height: overlayAnimation.to.height,
+      zIndex: 70,
+      transition: "all 480ms cubic-bezier(0.2, 0.9, 0.2, 1)",
+      pointerEvents: "none",
+    };
+
+    setOverlayStyle(fromStyle);
+
+    const raf = requestAnimationFrame(() => {
+      setOverlayStyle(toStyle);
+    });
+
+    const timeout = window.setTimeout(() => {
+      if (overlayAnimation.mode === "in") {
+        setViewState("detail");
+      } else {
+        setSelectedPresetId(null);
+        setViewState("overview");
+      }
+
+      setOverlayAnimation(null);
+      setOverlayStyle(null);
+    }, 500);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(timeout);
+    };
+  }, [overlayAnimation]);
+
   const accountItems = useMemo<AccountItem[]>(() => {
     const presetNameMap = new Map<number, string>(
       presets.map((preset) => [preset.id, preset.nombre])
     );
 
     return accounts
-      .filter((account): account is AccountRow & { preset_id: number } => typeof account.preset_id === "number")
+      .filter(
+        (account): account is AccountRow & { preset_id: number } =>
+          typeof account.preset_id === "number"
+      )
       .map((account) => {
         const packData = getPackData(account.pack_slots ?? null);
 
@@ -636,15 +690,12 @@ export default function PresetsClient({
       const matchesTipo =
         tipoFilter === "todos" || normalizeKey(item.tipoCuenta) === tipoFilter;
 
-      const matchesEstado =
-        estadoFilter === "all" || normalizeKey(item.estado) === estadoFilter;
-
       const matchesPack =
         packFilter === "todos" || item.packNombre === packFilter;
 
-      return matchesTipo && matchesEstado && matchesPack;
+      return matchesTipo && matchesPack;
     });
-  }, [selectedPresetAccounts, tipoFilter, estadoFilter, packFilter]);
+  }, [selectedPresetAccounts, tipoFilter, packFilter]);
 
   const filteredInactiveAccounts = useMemo(() => {
     return selectedPresetAccounts.filter((item) => {
@@ -653,62 +704,125 @@ export default function PresetsClient({
       const matchesTipo =
         tipoFilter === "todos" || normalizeKey(item.tipoCuenta) === tipoFilter;
 
-      const matchesEstado =
-        estadoFilter === "all" || normalizeKey(item.estado) === estadoFilter;
-
       const matchesPack =
         packFilter === "todos" || item.packNombre === packFilter;
 
-      return matchesTipo && matchesEstado && matchesPack;
+      return matchesTipo && matchesPack;
     });
-  }, [selectedPresetAccounts, tipoFilter, estadoFilter, packFilter]);
+  }, [selectedPresetAccounts, tipoFilter, packFilter]);
+
+  function buildTargetRect(originRect: DOMRect): RectShape | null {
+    const anchor = detailAnchorRef.current;
+    if (!anchor) return null;
+
+    const anchorRect = anchor.getBoundingClientRect();
+    const width = originRect.width;
+    const height = originRect.height;
+
+    return {
+      top: anchorRect.top,
+      left: anchorRect.left + (anchorRect.width - width) / 2,
+      width,
+      height,
+    };
+  }
 
   function handleSelectPreset(presetId: number) {
+    const preset = metrics.find((item) => item.id === presetId);
+    const sourceNode = presetButtonRefs.current[presetId];
+
+    if (!preset || !sourceNode || viewState !== "overview") return;
+
+    const sourceRect = sourceNode.getBoundingClientRect();
+    const targetRect = buildTargetRect(sourceRect);
+
+    if (!targetRect) {
+      setSelectedPresetId(presetId);
+      setViewState("detail");
+      return;
+    }
+
     setSelectedPresetId(presetId);
     setTipoFilter("todos");
-    setEstadoFilter("all");
-    setPackFilter("todos");
     setShowInactive(false);
     setPackMode(false);
+    setPackFilter("todos");
+    setViewState("transitioning-in");
+
+    setOverlayAnimation({
+      preset,
+      from: {
+        top: sourceRect.top,
+        left: sourceRect.left,
+        width: sourceRect.width,
+        height: sourceRect.height,
+      },
+      to: targetRect,
+      mode: "in",
+    });
   }
 
   function handleBack() {
-    setSelectedPresetId(null);
-    setTipoFilter("todos");
-    setEstadoFilter("all");
-    setPackFilter("todos");
-    setShowInactive(false);
-    setPackMode(false);
+    if (!selectedPreset || !detailCardRef.current || viewState !== "detail") {
+      setSelectedPresetId(null);
+      setViewState("overview");
+      return;
+    }
+
+    const targetNode = presetButtonRefs.current[selectedPreset.id];
+    if (!targetNode) {
+      setSelectedPresetId(null);
+      setViewState("overview");
+      return;
+    }
+
+    const detailRect = detailCardRef.current.getBoundingClientRect();
+    const targetRect = targetNode.getBoundingClientRect();
+
+    setViewState("transitioning-out");
+
+    setOverlayAnimation({
+      preset: selectedPreset,
+      from: {
+        top: detailRect.top,
+        left: detailRect.left,
+        width: detailRect.width,
+        height: detailRect.height,
+      },
+      to: {
+        top: targetRect.top,
+        left: targetRect.left,
+        width: targetRect.width,
+        height: targetRect.height,
+      },
+      mode: "out",
+    });
   }
 
   function handleQuickFilter(key: "packs" | "activa" | "all" | "fondeada" | "perdida") {
     if (key === "packs") {
-      setPackMode(true);
-      setEstadoFilter("all");
+      setPackMode((prev) => !prev);
       return;
     }
 
     setPackMode(false);
+    setPackFilter("todos");
 
     if (key === "activa") {
-      setEstadoFilter("activa");
       setShowInactive(false);
       return;
     }
 
     if (key === "all") {
-      setEstadoFilter("all");
       setShowInactive(true);
       return;
     }
 
     if (key === "fondeada") {
-      setEstadoFilter("fondeada");
       setShowInactive(true);
       return;
     }
 
-    setEstadoFilter("perdida");
     setShowInactive(true);
   }
 
@@ -721,7 +835,7 @@ export default function PresetsClient({
             box-shadow: 0 18px 38px rgba(0, 0, 0, 0.20);
           }
           8% {
-            transform: scale(1.012);
+            transform: scale(1.01);
             box-shadow: 0 24px 46px rgba(0, 0, 0, 0.24);
           }
           14% {
@@ -735,41 +849,21 @@ export default function PresetsClient({
             transform: scale(1);
           }
           8% {
-            transform: scale(1.018);
+            transform: scale(1.014);
           }
           14% {
             transform: scale(1);
           }
         }
 
-        @keyframes presetPop {
-          0% {
-            opacity: 0;
-            transform: scale(0.95) translateY(18px);
-          }
-          100% {
-            opacity: 1;
-            transform: scale(1) translateY(0);
-          }
-        }
-
         @keyframes accountEnter {
           0% {
             opacity: 0;
-            transform: translateY(18px) scale(0.98);
+            transform: translateY(18px) scale(0.985);
           }
           100% {
             opacity: 1;
             transform: translateY(0) scale(1);
-          }
-        }
-
-        @keyframes hintFloat {
-          0%, 100% {
-            transform: translateY(0);
-          }
-          50% {
-            transform: translateY(-4px);
           }
         }
 
@@ -782,17 +876,9 @@ export default function PresetsClient({
           animation: metricPulse 4.8s ease-in-out infinite;
         }
 
-        .preset-pop {
-          animation: presetPop 0.38s cubic-bezier(0.2, 0.9, 0.2, 1) both;
-        }
-
         .account-card-enter {
           animation: accountEnter 0.42s cubic-bezier(0.2, 0.9, 0.2, 1) both;
           animation-delay: var(--enter-delay, 0ms);
-        }
-
-        .hint-float {
-          animation: hintFloat 4.8s ease-in-out infinite;
         }
       `}</style>
 
@@ -815,196 +901,213 @@ export default function PresetsClient({
         </div>
       </section>
 
-      <section className="relative rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.05),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
+      <section
+        ref={sectionRef}
+        className="relative rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.05),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.22)]"
+      >
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-sm font-medium text-white">
             {selectedPreset ? `Preset seleccionado · ${selectedPreset.nombre}` : "Presets activos"}
           </h2>
         </div>
 
-        {!selectedPreset && (
-          <div className="hint-float absolute right-5 top-5 z-10 hidden max-w-[290px] rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] px-4 py-3 shadow-[0_16px_34px_rgba(0,0,0,0.24)] backdrop-blur-xl xl:block">
-            <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
+        <div
+          className={`pointer-events-none absolute left-1/2 top-4 z-20 w-full max-w-[340px] -translate-x-1/2 transform px-4 transition-all duration-500 ${
+            selectedPreset || viewState === "transitioning-in"
+              ? "-translate-y-8 opacity-0"
+              : "translate-y-0 opacity-100"
+          }`}
+        >
+          <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] px-4 py-3 shadow-[0_16px_34px_rgba(0,0,0,0.24)] backdrop-blur-xl">
+            <p className="text-center text-[10px] uppercase tracking-[0.16em] text-zinc-500">
               Detalle interactivo
             </p>
-            <p className="mt-2 text-sm leading-6 text-zinc-200">
+            <p className="mt-2 text-center text-sm leading-6 text-zinc-200">
               Pulsa un preset para ver todas sus cuentas y activar sus filtros.
             </p>
           </div>
-        )}
+        </div>
 
-        {!selectedPreset ? (
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-            {metrics.map((preset, index) => (
-              <PresetOverviewCard
+        <div
+          className={`grid grid-cols-1 gap-4 transition-all duration-500 xl:grid-cols-3 ${
+            selectedPreset || viewState === "transitioning-in" || viewState === "transitioning-out"
+              ? "opacity-100"
+              : "opacity-100"
+          }`}
+        >
+          {metrics.map((preset, index) => {
+            const isSelected = selectedPresetId === preset.id;
+            const hideOthers =
+              (viewState === "transitioning-in" || viewState === "detail" || viewState === "transitioning-out") &&
+              selectedPresetId !== null;
+
+            return (
+              <button
                 key={preset.id}
-                preset={preset}
-                onSelect={() => handleSelectPreset(preset.id)}
-                pulseDelay={`${index * 0.35}s`}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-5">
-            <div className="mx-auto max-w-[980px]">
-              <PresetDetailCard
+                ref={(node) => {
+                  presetButtonRefs.current[preset.id] = node;
+                }}
+                type="button"
+                onClick={() => handleSelectPreset(preset.id)}
+                className={`preset-overview-pulse text-left transition-all duration-500 ${
+                  hideOthers
+                    ? isSelected
+                      ? "opacity-0"
+                      : "pointer-events-none translate-y-6 scale-[0.96] opacity-0"
+                    : "opacity-100"
+                }`}
+                style={{ ["--pulse-delay" as string]: `${index * 0.35}s` }}
+              >
+                <PresetCardBody preset={preset} />
+              </button>
+            );
+          })}
+        </div>
+
+        <div
+          ref={detailAnchorRef}
+          className={`pointer-events-none absolute left-0 right-0 top-[56px] z-30 flex justify-center px-4 transition-all duration-500 ${
+            viewState === "detail" || viewState === "transitioning-out"
+              ? "opacity-100"
+              : "opacity-0"
+          }`}
+        >
+          {selectedPreset ? (
+            <div
+              ref={detailCardRef}
+              className={`w-full max-w-[590px] transition-all duration-500 ${
+                viewState === "detail" ? "scale-100 opacity-100" : "scale-[0.98] opacity-0"
+              }`}
+            >
+              <PresetCardBody
                 preset={selectedPreset}
-                onBack={handleBack}
+                metricButtonsEnabled
                 onQuickFilter={handleQuickFilter}
+                onBack={handleBack}
+                showBack
               />
             </div>
+          ) : null}
+        </div>
 
-            <div className="preset-pop space-y-4">
-              <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.022),rgba(255,255,255,0.012))] p-4 shadow-[0_16px_34px_rgba(0,0,0,0.20)]">
-                <div className="flex flex-wrap items-center gap-2">
-                  <FilterPill
-                    label="Todos los tipos"
-                    active={tipoFilter === "todos"}
-                    onClick={() => setTipoFilter("todos")}
-                  />
-                  <FilterPill
-                    label="Prueba"
-                    active={tipoFilter === "prueba"}
-                    onClick={() => setTipoFilter("prueba")}
-                  />
-                  <FilterPill
-                    label="Fondeada"
-                    active={tipoFilter === "fondeada"}
-                    onClick={() => setTipoFilter("fondeada")}
-                  />
+        <div className="mt-4 min-h-[320px]" />
 
-                  <div className="mx-1 hidden h-8 w-px bg-white/10 lg:block" />
+        {selectedPreset && viewState === "detail" ? (
+          <div className="space-y-4">
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-wrap gap-2">
+                <FilterPill
+                  label="Todos los tipos"
+                  active={tipoFilter === "todos"}
+                  onClick={() => setTipoFilter("todos")}
+                />
+                <FilterPill
+                  label="Prueba"
+                  active={tipoFilter === "prueba"}
+                  onClick={() => setTipoFilter("prueba")}
+                />
+                <FilterPill
+                  label="Fondeada"
+                  active={tipoFilter === "fondeada"}
+                  onClick={() => setTipoFilter("fondeada")}
+                />
+              </div>
 
-                  <FilterPill
-                    label="Todos los estados"
-                    active={estadoFilter === "all"}
-                    onClick={() => setEstadoFilter("all")}
-                  />
-                  <FilterPill
-                    label="Activas"
-                    active={estadoFilter === "activa"}
-                    onClick={() => {
-                      setEstadoFilter("activa");
-                      setShowInactive(false);
-                    }}
-                  />
-                  <FilterPill
-                    label="Fondeadas"
-                    active={estadoFilter === "fondeada"}
-                    onClick={() => {
-                      setEstadoFilter("fondeada");
-                      setShowInactive(true);
-                    }}
-                  />
-                  <FilterPill
-                    label="Perdidas"
-                    active={estadoFilter === "perdida"}
-                    onClick={() => {
-                      setEstadoFilter("perdida");
-                      setShowInactive(true);
-                    }}
-                  />
+              <div className="flex flex-wrap gap-2">
+                <ActionButton
+                  onClick={() => setShowInactive((prev) => !prev)}
+                  variant="secondary"
+                >
+                  {showInactive ? "Ocultar inactivas" : "Mostrar inactivas"}
+                </ActionButton>
+              </div>
+            </div>
 
-                  <div className="mx-1 hidden h-8 w-px bg-white/10 lg:block" />
+            {packMode && packOptions.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                <FilterPill
+                  label="Todos los packs"
+                  active={packFilter === "todos"}
+                  onClick={() => setPackFilter("todos")}
+                />
+                {packOptions.map((pack) => (
+                  <FilterPill
+                    key={pack}
+                    label={pack}
+                    active={packFilter === pack}
+                    onClick={() => setPackFilter(pack)}
+                  />
+                ))}
+              </div>
+            ) : null}
 
-                  <ActionButton
-                    onClick={() => setShowInactive((prev) => !prev)}
-                    variant="secondary"
-                  >
-                    {showInactive ? "Ocultar inactivas" : "Mostrar inactivas"}
-                  </ActionButton>
+            <div>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-medium text-white">
+                  Cuentas activas · {filteredActiveAccounts.length}
+                </h3>
+              </div>
 
-                  <ActionButton
-                    onClick={() => setPackMode((prev) => !prev)}
-                    variant={packMode ? "primary" : "ghost"}
-                  >
-                    Packs
-                  </ActionButton>
+              {filteredActiveAccounts.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-center text-sm text-zinc-500">
+                  No hay cuentas activas para este filtro.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+                  {filteredActiveAccounts.map((account, index) => (
+                    <AccountCard
+                      key={account.id}
+                      account={account}
+                      index={index}
+                      totalPct={resolveDisplayTotalPct(
+                        account.numeroCuenta,
+                        persistedPerformance,
+                        liveStatus
+                      )}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {showInactive ? (
+              <div>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-medium text-white">
+                    Cuentas inactivas · {filteredInactiveAccounts.length}
+                  </h3>
                 </div>
 
-                {packMode && packOptions.length > 0 ? (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <FilterPill
-                      label="Todos los packs"
-                      active={packFilter === "todos"}
-                      onClick={() => setPackFilter("todos")}
-                    />
-                    {packOptions.map((pack) => (
-                      <FilterPill
-                        key={pack}
-                        label={pack}
-                        active={packFilter === pack}
-                        onClick={() => setPackFilter(pack)}
+                {filteredInactiveAccounts.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-center text-sm text-zinc-500">
+                    No hay cuentas inactivas para este filtro.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+                    {filteredInactiveAccounts.map((account, index) => (
+                      <AccountCard
+                        key={account.id}
+                        account={account}
+                        index={index}
+                        totalPct={resolveDisplayTotalPct(
+                          account.numeroCuenta,
+                          persistedPerformance,
+                          liveStatus
+                        )}
                       />
                     ))}
                   </div>
-                ) : null}
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <h3 className="text-sm font-medium text-white">
-                      Cuentas activas · {filteredActiveAccounts.length}
-                    </h3>
-                  </div>
-
-                  {filteredActiveAccounts.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-center text-sm text-zinc-500">
-                      No hay cuentas activas para este filtro.
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-                      {filteredActiveAccounts.map((account, index) => (
-                        <AccountCard
-                          key={account.id}
-                          account={account}
-                          index={index}
-                          totalPct={resolveDisplayTotalPct(
-                            account.numeroCuenta,
-                            persistedPerformance,
-                            liveStatus
-                          )}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {showInactive && (
-                  <div>
-                    <div className="mb-3 flex items-center justify-between gap-3">
-                      <h3 className="text-sm font-medium text-white">
-                        Cuentas inactivas · {filteredInactiveAccounts.length}
-                      </h3>
-                    </div>
-
-                    {filteredInactiveAccounts.length === 0 ? (
-                      <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-center text-sm text-zinc-500">
-                        No hay cuentas inactivas para este filtro.
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-                        {filteredInactiveAccounts.map((account, index) => (
-                          <AccountCard
-                            key={account.id}
-                            account={account}
-                            index={index}
-                            totalPct={resolveDisplayTotalPct(
-                              account.numeroCuenta,
-                              persistedPerformance,
-                              liveStatus
-                            )}
-                          />
-                        ))}
-                      </div>
-                    )}
-                  </div>
                 )}
               </div>
-            </div>
+            ) : null}
           </div>
-        )}
+        ) : null}
+
+        {overlayAnimation && overlayStyle ? (
+          <div style={overlayStyle}>
+            <PresetCardBody preset={overlayAnimation.preset} />
+          </div>
+        ) : null}
       </section>
     </div>
   );
