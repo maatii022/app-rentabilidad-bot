@@ -796,9 +796,9 @@ export default function PresetsClient({
           </h2>
         </div>
 
-        <div className="relative mb-4 flex min-h-[72px] items-start justify-center">
+        <div className="relative mb-1 flex h-[26px] items-start justify-center">
   {!selectedPreset && viewMode === "overview" ? (
-    <div className="pointer-events-none hint-enter w-full max-w-[340px] px-4">
+    <div className="pointer-events-none hint-enter absolute left-1/2 top-[-8px] w-full max-w-[340px] -translate-x-1/2 px-4">
       <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] px-4 py-3 shadow-[0_16px_34px_rgba(0,0,0,0.24)] backdrop-blur-xl">
         <p className="text-center text-[10px] uppercase tracking-[0.16em] text-zinc-500">
           Detalle interactivo
@@ -823,10 +823,10 @@ export default function PresetsClient({
               {metrics.map((preset, index) => (
                 <button
                   key={preset.id}
-                  type="button"
-                  onClick={() => handleSelectPreset(preset.id)}
-                  className="preset-overview-pulse text-left"
-                  style={{ ["--pulse-delay" as string]: `${index * 0.35}s` }}
+  type="button"
+  onClick={() => handleSelectPreset(preset.id)}
+  className="preset-overview-pulse text-left transition-all duration-300 hover:-translate-y-[3px] hover:scale-[1.01] hover:brightness-105"
+  style={{ ["--pulse-delay" as string]: `${index * 0.35}s` }}
                 >
                   <PresetCard preset={preset} />
                 </button>
@@ -836,68 +836,68 @@ export default function PresetsClient({
         )}
 
         {(viewMode === "detail" || viewMode === "detail-exit") && selectedPreset && (
-          <div
-            className={`space-y-5 transition-all duration-300 ${
-              viewMode === "detail"
-                ? "translate-y-0 scale-100 opacity-100"
-                : "translate-y-4 scale-[0.985] opacity-0"
-            }`}
+  <div
+    className={`space-y-4 transition-all duration-300 ${
+      viewMode === "detail"
+        ? "translate-y-0 scale-100 opacity-100"
+        : "translate-y-4 scale-[0.985] opacity-0"
+    }`}
+  >
+    <div className="mx-auto flex w-full max-w-[760px] flex-col gap-3">
+      <PresetCard
+        preset={selectedPreset}
+        interactive
+        onBack={handleBack}
+        onMetricClick={handleMetricClick}
+      />
+
+      <div className="flex flex-col gap-3 rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.012))] p-3 shadow-[0_14px_30px_rgba(0,0,0,0.18)] md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-wrap gap-2">
+          <FilterPill
+            label="Todos los tipos"
+            active={tipoFilter === "todos"}
+            onClick={() => setTipoFilter("todos")}
+          />
+          <FilterPill
+            label="Prueba"
+            active={tipoFilter === "prueba"}
+            onClick={() => setTipoFilter("prueba")}
+          />
+          <FilterPill
+            label="Fondeada"
+            active={tipoFilter === "fondeada"}
+            onClick={() => setTipoFilter("fondeada")}
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <ActionButton
+            onClick={() => setShowInactive((prev) => !prev)}
+            variant="secondary"
           >
-            <div className="mx-auto max-w-[590px]">
-              <PresetCard
-                preset={selectedPreset}
-                interactive
-                onBack={handleBack}
-                onMetricClick={handleMetricClick}
-              />
-            </div>
+            {showInactive ? "Ocultar inactivas" : "Mostrar inactivas"}
+          </ActionButton>
+        </div>
+      </div>
 
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div className="flex flex-wrap gap-2">
-                <FilterPill
-                  label="Todos los tipos"
-                  active={tipoFilter === "todos"}
-                  onClick={() => setTipoFilter("todos")}
-                />
-                <FilterPill
-                  label="Prueba"
-                  active={tipoFilter === "prueba"}
-                  onClick={() => setTipoFilter("prueba")}
-                />
-                <FilterPill
-                  label="Fondeada"
-                  active={tipoFilter === "fondeada"}
-                  onClick={() => setTipoFilter("fondeada")}
-                />
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <ActionButton
-                  onClick={() => setShowInactive((prev) => !prev)}
-                  variant="secondary"
-                >
-                  {showInactive ? "Ocultar inactivas" : "Mostrar inactivas"}
-                </ActionButton>
-              </div>
-            </div>
-
-            {packMode && packOptions.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                <FilterPill
-                  label="Todos los packs"
-                  active={packFilter === "todos"}
-                  onClick={() => setPackFilter("todos")}
-                />
-                {packOptions.map((pack) => (
-                  <FilterPill
-                    key={pack}
-                    label={pack}
-                    active={packFilter === pack}
-                    onClick={() => setPackFilter(pack)}
-                  />
-                ))}
-              </div>
-            ) : null}
+      {packMode && packOptions.length > 0 ? (
+        <div className="flex flex-wrap gap-2 rounded-[20px] border border-white/10 bg-white/[0.02] p-3">
+          <FilterPill
+            label="Todos los packs"
+            active={packFilter === "todos"}
+            onClick={() => setPackFilter("todos")}
+          />
+          {packOptions.map((pack) => (
+            <FilterPill
+              key={pack}
+              label={pack}
+              active={packFilter === pack}
+              onClick={() => setPackFilter(pack)}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
 
             <div>
               <div className="mb-3 flex items-center justify-between gap-3">
