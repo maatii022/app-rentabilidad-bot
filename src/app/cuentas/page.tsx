@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type AccountRow = {
@@ -186,6 +185,51 @@ function getPctTone(value?: number | null) {
   };
 }
 
+function getInitialFilters() {
+  if (typeof window === "undefined") {
+    return {
+      preset: "todos",
+      tipo: "todos",
+      estado: "todos",
+      pack: "todos",
+      showInactive: false,
+    };
+  }
+
+  const params = new URLSearchParams(window.location.search);
+
+  return {
+    preset: params.get("preset") ?? "todos",
+    tipo: params.get("tipo") ?? "todos",
+    estado: params.get("estado") ?? "todos",
+    pack: params.get("pack") ?? "todos",
+    showInactive: params.get("showInactive") === "true",
+  };
+}
+
+function updateUrl(params: {
+  preset: string;
+  tipo: string;
+  estado: string;
+  pack: string;
+  showInactive: boolean;
+}) {
+  if (typeof window === "undefined") return;
+
+  const search = new URLSearchParams();
+
+  if (params.preset !== "todos") search.set("preset", params.preset);
+  if (params.tipo !== "todos") search.set("tipo", params.tipo);
+  if (params.estado !== "todos") search.set("estado", params.estado);
+  if (params.pack !== "todos") search.set("pack", params.pack);
+  if (params.showInactive) search.set("showInactive", "true");
+
+  const query = search.toString();
+  const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+
+  window.history.replaceState({}, "", nextUrl);
+}
+
 function FilterPill({
   label,
   active,
@@ -347,10 +391,6 @@ function AccountCard({
 }
 
 export default function CuentasPage() {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
   const [accounts, setAccounts] = useState<AccountCardItem[]>([]);
   const [persistedPerformance, setPersistedPerformance] =
     useState<PersistedPerformanceMap>({});
@@ -358,39 +398,35 @@ export default function CuentasPage() {
   const [loading, setLoading] = useState(true);
   const [loadingPct, setLoadingPct] = useState(true);
   const [error, setError] = useState("");
+  const [filtersReady, setFiltersReady] = useState(false);
 
-  const presetParam = searchParams.get("preset") ?? "todos";
-  const tipoParam = searchParams.get("tipo") ?? "todos";
-  const estadoParam = searchParams.get("estado") ?? "todos";
-  const packParam = searchParams.get("pack") ?? "todos";
-  const showInactiveParam = searchParams.get("showInactive") === "true";
-
-  const [presetFilter, setPresetFilter] = useState(presetParam);
-  const [tipoFilter, setTipoFilter] = useState(tipoParam);
-  const [estadoFilter, setEstadoFilter] = useState(estadoParam);
-  const [packFilter, setPackFilter] = useState(packParam);
-  const [showInactive, setShowInactive] = useState(showInactiveParam);
+  const [presetFilter, setPresetFilter] = useState("todos");
+  const [tipoFilter, setTipoFilter] = useState("todos");
+  const [estadoFilter, setEstadoFilter] = useState("todos");
+  const [packFilter, setPackFilter] = useState("todos");
+  const [showInactive, setShowInactive] = useState(false);
 
   useEffect(() => {
-    setPresetFilter(presetParam);
-    setTipoFilter(tipoParam);
-    setEstadoFilter(estadoParam);
-    setPackFilter(packParam);
-    setShowInactive(showInactiveParam);
-  }, [presetParam, tipoParam, estadoParam, packParam, showInactiveParam]);
+    const initial = getInitialFilters();
+    setPresetFilter(initial.preset);
+    setTipoFilter(initial.tipo);
+    setEstadoFilter(initial.estado);
+    setPackFilter(initial.pack);
+    setShowInactive(initial.showInactive);
+    setFiltersReady(true);
+  }, []);
 
   useEffect(() => {
-    const params = new URLSearchParams();
+    if (!filtersReady) return;
 
-    if (presetFilter !== "todos") params.set("preset", presetFilter);
-    if (tipoFilter !== "todos") params.set("tipo", tipoFilter);
-    if (estadoFilter !== "todos") params.set("estado", estadoFilter);
-    if (packFilter !== "todos") params.set("pack", packFilter);
-    if (showInactive) params.set("showInactive", "true");
-
-    const query = params.toString();
-    router.replace(query ? `${pathname}?${query}` : pathname);
-  }, [presetFilter, tipoFilter, estadoFilter, packFilter, showInactive, router, pathname]);
+    updateUrl({
+      preset: presetFilter,
+      tipo: tipoFilter,
+      estado: estadoFilter,
+      pack: packFilter,
+      showInactive,
+    });
+  }, [presetFilter, tipoFilter, estadoFilter, packFilter, showInactive, filtersReady]);
 
   useEffect(() => {
     async function cargarCuentas() {
