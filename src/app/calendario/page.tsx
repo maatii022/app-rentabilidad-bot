@@ -886,13 +886,6 @@ export default function CalendarioPage() {
         title="Trading Calendar"
         right={
           <div className="flex flex-wrap items-center gap-2">
-            <ActionButton
-              onClick={() => void cargarDatos(true)}
-              disabled={loading || reloading}
-              variant="secondary"
-            >
-              {reloading ? "Recargando..." : "Recargar"}
-            </ActionButton>
 
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-1 shadow-[0_12px_30px_rgba(255,255,255,0.03)]">
               <div className="flex gap-1">
