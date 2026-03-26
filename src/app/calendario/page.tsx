@@ -70,6 +70,7 @@ type CalendarDayData = {
     pnlUsd: number;
     pnlPct: number;
     redDay: boolean;
+    numeroTrades: number;
   }[];
   eventDetails: {
     id: number;
@@ -318,6 +319,35 @@ function SlotButton({
   );
 }
 
+function ActionButton({
+  children,
+  onClick,
+  disabled,
+  variant = "secondary",
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+  variant?: "primary" | "secondary";
+}) {
+  const styles = {
+    primary:
+      "border border-white/10 bg-white text-black shadow-[0_12px_26px_rgba(255,255,255,0.08)] hover:bg-zinc-200",
+    secondary:
+      "border border-white/10 bg-white/[0.04] text-white shadow-[0_10px_24px_rgba(255,255,255,0.03)] hover:bg-white/[0.08]",
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${styles[variant]}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 function getEventPillClasses(kind: CalendarEventItem["kind"]) {
   if (kind === "perdida") return "border-amber-300/20 bg-amber-300/[0.10] text-amber-200 shadow-[0_8px_18px_rgba(251,191,36,0.08)]";
   if (kind === "fondeada") return "border-violet-300/20 bg-violet-300/[0.10] text-violet-200 shadow-[0_8px_18px_rgba(167,139,250,0.08)]";
@@ -337,6 +367,14 @@ function getToneByValue(value: number) {
   return "border-white/10 bg-white/[0.03] shadow-[0_10px_24px_rgba(255,255,255,0.03)]";
 }
 
+function hasVisibleResult(result: CalendarApiResultItem) {
+  return (
+    Number(result.numero_trades || 0) > 0 ||
+    Number(result.pnl_usd || 0) !== 0 ||
+    Number(result.pnl_pct || 0) !== 0
+  );
+}
+
 export default function CalendarioPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -344,6 +382,7 @@ export default function CalendarioPage() {
   const [presets, setPresets] = useState<PresetOption[]>([]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [packs, setPacks] = useState<PackFilterItem[]>([]);
+  const [reloading, setReloading] = useState(false);
 
   const [viewMode, setViewMode] = useState<TradingMode>("pnl");
   const [selectedCuentaTipo, setSelectedCuentaTipo] =
@@ -361,8 +400,13 @@ export default function CalendarioPage() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
 
-  async function cargarDatos() {
-    setLoading(true);
+  async function cargarDatos(showReloadState = false) {
+    if (showReloadState) {
+      setReloading(true);
+    } else {
+      setLoading(true);
+    }
+
     setError("");
 
     const year = currentMonth.getFullYear();
@@ -422,24 +466,28 @@ export default function CalendarioPage() {
     if (presetsResponse.error) {
       setError(presetsResponse.error.message);
       setLoading(false);
+      setReloading(false);
       return;
     }
 
     if (accountsResponse.error) {
       setError(accountsResponse.error.message);
       setLoading(false);
+      setReloading(false);
       return;
     }
 
     if (packSlotsResponse.error) {
       setError(packSlotsResponse.error.message);
       setLoading(false);
+      setReloading(false);
       return;
     }
 
     if (!calendarResponse.ok) {
       setError(calendarResponse.error || "Error cargando calendar-data");
       setLoading(false);
+      setReloading(false);
       return;
     }
 
@@ -477,6 +525,7 @@ export default function CalendarioPage() {
     setAccounts(mappedAccounts);
     setPacks(mappedPacks);
     setLoading(false);
+    setReloading(false);
   }
 
   useEffect(() => {
@@ -658,8 +707,8 @@ export default function CalendarioPage() {
     const resultMap = new Map<string, CalendarDayData>();
 
     calendarDays.forEach((day) => {
-      const filteredResults = (day.results || []).filter((result) =>
-        allowedAccountIds.has(result.account_id)
+      const filteredResults = (day.results || []).filter(
+        (result) => allowedAccountIds.has(result.account_id) && hasVisibleResult(result)
       );
 
       const importantItems = (day.events?.items || []).filter(
@@ -679,18 +728,19 @@ export default function CalendarioPage() {
           pnlUsd: Number(result.pnl_usd || 0),
           pnlPct: Number(result.pnl_pct || 0),
           redDay: !!result.red_day,
+          numeroTrades: Number(result.numero_trades || 0),
         }))
         .sort((a, b) => a.alias.localeCompare(b.alias));
 
       const eventDetails = importantItems
-  .map((event) => ({
-    id: event.id,
-    tipo: buildEventLabel(event.tipo),
-    descripcion: event.descripcion ?? "",
-    alias: event.alias ?? "-",
-    numeroCuenta: event.numero_cuenta ?? "-",
-  }))
-  .sort((a, b) => a.tipo.localeCompare(b.tipo));
+        .map((event) => ({
+          id: event.id,
+          tipo: buildEventLabel(event.tipo),
+          descripcion: event.descripcion ?? "",
+          alias: event.alias ?? "-",
+          numeroCuenta: event.numero_cuenta ?? "-",
+        }))
+        .sort((a, b) => a.tipo.localeCompare(b.tipo));
 
       const grouped = new Map<string, CalendarEventItem>();
 
@@ -836,6 +886,14 @@ export default function CalendarioPage() {
         title="Trading Calendar"
         right={
           <div className="flex flex-wrap items-center gap-2">
+            <ActionButton
+              onClick={() => void cargarDatos(true)}
+              disabled={loading || reloading}
+              variant="secondary"
+            >
+              {reloading ? "Recargando..." : "Recargar"}
+            </ActionButton>
+
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-1 shadow-[0_12px_30px_rgba(255,255,255,0.03)]">
               <div className="flex gap-1">
                 <SegmentedButton
