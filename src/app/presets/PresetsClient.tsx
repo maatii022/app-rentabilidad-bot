@@ -700,8 +700,35 @@ export default function PresetsClient({
   }
 
   return (
-    <div className="space-y-5 text-white">
+  <div className="space-y-5 text-white">
+    {!selectedPreset && viewMode === "overview" ? (
+      <div className="pointer-events-none fixed left-1/2 top-3 z-[90] w-full max-w-[360px] -translate-x-1/2 px-4 hint-floating-in">
+        <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.10),rgba(255,255,255,0.035))] px-4 py-3 shadow-[0_18px_40px_rgba(0,0,0,0.28)] backdrop-blur-xl">
+          <p className="text-center text-[10px] uppercase tracking-[0.16em] text-zinc-500">
+            Detalle interactivo
+          </p>
+          <p className="mt-2 text-center text-sm leading-6 text-zinc-200">
+            Pulsa un preset para ver todas sus cuentas y activar sus filtros.
+          </p>
+        </div>
+      </div>
+    ) : null}
       <style jsx global>{`
+      @keyframes floatingHintIn {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -110px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.hint-floating-in {
+  animation: floatingHintIn 520ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
+}
+
         @keyframes presetCardPulse {
           0%, 100% {
             transform: scale(1);
@@ -795,21 +822,6 @@ export default function PresetsClient({
             {selectedPreset ? `Preset seleccionado · ${selectedPreset.nombre}` : "Presets activos"}
           </h2>
         </div>
-
-        <div className="relative mb-1 flex h-[26px] items-start justify-center">
-  {!selectedPreset && viewMode === "overview" ? (
-    <div className="pointer-events-none hint-enter absolute left-1/2 top-[-8px] w-full max-w-[340px] -translate-x-1/2 px-4">
-      <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] px-4 py-3 shadow-[0_16px_34px_rgba(0,0,0,0.24)] backdrop-blur-xl">
-        <p className="text-center text-[10px] uppercase tracking-[0.16em] text-zinc-500">
-          Detalle interactivo
-        </p>
-        <p className="mt-2 text-center text-sm leading-6 text-zinc-200">
-          Pulsa un preset para ver todas sus cuentas y activar sus filtros.
-        </p>
-      </div>
-    </div>
-  ) : null}
-</div>
 
         {(viewMode === "overview" || viewMode === "overview-exit") && (
           <div
