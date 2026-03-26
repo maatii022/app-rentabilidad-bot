@@ -337,9 +337,17 @@ function resolveDisplayDayPct(
   const live = liveStatus[numeroCuenta];
   const persisted = persistedPerformance[numeroCuenta];
 
-  if (isValidNumber(live?.pnl_hoy_pct)) return live!.pnl_hoy_pct!;
-  if (isValidNumber(live?.pnl_pct_actual)) return live!.pnl_pct_actual!;
-  if (isValidNumber(persisted?.today_pct)) return persisted!.today_pct!;
+  if (isValidNumber(live?.pnl_hoy_pct)) {
+    return live!.pnl_hoy_pct!;
+  }
+
+  if (isValidNumber(live?.pnl_pct_actual)) {
+    return live!.pnl_pct_actual!;
+  }
+
+  if (isValidNumber(persisted?.today_pct)) {
+    return persisted!.today_pct!;
+  }
 
   return null;
 }
@@ -356,12 +364,12 @@ function resolveDisplayTotalPct(
     return live!.profit_total_pct_current!;
   }
 
-  if (isValidNumber(persisted?.total_pct)) {
-    return persisted!.total_pct!;
-  }
-
   if (isValidNumber(live?.profit_total_pct)) {
     return live!.profit_total_pct!;
+  }
+
+  if (isValidNumber(persisted?.total_pct)) {
+    return persisted!.total_pct!;
   }
 
   return null;
