@@ -102,15 +102,21 @@ function MetricButton({
   return (
     <button
       type="button"
-      className="group cursor-pointer rounded-xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.015))] px-3 py-3 shadow-[0_10px_24px_rgba(0,0,0,0.16)] transition-all duration-200 hover:-translate-y-[1px] hover:border-white/20 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.022))] hover:shadow-[0_16px_30px_rgba(0,0,0,0.22)] active:translate-y-0"
+      className="group relative cursor-pointer overflow-hidden rounded-[18px] border border-white/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.09),rgba(255,255,255,0.035))] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),inset_0_-1px_0_rgba(255,255,255,0.03),0_14px_30px_rgba(0,0,0,0.24)] backdrop-blur-xl transition-all duration-200 hover:-translate-y-[2px] hover:border-white/24 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.05))] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.18),inset_0_-1px_0_rgba(255,255,255,0.04),0_18px_34px_rgba(0,0,0,0.30)] active:translate-y-0 active:shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_10px_20px_rgba(0,0,0,0.22)]"
       title="Más adelante abrirá la página de cuentas con este filtro"
     >
-      <p className="text-center text-[10px] uppercase tracking-[0.14em] text-zinc-500 transition-colors duration-200 group-hover:text-zinc-400">
-        {label}
-      </p>
-      <p className="mt-2 text-center text-xl font-semibold leading-none text-white">
-        {value}
-      </p>
+      <span className="pointer-events-none absolute inset-x-3 top-0 h-px bg-white/20 opacity-80" />
+      <span className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.12),transparent_58%)] opacity-70 transition-opacity duration-200 group-hover:opacity-100" />
+      <span className="pointer-events-none absolute -left-10 top-0 h-full w-16 rotate-[18deg] bg-white/6 blur-md transition-all duration-300 group-hover:left-[110%]" />
+
+      <div className="relative z-10">
+        <p className="text-center text-[10px] uppercase tracking-[0.14em] text-zinc-400 transition-colors duration-200 group-hover:text-zinc-300">
+          {label}
+        </p>
+        <p className="mt-2 text-center text-xl font-semibold leading-none text-white">
+          {value}
+        </p>
+      </div>
     </button>
   );
 }
@@ -150,7 +156,7 @@ function PresetCard({ preset }: { preset: PresetMetric }) {
       </div>
 
       <div className="p-4">
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
           <MetricButton label="Packs" value={preset.packs} />
           <MetricButton label="Activas" value={preset.cuentasActivas} />
           <MetricButton label="Totales" value={preset.cuentasTotales} />
