@@ -28,7 +28,6 @@ type DailyResult = {
 type PresetMetric = {
   id: number;
   nombre: string;
-  descripcion: string | null;
   activo: boolean;
   packs: number;
   cuentas: number;
@@ -111,7 +110,6 @@ function buildPresetMetrics(
     return {
       id: preset.id,
       nombre: preset.nombre,
-      descripcion: preset.descripcion,
       activo: Boolean(preset.activo),
       packs: packsByPreset.get(preset.id) ?? 0,
       cuentas: presetAccounts.length,
@@ -123,24 +121,7 @@ function buildPresetMetrics(
   });
 }
 
-function SectionCard({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.06),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
-      <div className="mb-4">
-        <h2 className="text-sm font-medium text-white">{title}</h2>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function MetricTile({
+function MetricChip({
   label,
   value,
 }: {
@@ -148,30 +129,37 @@ function MetricTile({
   value: number | string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.025] px-3 py-3 shadow-[0_10px_24px_rgba(255,255,255,0.025)]">
+    <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 shadow-[0_10px_24px_rgba(0,0,0,0.16)]">
       <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
         {label}
       </p>
-      <p className="mt-2 text-xl font-semibold leading-none text-white">
+      <p className="mt-1.5 text-lg font-semibold leading-none text-white">
         {value}
       </p>
     </div>
   );
 }
 
-function RatioBlock({
+function WinratePanel({
   label,
   value,
+  accent = "blue",
 }: {
   label: string;
   value: number | null;
+  accent?: "blue" | "violet";
 }) {
+  const accentClass =
+    accent === "violet"
+      ? "border-violet-400/15 bg-[linear-gradient(180deg,rgba(167,139,250,0.08),rgba(167,139,250,0.02))] shadow-[0_14px_30px_rgba(167,139,250,0.06)]"
+      : "border-sky-400/15 bg-[linear-gradient(180deg,rgba(56,189,248,0.08),rgba(56,189,248,0.02))] shadow-[0_14px_30px_rgba(56,189,248,0.06)]";
+
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 shadow-[0_10px_24px_rgba(0,0,0,0.16)]">
-      <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
+    <div className={`rounded-2xl border px-4 py-4 ${accentClass}`}>
+      <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
         {label}
       </p>
-      <p className="mt-2 text-2xl font-semibold leading-none text-white">
+      <p className="mt-3 text-3xl font-semibold leading-none text-white">
         {formatPercent(value)}
       </p>
     </div>
@@ -180,40 +168,40 @@ function RatioBlock({
 
 function PresetCard({ preset }: { preset: PresetMetric }) {
   return (
-    <article className="overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))] shadow-[0_14px_30px_rgba(0,0,0,0.18)] transition-all duration-300 hover:shadow-[0_18px_36px_rgba(0,0,0,0.22)]">
+    <article className="overflow-hidden rounded-[24px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.05),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.022),rgba(255,255,255,0.012))] shadow-[0_18px_38px_rgba(0,0,0,0.20)] transition-all duration-300 hover:shadow-[0_22px_44px_rgba(0,0,0,0.24)]">
       <div className="border-b border-white/8 px-4 py-4">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="truncate text-xl font-semibold tracking-tight text-white">
-                {preset.nombre}
-              </h3>
-
-              <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-300 shadow-[0_8px_18px_rgba(255,255,255,0.03)]">
-                Activo
-              </span>
-            </div>
-
-            <p className="mt-2 text-sm text-zinc-500">
-              {preset.descripcion?.trim()
-                ? preset.descripcion
-                : "Preset activo sin descripción adicional."}
+            <p className="truncate text-xl font-semibold tracking-tight text-white">
+              {preset.nombre}
             </p>
           </div>
+
+          <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-300 shadow-[0_8px_18px_rgba(255,255,255,0.03)]">
+            Activo
+          </span>
         </div>
       </div>
 
       <div className="p-4">
-        <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
-          <MetricTile label="Packs" value={preset.packs} />
-          <MetricTile label="Cuentas" value={preset.cuentas} />
-          <MetricTile label="Fondeadas" value={preset.fondeadas} />
-          <MetricTile label="Perdidas" value={preset.perdidas} />
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          <MetricChip label="Packs" value={preset.packs} />
+          <MetricChip label="Cuentas" value={preset.cuentas} />
+          <MetricChip label="Fondeadas" value={preset.fondeadas} />
+          <MetricChip label="Perdidas" value={preset.perdidas} />
         </div>
 
-        <div className="mt-3 grid grid-cols-1 gap-2.5 xl:grid-cols-2">
-          <RatioBlock label="Trades winrate" value={preset.tradesWinrate} />
-          <RatioBlock label="Funded winrate" value={preset.fundedWinrate} />
+        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <WinratePanel
+            label="Trades winrate"
+            value={preset.tradesWinrate}
+            accent="blue"
+          />
+          <WinratePanel
+            label="Funded winrate"
+            value={preset.fundedWinrate}
+            accent="violet"
+          />
         </div>
       </div>
     </article>
@@ -233,13 +221,9 @@ export default async function PresetsPage() {
       .eq("activo", true)
       .order("nombre", { ascending: true }),
 
-    supabase
-      .from("packs")
-      .select("id, preset_id"),
+    supabase.from("packs").select("id, preset_id"),
 
-    supabase
-      .from("accounts")
-      .select("id, preset_id, estado"),
+    supabase.from("accounts").select("id, preset_id, estado"),
 
     supabase
       .from("daily_results")
@@ -279,7 +263,7 @@ export default async function PresetsPage() {
 
   return (
     <div className="space-y-5 text-white">
-      <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.06),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
+      <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
             <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">
@@ -288,9 +272,6 @@ export default async function PresetsPage() {
             <h1 className="mt-2 text-4xl font-semibold tracking-tight text-white">
               Presets
             </h1>
-            <p className="mt-2 text-sm text-zinc-400">
-              Vista consolidada de presets activos y sus métricas principales.
-            </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -301,19 +282,23 @@ export default async function PresetsPage() {
         </div>
       </section>
 
-      <SectionCard title="Presets activos">
+      <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.06),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-sm font-medium text-white">Presets activos</h2>
+        </div>
+
         {metrics.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-center text-sm text-zinc-500">
             No hay presets activos para mostrar.
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             {metrics.map((preset) => (
               <PresetCard key={preset.id} preset={preset} />
             ))}
           </div>
         )}
-      </SectionCard>
+      </section>
     </div>
   );
 }
