@@ -43,91 +43,6 @@ function formatPercent(value: number | null) {
   return `${value.toFixed(2)}%`;
 }
 
-function getStatusPillClass(activo: boolean) {
-  if (activo) {
-    return "border-emerald-300/20 bg-emerald-300/[0.10] text-emerald-200 shadow-[0_10px_20px_rgba(16,185,129,0.08)]";
-  }
-
-  return "border-white/10 bg-white/[0.05] text-zinc-400 shadow-[0_10px_20px_rgba(255,255,255,0.03)]";
-}
-
-function getMetricTone(
-  tone: "neutral" | "blue" | "green" | "violet" | "red" | "amber"
-) {
-  const classes = {
-    neutral:
-      "border-white/10 bg-white/[0.03] shadow-[0_12px_28px_rgba(255,255,255,0.03)]",
-    blue:
-      "border-sky-400/20 bg-sky-400/[0.08] shadow-[0_14px_30px_rgba(56,189,248,0.08)]",
-    green:
-      "border-emerald-400/20 bg-emerald-400/[0.08] shadow-[0_14px_30px_rgba(16,185,129,0.08)]",
-    violet:
-      "border-violet-400/20 bg-violet-400/[0.08] shadow-[0_14px_30px_rgba(167,139,250,0.08)]",
-    red:
-      "border-rose-400/20 bg-rose-400/[0.08] shadow-[0_14px_30px_rgba(244,63,94,0.08)]",
-    amber:
-      "border-amber-300/20 bg-amber-300/[0.08] shadow-[0_14px_30px_rgba(251,191,36,0.08)]",
-  };
-
-  return classes[tone];
-}
-
-function SectionCard({
-  title,
-  children,
-  right,
-}: {
-  title: string;
-  children: React.ReactNode;
-  right?: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
-      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <h2 className="text-sm font-medium text-white">{title}</h2>
-        {right ? <div className="flex flex-wrap gap-2">{right}</div> : null}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  tone = "neutral",
-}: {
-  label: string;
-  value: number | string;
-  tone?: "neutral" | "blue" | "green" | "violet" | "red" | "amber";
-}) {
-  return (
-    <div className={`rounded-2xl border p-3 ${getMetricTone(tone)}`}>
-      <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-400">{label}</p>
-      <p className="mt-2 text-2xl font-semibold leading-none text-white">{value}</p>
-    </div>
-  );
-}
-
-function RatioCard({
-  label,
-  value,
-  tone = "neutral",
-}: {
-  label: string;
-  value: number | null;
-  tone?: "neutral" | "blue" | "green" | "violet" | "red" | "amber";
-}) {
-  return (
-    <div className={`rounded-2xl border p-4 ${getMetricTone(tone)}`}>
-      <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">{label}</p>
-      <p className="mt-2 text-3xl font-semibold leading-none text-white">
-        {formatPercent(value)}
-      </p>
-    </div>
-  );
-}
-
 function normalizeEstado(value: string | null | undefined) {
   return String(value || "").trim().toLowerCase();
 }
@@ -163,18 +78,18 @@ function buildPresetMetrics(
     if (typeof presetId !== "number") continue;
 
     const current = tradesByPreset.get(presetId) ?? { winning: 0, losing: 0 };
-
     current.winning += Number(result.winning_trades ?? 0);
     current.losing += Number(result.losing_trades ?? 0);
-
     tradesByPreset.set(presetId, current);
   }
 
   return presets.map((preset) => {
     const presetAccounts = accountsByPreset.get(preset.id) ?? [];
+
     const fondeadas = presetAccounts.filter(
       (account) => normalizeEstado(account.estado) === "fondeada"
     ).length;
+
     const perdidas = presetAccounts.filter(
       (account) => normalizeEstado(account.estado) === "perdida"
     ).length;
@@ -189,7 +104,9 @@ function buildPresetMetrics(
 
     const fundedBase = fondeadas + perdidas;
     const fundedWinrate =
-      fundedBase > 0 ? (fondeadas / fundedBase) * 100 : null;
+      fundedBase > 0
+        ? (fondeadas / fundedBase) * 100
+        : null;
 
     return {
       id: preset.id,
@@ -204,6 +121,103 @@ function buildPresetMetrics(
       fundedWinrate,
     };
   });
+}
+
+function SectionCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.06),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
+      <div className="mb-4">
+        <h2 className="text-sm font-medium text-white">{title}</h2>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function MetricTile({
+  label,
+  value,
+}: {
+  label: string;
+  value: number | string;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.025] px-3 py-3 shadow-[0_10px_24px_rgba(255,255,255,0.025)]">
+      <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
+        {label}
+      </p>
+      <p className="mt-2 text-xl font-semibold leading-none text-white">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function RatioBlock({
+  label,
+  value,
+}: {
+  label: string;
+  value: number | null;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 shadow-[0_10px_24px_rgba(0,0,0,0.16)]">
+      <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-semibold leading-none text-white">
+        {formatPercent(value)}
+      </p>
+    </div>
+  );
+}
+
+function PresetCard({ preset }: { preset: PresetMetric }) {
+  return (
+    <article className="overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))] shadow-[0_14px_30px_rgba(0,0,0,0.18)] transition-all duration-300 hover:shadow-[0_18px_36px_rgba(0,0,0,0.22)]">
+      <div className="border-b border-white/8 px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="truncate text-xl font-semibold tracking-tight text-white">
+                {preset.nombre}
+              </h3>
+
+              <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-300 shadow-[0_8px_18px_rgba(255,255,255,0.03)]">
+                Activo
+              </span>
+            </div>
+
+            <p className="mt-2 text-sm text-zinc-500">
+              {preset.descripcion?.trim()
+                ? preset.descripcion
+                : "Preset activo sin descripción adicional."}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="p-4">
+        <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
+          <MetricTile label="Packs" value={preset.packs} />
+          <MetricTile label="Cuentas" value={preset.cuentas} />
+          <MetricTile label="Fondeadas" value={preset.fondeadas} />
+          <MetricTile label="Perdidas" value={preset.perdidas} />
+        </div>
+
+        <div className="mt-3 grid grid-cols-1 gap-2.5 xl:grid-cols-2">
+          <RatioBlock label="Trades winrate" value={preset.tradesWinrate} />
+          <RatioBlock label="Funded winrate" value={preset.fundedWinrate} />
+        </div>
+      </div>
+    </article>
+  );
 }
 
 export default async function PresetsPage() {
@@ -263,28 +277,10 @@ export default async function PresetsPage() {
 
   const metrics = buildPresetMetrics(presets, packs, accounts, dailyResults);
 
-  const resumen = metrics.reduce(
-    (acc, item) => {
-      acc.presets += 1;
-      acc.packs += item.packs;
-      acc.cuentas += item.cuentas;
-      acc.fondeadas += item.fondeadas;
-      acc.perdidas += item.perdidas;
-      return acc;
-    },
-    {
-      presets: 0,
-      packs: 0,
-      cuentas: 0,
-      fondeadas: 0,
-      perdidas: 0,
-    }
-  );
-
   return (
     <div className="space-y-5 text-white">
-      <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+      <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.06),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">
             <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">
               App rentabilidad bot
@@ -293,23 +289,15 @@ export default async function PresetsPage() {
               Presets
             </h1>
             <p className="mt-2 text-sm text-zinc-400">
-              Vista consolidada de presets activos, estructura operativa y ratios de rendimiento.
+              Vista consolidada de presets activos y sus métricas principales.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
             <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-zinc-300 shadow-[0_10px_24px_rgba(255,255,255,0.03)]">
-              Solo presets activos
+              {metrics.length} preset{metrics.length === 1 ? "" : "s"} activo{metrics.length === 1 ? "" : "s"}
             </span>
           </div>
-        </div>
-
-        <div className="mt-6 grid grid-cols-2 gap-2.5 xl:grid-cols-5">
-          <StatCard label="Presets" value={resumen.presets} tone="blue" />
-          <StatCard label="Packs" value={resumen.packs} tone="neutral" />
-          <StatCard label="Cuentas" value={resumen.cuentas} tone="green" />
-          <StatCard label="Fondeadas" value={resumen.fondeadas} tone="violet" />
-          <StatCard label="Perdidas" value={resumen.perdidas} tone="red" />
         </div>
       </section>
 
@@ -321,59 +309,7 @@ export default async function PresetsPage() {
         ) : (
           <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
             {metrics.map((preset) => (
-              <article
-                key={preset.id}
-                className="overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(255,255,255,0.01))] shadow-[0_14px_30px_rgba(0,0,0,0.18)] transition-all duration-300 hover:shadow-[0_18px_38px_rgba(0,0,0,0.20)]"
-              >
-                <div className="border-b border-white/8 px-4 py-4">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h2 className="text-xl font-semibold text-white">
-                          {preset.nombre}
-                        </h2>
-
-                        <span
-                          className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] ${getStatusPillClass(
-                            preset.activo
-                          )}`}
-                        >
-                          {preset.activo ? "Activo" : "Inactivo"}
-                        </span>
-                      </div>
-
-                      <p className="mt-2 text-sm text-zinc-400">
-                        {preset.descripcion?.trim()
-                          ? preset.descripcion
-                          : "Preset activo sin descripción adicional."}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="p-4">
-                  <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-4">
-                    <StatCard label="Packs" value={preset.packs} tone="blue" />
-                    <StatCard label="Cuentas" value={preset.cuentas} tone="green" />
-                    <StatCard label="Fondeadas" value={preset.fondeadas} tone="violet" />
-                    <StatCard label="Perdidas" value={preset.perdidas} tone="red" />
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-2">
-                    <RatioCard
-                      label="Trades winrate"
-                      value={preset.tradesWinrate}
-                      tone="amber"
-                    />
-
-                    <RatioCard
-                      label="Funded winrate"
-                      value={preset.fundedWinrate}
-                      tone="neutral"
-                    />
-                  </div>
-                </div>
-              </article>
+              <PresetCard key={preset.id} preset={preset} />
             ))}
           </div>
         )}
