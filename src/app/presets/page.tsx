@@ -19,8 +19,7 @@ type Account = {
 
 type DailyResult = {
   account_id: number;
-  winning_trades: number | null;
-  losing_trades: number | null;
+  pnl_usd: number | null;
 };
 
 type PresetMetric = {
@@ -69,16 +68,22 @@ function buildPresetMetrics(
     presetByAccount.set(account.id, account.preset_id);
   }
 
-  const tradesByPreset = new Map<number, { winning: number; losing: number }>();
+  const sessionByPreset = new Map<number, { winners: number; losers: number }>();
 
   for (const result of dailyResults) {
     const presetId = presetByAccount.get(result.account_id);
     if (typeof presetId !== "number") continue;
 
-    const current = tradesByPreset.get(presetId) ?? { winning: 0, losing: 0 };
-    current.winning += Number(result.winning_trades ?? 0);
-    current.losing += Number(result.losing_trades ?? 0);
-    tradesByPreset.set(presetId, current);
+    const pnl = Number(result.pnl_usd ?? 0);
+    const current = sessionByPreset.get(presetId) ?? { winners: 0, losers: 0 };
+
+    if (pnl > 0) {
+      current.winners += 1;
+    } else if (pnl < 0) {
+      current.losers += 1;
+    }
+
+    sessionByPreset.set(presetId, current);
   }
 
   return presets.map((preset) => {
@@ -96,12 +101,12 @@ function buildPresetMetrics(
       (account) => normalizeEstado(account.estado) === "perdida"
     ).length;
 
-    const tradeTotals = tradesByPreset.get(preset.id) ?? { winning: 0, losing: 0 };
-    const totalResolvedTrades = tradeTotals.winning + tradeTotals.losing;
+    const sessionTotals = sessionByPreset.get(preset.id) ?? { winners: 0, losers: 0 };
+    const resolvedSessions = sessionTotals.winners + sessionTotals.losers;
 
     const tradesWinrate =
-      totalResolvedTrades > 0
-        ? (tradeTotals.winning / totalResolvedTrades) * 100
+      resolvedSessions > 0
+        ? (sessionTotals.winners / resolvedSessions) * 100
         : null;
 
     const fundedBase = fondeadas + perdidas;
@@ -125,34 +130,68 @@ function buildPresetMetrics(
   });
 }
 
-function StatPill({
+function MetricButton({
   label,
   value,
+  tone = "neutral",
 }: {
   label: string;
   value: number | string;
+  tone?: "neutral" | "blue" | "green" | "violet" | "red";
 }) {
+  const toneClasses = {
+    neutral:
+      "border-white/10 bg-white/[0.025] hover:border-white/20 hover:bg-white/[0.045]",
+    blue:
+      "border-sky-400/12 bg-sky-400/[0.045] hover:border-sky-300/22 hover:bg-sky-400/[0.07]",
+    green:
+      "border-emerald-400/12 bg-emerald-400/[0.045] hover:border-emerald-300/22 hover:bg-emerald-400/[0.07]",
+    violet:
+      "border-violet-400/12 bg-violet-400/[0.045] hover:border-violet-300/22 hover:bg-violet-400/[0.07]",
+    red:
+      "border-rose-400/12 bg-rose-400/[0.045] hover:border-rose-300/22 hover:bg-rose-400/[0.07]",
+  };
+
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.025] px-3 py-3 shadow-[0_10px_24px_rgba(255,255,255,0.025)]">
-      <p className="text-center text-[10px] uppercase tracking-[0.14em] text-zinc-500">
-        {label}
-      </p>
-      <p className="mt-2 text-center text-xl font-semibold leading-none text-white">
-        {value}
-      </p>
-    </div>
+    <button
+      type="button"
+      className={`group rounded-xl border px-3 py-3 shadow-[0_10px_24px_rgba(0,0,0,0.14)] transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_14px_30px_rgba(0,0,0,0.18)] ${toneClasses[tone]}`}
+      title="Más adelante abrirá la página de cuentas con este filtro"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1">
+          <p className="text-center text-[10px] uppercase tracking-[0.14em] text-zinc-500 transition-colors duration-200 group-hover:text-zinc-400">
+            {label}
+          </p>
+          <p className="mt-2 text-center text-xl font-semibold leading-none text-white">
+            {value}
+          </p>
+        </div>
+
+        <span className="mt-0.5 text-[11px] text-zinc-600 transition-colors duration-200 group-hover:text-zinc-400">
+          ↗
+        </span>
+      </div>
+    </button>
   );
 }
 
 function WinratePanel({
   label,
   value,
+  tone = "blue",
 }: {
   label: string;
   value: number | null;
+  tone?: "blue" | "violet";
 }) {
+  const toneClasses =
+    tone === "violet"
+      ? "border-violet-400/16 bg-[linear-gradient(180deg,rgba(167,139,250,0.10),rgba(167,139,250,0.03))] shadow-[0_14px_30px_rgba(167,139,250,0.06)]"
+      : "border-sky-400/16 bg-[linear-gradient(180deg,rgba(56,189,248,0.10),rgba(56,189,248,0.03))] shadow-[0_14px_30px_rgba(56,189,248,0.06)]";
+
   return (
-    <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.012))] px-4 py-4 shadow-[0_12px_28px_rgba(0,0,0,0.18)]">
+    <div className={`rounded-2xl border px-4 py-4 ${toneClasses}`}>
       <p className="text-center text-[10px] uppercase tracking-[0.16em] text-zinc-500">
         {label}
       </p>
@@ -165,14 +204,14 @@ function WinratePanel({
 
 function PresetCard({ preset }: { preset: PresetMetric }) {
   return (
-    <article className="overflow-hidden rounded-[24px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.04),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.022),rgba(255,255,255,0.012))] shadow-[0_18px_38px_rgba(0,0,0,0.20)] transition-all duration-300 hover:shadow-[0_22px_44px_rgba(0,0,0,0.24)]">
+    <article className="overflow-hidden rounded-[24px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.05),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.022),rgba(255,255,255,0.012))] shadow-[0_18px_38px_rgba(0,0,0,0.20)] transition-all duration-300 hover:shadow-[0_22px_44px_rgba(0,0,0,0.24)]">
       <div className="border-b border-white/8 px-4 py-4">
         <div className="flex items-center justify-between gap-3">
           <p className="truncate text-xl font-semibold tracking-tight text-white">
             {preset.nombre}
           </p>
 
-          <span className="rounded-full border border-sky-300/15 bg-sky-300/[0.08] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-sky-100 shadow-[0_8px_18px_rgba(56,189,248,0.06)]">
+          <span className="rounded-full border border-sky-300/18 bg-sky-300/[0.10] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-sky-100 shadow-[0_8px_18px_rgba(56,189,248,0.06)]">
             Activo
           </span>
         </div>
@@ -180,16 +219,16 @@ function PresetCard({ preset }: { preset: PresetMetric }) {
 
       <div className="p-4">
         <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
-          <StatPill label="Packs" value={preset.packs} />
-          <StatPill label="Activas" value={preset.cuentasActivas} />
-          <StatPill label="Totales" value={preset.cuentasTotales} />
-          <StatPill label="Fondeadas" value={preset.fondeadas} />
-          <StatPill label="Perdidas" value={preset.perdidas} />
+          <MetricButton label="Packs" value={preset.packs} tone="blue" />
+          <MetricButton label="Activas" value={preset.cuentasActivas} tone="green" />
+          <MetricButton label="Totales" value={preset.cuentasTotales} tone="neutral" />
+          <MetricButton label="Fondeadas" value={preset.fondeadas} tone="violet" />
+          <MetricButton label="Perdidas" value={preset.perdidas} tone="red" />
         </div>
 
         <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <WinratePanel label="Trades winrate" value={preset.tradesWinrate} />
-          <WinratePanel label="Funded winrate" value={preset.fundedWinrate} />
+          <WinratePanel label="Trades winrate" value={preset.tradesWinrate} tone="blue" />
+          <WinratePanel label="Funded winrate" value={preset.fundedWinrate} tone="violet" />
         </div>
       </div>
     </article>
@@ -215,7 +254,7 @@ export default async function PresetsPage() {
 
     supabase
       .from("daily_results")
-      .select("account_id, winning_trades, losing_trades"),
+      .select("account_id, pnl_usd"),
   ]);
 
   const error =
