@@ -820,7 +820,7 @@ export default function PresetsClient({
               App rentabilidad bot
             </p>
             <h1 className="mt-2 text-4xl font-semibold tracking-tight text-white">
-              Presets
+              Estadísticas
             </h1>
           </div>
 
@@ -835,7 +835,7 @@ export default function PresetsClient({
       <section className="relative rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.05),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-sm font-medium text-white">
-            {selectedPreset ? `Preset seleccionado · ${selectedPreset.nombre}` : "Presets activos"}
+            {selectedPreset ? `Preset seleccionado · ${selectedPreset.nombre}` : "Resumen por preset"}
           </h2>
         </div>
 

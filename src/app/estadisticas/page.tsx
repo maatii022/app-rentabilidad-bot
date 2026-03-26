@@ -38,7 +38,7 @@ export type AccountRow = {
     | null;
 };
 
-export default async function PresetsPage() {
+export default async function EstadisticasPage() {
   const [presetsResponse, packsResponse, accountsResponse] = await Promise.all([
     supabase
       .from("presets")
@@ -85,10 +85,10 @@ export default async function PresetsPage() {
             App rentabilidad bot
           </p>
           <h1 className="mt-2 text-4xl font-semibold tracking-tight text-white">
-            Presets
+            Estadísticas
           </h1>
           <p className="mt-3 text-sm text-rose-200">
-            Error cargando la página de presets: {error.message}
+            Error cargando la página de estadísticas: {error.message}
           </p>
         </section>
       </div>

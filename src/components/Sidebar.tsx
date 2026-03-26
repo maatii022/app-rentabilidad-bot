@@ -7,8 +7,7 @@ import { useState } from "react";
 const links = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/calendario", label: "Calendario" },
-  { href: "/presets", label: "Presets" },
-  { href: "/cuentas", label: "Cuentas" },
+  { href: "/estadisticas", label: "Estadísticas" },
   { href: "/importacion", label: "Importación" },
 ];
 
@@ -49,7 +48,6 @@ export default function Sidebar() {
             expanded ? "p-3" : "p-2"
           }`}
         >
-
           <nav className="space-y-1.5">
             {links.map((link) => {
               const active = isActivePath(pathname, link.href);
