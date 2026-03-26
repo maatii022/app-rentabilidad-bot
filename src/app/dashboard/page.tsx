@@ -348,8 +348,30 @@ function resolveDisplayTotalPct(
   const live = liveStatus[numeroCuenta];
   const persisted = persistedPerformance[numeroCuenta];
 
+  const persistedTotal = isValidNumber(persisted?.total_pct)
+    ? persisted!.total_pct!
+    : null;
+
+  const persistedToday = isValidNumber(persisted?.today_pct)
+    ? persisted!.today_pct!
+    : 0;
+
+  const liveToday = isValidNumber(live?.pnl_hoy_pct)
+    ? live!.pnl_hoy_pct!
+    : isValidNumber(live?.pnl_pct_actual)
+    ? live!.pnl_pct_actual!
+    : null;
+
+  const tradesAbiertos = isValidNumber(live?.trades_abiertos)
+    ? live!.trades_abiertos!
+    : 0;
+
+  if (persistedTotal !== null && liveToday !== null && tradesAbiertos > 0) {
+    return persistedTotal - persistedToday + liveToday;
+  }
+
   if (isValidNumber(live?.profit_total_pct)) return live!.profit_total_pct!;
-  if (isValidNumber(persisted?.total_pct)) return persisted!.total_pct!;
+  if (persistedTotal !== null) return persistedTotal;
 
   return null;
 }
