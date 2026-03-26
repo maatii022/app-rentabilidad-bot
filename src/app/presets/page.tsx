@@ -17,11 +17,6 @@ type Account = {
   estado: string | null;
 };
 
-type DailyResult = {
-  account_id: number;
-  pnl_usd: number | null;
-};
-
 type PresetMetric = {
   id: number;
   nombre: string;
@@ -31,7 +26,6 @@ type PresetMetric = {
   cuentasTotales: number;
   fondeadas: number;
   perdidas: number;
-  tradesWinrate: number | null;
   fundedWinrate: number | null;
 };
 
@@ -47,12 +41,10 @@ function normalizeEstado(value: string | null | undefined) {
 function buildPresetMetrics(
   presets: Preset[],
   packs: Pack[],
-  accounts: Account[],
-  dailyResults: DailyResult[]
+  accounts: Account[]
 ): PresetMetric[] {
   const packsByPreset = new Map<number, number>();
   const accountsByPreset = new Map<number, Account[]>();
-  const presetByAccount = new Map<number, number>();
 
   for (const pack of packs) {
     if (typeof pack.preset_id !== "number") continue;
@@ -65,25 +57,6 @@ function buildPresetMetrics(
     const current = accountsByPreset.get(account.preset_id) ?? [];
     current.push(account);
     accountsByPreset.set(account.preset_id, current);
-    presetByAccount.set(account.id, account.preset_id);
-  }
-
-  const sessionByPreset = new Map<number, { winners: number; losers: number }>();
-
-  for (const result of dailyResults) {
-    const presetId = presetByAccount.get(result.account_id);
-    if (typeof presetId !== "number") continue;
-
-    const pnl = Number(result.pnl_usd ?? 0);
-    const current = sessionByPreset.get(presetId) ?? { winners: 0, losers: 0 };
-
-    if (pnl > 0) {
-      current.winners += 1;
-    } else if (pnl < 0) {
-      current.losers += 1;
-    }
-
-    sessionByPreset.set(presetId, current);
   }
 
   return presets.map((preset) => {
@@ -101,19 +74,9 @@ function buildPresetMetrics(
       (account) => normalizeEstado(account.estado) === "perdida"
     ).length;
 
-    const sessionTotals = sessionByPreset.get(preset.id) ?? { winners: 0, losers: 0 };
-    const resolvedSessions = sessionTotals.winners + sessionTotals.losers;
-
-    const tradesWinrate =
-      resolvedSessions > 0
-        ? (sessionTotals.winners / resolvedSessions) * 100
-        : null;
-
     const fundedBase = fondeadas + perdidas;
     const fundedWinrate =
-      fundedBase > 0
-        ? (fondeadas / fundedBase) * 100
-        : null;
+      fundedBase > 0 ? (fondeadas / fundedBase) * 100 : null;
 
     return {
       id: preset.id,
@@ -124,7 +87,6 @@ function buildPresetMetrics(
       cuentasTotales: presetAccounts.length,
       fondeadas,
       perdidas,
-      tradesWinrate,
       fundedWinrate,
     };
   });
@@ -133,45 +95,22 @@ function buildPresetMetrics(
 function MetricButton({
   label,
   value,
-  tone = "neutral",
 }: {
   label: string;
   value: number | string;
-  tone?: "neutral" | "blue" | "green" | "violet" | "red";
 }) {
-  const toneClasses = {
-    neutral:
-      "border-white/10 bg-white/[0.025] hover:border-white/20 hover:bg-white/[0.045]",
-    blue:
-      "border-sky-400/12 bg-sky-400/[0.045] hover:border-sky-300/22 hover:bg-sky-400/[0.07]",
-    green:
-      "border-emerald-400/12 bg-emerald-400/[0.045] hover:border-emerald-300/22 hover:bg-emerald-400/[0.07]",
-    violet:
-      "border-violet-400/12 bg-violet-400/[0.045] hover:border-violet-300/22 hover:bg-violet-400/[0.07]",
-    red:
-      "border-rose-400/12 bg-rose-400/[0.045] hover:border-rose-300/22 hover:bg-rose-400/[0.07]",
-  };
-
   return (
     <button
       type="button"
-      className={`group rounded-xl border px-3 py-3 shadow-[0_10px_24px_rgba(0,0,0,0.14)] transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_14px_30px_rgba(0,0,0,0.18)] ${toneClasses[tone]}`}
+      className="group cursor-pointer rounded-xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.032),rgba(255,255,255,0.015))] px-3 py-3 shadow-[0_10px_24px_rgba(0,0,0,0.16)] transition-all duration-200 hover:-translate-y-[1px] hover:border-white/20 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.022))] hover:shadow-[0_16px_30px_rgba(0,0,0,0.22)] active:translate-y-0"
       title="Más adelante abrirá la página de cuentas con este filtro"
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1">
-          <p className="text-center text-[10px] uppercase tracking-[0.14em] text-zinc-500 transition-colors duration-200 group-hover:text-zinc-400">
-            {label}
-          </p>
-          <p className="mt-2 text-center text-xl font-semibold leading-none text-white">
-            {value}
-          </p>
-        </div>
-
-        <span className="mt-0.5 text-[11px] text-zinc-600 transition-colors duration-200 group-hover:text-zinc-400">
-          ↗
-        </span>
-      </div>
+      <p className="text-center text-[10px] uppercase tracking-[0.14em] text-zinc-500 transition-colors duration-200 group-hover:text-zinc-400">
+        {label}
+      </p>
+      <p className="mt-2 text-center text-xl font-semibold leading-none text-white">
+        {value}
+      </p>
     </button>
   );
 }
@@ -179,23 +118,16 @@ function MetricButton({
 function WinratePanel({
   label,
   value,
-  tone = "blue",
 }: {
   label: string;
   value: number | null;
-  tone?: "blue" | "violet";
 }) {
-  const toneClasses =
-    tone === "violet"
-      ? "border-violet-400/16 bg-[linear-gradient(180deg,rgba(167,139,250,0.10),rgba(167,139,250,0.03))] shadow-[0_14px_30px_rgba(167,139,250,0.06)]"
-      : "border-sky-400/16 bg-[linear-gradient(180deg,rgba(56,189,248,0.10),rgba(56,189,248,0.03))] shadow-[0_14px_30px_rgba(56,189,248,0.06)]";
-
   return (
-    <div className={`rounded-2xl border px-4 py-4 ${toneClasses}`}>
+    <div className="rounded-2xl border border-violet-400/16 bg-[linear-gradient(180deg,rgba(167,139,250,0.10),rgba(167,139,250,0.03))] px-4 py-5 shadow-[0_14px_30px_rgba(167,139,250,0.06)]">
       <p className="text-center text-[10px] uppercase tracking-[0.16em] text-zinc-500">
         {label}
       </p>
-      <p className="mt-3 text-center text-3xl font-semibold leading-none text-white">
+      <p className="mt-3 text-center text-4xl font-semibold leading-none text-white">
         {formatPercent(value)}
       </p>
     </div>
@@ -219,16 +151,15 @@ function PresetCard({ preset }: { preset: PresetMetric }) {
 
       <div className="p-4">
         <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
-          <MetricButton label="Packs" value={preset.packs} tone="blue" />
-          <MetricButton label="Activas" value={preset.cuentasActivas} tone="green" />
-          <MetricButton label="Totales" value={preset.cuentasTotales} tone="neutral" />
-          <MetricButton label="Fondeadas" value={preset.fondeadas} tone="violet" />
-          <MetricButton label="Perdidas" value={preset.perdidas} tone="red" />
+          <MetricButton label="Packs" value={preset.packs} />
+          <MetricButton label="Activas" value={preset.cuentasActivas} />
+          <MetricButton label="Totales" value={preset.cuentasTotales} />
+          <MetricButton label="Fondeadas" value={preset.fondeadas} />
+          <MetricButton label="Perdidas" value={preset.perdidas} />
         </div>
 
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <WinratePanel label="Trades winrate" value={preset.tradesWinrate} tone="blue" />
-          <WinratePanel label="Funded winrate" value={preset.fundedWinrate} tone="violet" />
+        <div className="mt-3">
+          <WinratePanel label="Funded winrate" value={preset.fundedWinrate} />
         </div>
       </div>
     </article>
@@ -236,12 +167,7 @@ function PresetCard({ preset }: { preset: PresetMetric }) {
 }
 
 export default async function PresetsPage() {
-  const [
-    presetsResponse,
-    packsResponse,
-    accountsResponse,
-    dailyResultsResponse,
-  ] = await Promise.all([
+  const [presetsResponse, packsResponse, accountsResponse] = await Promise.all([
     supabase
       .from("presets")
       .select("id, nombre, activo")
@@ -251,17 +177,12 @@ export default async function PresetsPage() {
     supabase.from("packs").select("id, preset_id"),
 
     supabase.from("accounts").select("id, preset_id, estado"),
-
-    supabase
-      .from("daily_results")
-      .select("account_id, pnl_usd"),
   ]);
 
   const error =
     presetsResponse.error ||
     packsResponse.error ||
-    accountsResponse.error ||
-    dailyResultsResponse.error;
+    accountsResponse.error;
 
   if (error) {
     return (
@@ -284,9 +205,8 @@ export default async function PresetsPage() {
   const presets = (presetsResponse.data || []) as Preset[];
   const packs = (packsResponse.data || []) as Pack[];
   const accounts = (accountsResponse.data || []) as Account[];
-  const dailyResults = (dailyResultsResponse.data || []) as DailyResult[];
 
-  const metrics = buildPresetMetrics(presets, packs, accounts, dailyResults);
+  const metrics = buildPresetMetrics(presets, packs, accounts);
 
   return (
     <div className="space-y-5 text-white">
