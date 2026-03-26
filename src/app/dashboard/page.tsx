@@ -58,6 +58,21 @@ type ResultadoRevisionDiaria = {
   mensaje: string;
 };
 
+type LiveStatusItem = {
+  preset?: string;
+  balance?: number | null;
+  account_size_inferred?: number | null;
+  pnl_actual?: number | null;
+  pnl_hoy_usd?: number | null;
+  pnl_pct_actual?: number | null;
+  pnl_hoy_pct?: number | null;
+  profit_total_pct?: number | null;
+  trades_abiertos?: number | null;
+  error?: string;
+};
+
+type LiveStatusMap = Record<string, LiveStatusItem>;
+
 type SnapshotItem = {
   pnl_hoy_usd?: number | null;
   pnl_hoy_pct?: number | null;
@@ -308,16 +323,37 @@ function buildDisplaySlots(pack: Pack): PackSlot[] {
   return original.sort((a, b) => a.orden - b.orden);
 }
 
-function resolveDisplayDayPct(numeroCuenta: string, snapshots: SnapshotMap) {
-  const snapshot = snapshots[numeroCuenta];
-  return typeof snapshot?.pnl_hoy_pct === "number" ? snapshot.pnl_hoy_pct : null;
+function isValidNumber(value: unknown): value is number {
+  return typeof value === "number" && !Number.isNaN(value);
 }
 
-function resolveDisplayTotalPct(numeroCuenta: string, snapshots: SnapshotMap) {
-  const snapshot = snapshots[numeroCuenta];
-  return typeof snapshot?.profit_total_pct === "number"
-    ? snapshot.profit_total_pct
-    : null;
+function resolveDisplayDayPct(
+  numeroCuenta: string,
+  persistedSnapshots: SnapshotMap,
+  liveStatus: LiveStatusMap
+) {
+  const live = liveStatus[numeroCuenta];
+  const persisted = persistedSnapshots[numeroCuenta];
+
+  if (isValidNumber(live?.pnl_hoy_pct)) return live!.pnl_hoy_pct!;
+  if (isValidNumber(live?.pnl_pct_actual)) return live!.pnl_pct_actual!;
+  if (isValidNumber(persisted?.pnl_hoy_pct)) return persisted!.pnl_hoy_pct!;
+
+  return null;
+}
+
+function resolveDisplayTotalPct(
+  numeroCuenta: string,
+  persistedSnapshots: SnapshotMap,
+  liveStatus: LiveStatusMap
+) {
+  const live = liveStatus[numeroCuenta];
+  const persisted = persistedSnapshots[numeroCuenta];
+
+  if (isValidNumber(live?.profit_total_pct)) return live!.profit_total_pct!;
+  if (isValidNumber(persisted?.profit_total_pct)) return persisted!.profit_total_pct!;
+
+  return null;
 }
 
 export default function DashboardPage() {
@@ -325,6 +361,7 @@ export default function DashboardPage() {
   const [events, setEvents] = useState<AccountEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingSnapshots, setLoadingSnapshots] = useState(false);
+  const [loadingLive, setLoadingLive] = useState(false);
 
   const [selectedPendingSlotValue, setSelectedPendingSlotValue] = useState("");
   const [numeroCuenta, setNumeroCuenta] = useState("");
@@ -340,7 +377,8 @@ export default function DashboardPage() {
   });
 
   const [resultadosRevision, setResultadosRevision] = useState<ResultadoRevisionDiaria[]>([]);
-  const [todaySnapshots, setTodaySnapshots] = useState<SnapshotMap>({});
+  const [persistedSnapshots, setPersistedSnapshots] = useState<SnapshotMap>({});
+  const [liveStatus, setLiveStatus] = useState<LiveStatusMap>({});
 
   const reemplazoRef = useRef<HTMLDivElement | null>(null);
 
@@ -372,11 +410,11 @@ export default function DashboardPage() {
     });
   }
 
-  async function cargarSnapshotsHoy() {
+  async function cargarSnapshotsPersistidosHoy() {
     setLoadingSnapshots(true);
 
     try {
-      const res = await fetch("/api/snapshots/today", {
+      const res = await fetch("/api/snapshots/persisted-today", {
         method: "GET",
         cache: "no-store",
       });
@@ -384,21 +422,49 @@ export default function DashboardPage() {
       const json = await res.json();
 
       if (!res.ok || !json?.ok) {
-        alert(`No se pudieron cargar los snapshots: ${json?.error || "Error desconocido"}`);
+        alert(`No se pudieron cargar los snapshots persistidos: ${json?.error || "Error desconocido"}`);
         return;
       }
 
-      setTodaySnapshots(json.data || {});
+      setPersistedSnapshots(json.data || {});
     } catch (error) {
-      console.error("Error cargando snapshots de hoy:", error);
-      alert("No se pudieron cargar los snapshots");
+      console.error("Error cargando snapshots persistidos:", error);
+      alert("No se pudieron cargar los snapshots persistidos");
     } finally {
       setLoadingSnapshots(false);
     }
   }
 
+  async function cargarLiveStatus() {
+    setLoadingLive(true);
+
+    try {
+      const res = await fetch("/api/live-status", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json?.ok) {
+        setLiveStatus({});
+        return;
+      }
+
+      setLiveStatus(json.data || {});
+    } catch (error) {
+      console.error("Error cargando live status:", error);
+      setLiveStatus({});
+    } finally {
+      setLoadingLive(false);
+    }
+  }
+
   async function recargarEstado() {
-    await cargarSnapshotsHoy();
+    await Promise.all([
+      cargarSnapshotsPersistidosHoy(),
+      cargarLiveStatus(),
+    ]);
   }
 
   async function ejecutarRevisionDiaria() {
@@ -423,7 +489,7 @@ export default function DashboardPage() {
       setResultadosRevision(data.resultados || []);
       await cargarDatos();
       await cargarResumenHistorico();
-      await cargarSnapshotsHoy();
+      await recargarEstado();
 
       alert(`Revisión diaria ejecutada para fecha de negocio ${data?.fecha}`);
     } finally {
@@ -456,7 +522,7 @@ export default function DashboardPage() {
 
       await cargarDatos();
       await cargarResumenHistorico();
-      await cargarSnapshotsHoy();
+      await recargarEstado();
       alert(`Rotación ejecutada en ${packNombre}`);
     } finally {
       setLoading(false);
@@ -488,7 +554,7 @@ export default function DashboardPage() {
 
       await cargarDatos();
       await cargarResumenHistorico();
-      await cargarSnapshotsHoy();
+      await recargarEstado();
 
       const mensaje =
         data?.resultado?.mensaje ||
@@ -528,7 +594,7 @@ export default function DashboardPage() {
 
       await cargarDatos();
       await cargarResumenHistorico();
-      await cargarSnapshotsHoy();
+      await recargarEstado();
       alert("Cuenta marcada como perdida correctamente");
     } finally {
       setLoading(false);
@@ -562,7 +628,7 @@ export default function DashboardPage() {
 
       await cargarDatos();
       await cargarResumenHistorico();
-      await cargarSnapshotsHoy();
+      await recargarEstado();
       alert("Cuenta marcada como fondeada correctamente");
     } finally {
       setLoading(false);
@@ -611,7 +677,7 @@ export default function DashboardPage() {
 
       await cargarDatos();
       await cargarResumenHistorico();
-      await cargarSnapshotsHoy();
+      await recargarEstado();
       alert("Cuenta reemplazada correctamente");
     } finally {
       setLoading(false);
@@ -720,7 +786,8 @@ export default function DashboardPage() {
       await Promise.all([
         cargarDatos(),
         cargarResumenHistorico(),
-        cargarSnapshotsHoy(),
+        cargarSnapshotsPersistidosHoy(),
+        cargarLiveStatus(),
       ]);
     }
 
@@ -750,10 +817,10 @@ export default function DashboardPage() {
           <div className="flex flex-wrap gap-2">
             <ActionButton
               onClick={recargarEstado}
-              disabled={loadingSnapshots}
+              disabled={loadingSnapshots || loadingLive}
               variant="secondary"
             >
-              {loadingSnapshots ? "Recargando..." : "Recargar estado"}
+              {loadingSnapshots || loadingLive ? "Recargando..." : "Recargar estado"}
             </ActionButton>
 
             <ActionButton
@@ -834,7 +901,8 @@ export default function DashboardPage() {
             <PackCard
               key={pack.id}
               pack={pack}
-              todaySnapshots={todaySnapshots}
+              persistedSnapshots={persistedSnapshots}
+              liveStatus={liveStatus}
               loading={loading}
               onRotar={rotarPack}
               onEvaluar={evaluarPack}
@@ -980,7 +1048,8 @@ export default function DashboardPage() {
 
 function PackCard({
   pack,
-  todaySnapshots,
+  persistedSnapshots,
+  liveStatus,
   loading,
   onRotar,
   onEvaluar,
@@ -990,7 +1059,8 @@ function PackCard({
   getLivePnlClass,
 }: {
   pack: Pack;
-  todaySnapshots: SnapshotMap;
+  persistedSnapshots: SnapshotMap;
+  liveStatus: LiveStatusMap;
   loading: boolean;
   onRotar: (packId: number, packNombre: string) => void;
   onEvaluar: (packId: number, packNombre: string) => void;
@@ -1076,11 +1146,11 @@ function PackCard({
           const missingAccount = !slot.accounts?.id;
 
           const displayHoyPct = numeroCuenta
-            ? resolveDisplayDayPct(numeroCuenta, todaySnapshots)
+            ? resolveDisplayDayPct(numeroCuenta, persistedSnapshots, liveStatus)
             : null;
 
           const displayTotalPct = numeroCuenta
-            ? resolveDisplayTotalPct(numeroCuenta, todaySnapshots)
+            ? resolveDisplayTotalPct(numeroCuenta, persistedSnapshots, liveStatus)
             : null;
 
           return (
