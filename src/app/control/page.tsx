@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type PresetOption = {
   id: number;
@@ -115,104 +115,96 @@ function TypeSwitch({
   );
 }
 
-function useOutsideClose<T extends HTMLElement>(onClose: () => void) {
-  const ref = useRef<T | null>(null);
-
-  useEffect(() => {
-    function handleClick(event: MouseEvent) {
-      if (!ref.current) return;
-      if (!ref.current.contains(event.target as Node)) {
-        onClose();
-      }
-    }
-
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [onClose]);
-
-  return ref;
-}
-
-function DropdownCard<T extends string | number>({
+function ExpandSelector<T extends string | number>({
   label,
-  valueLabel,
-  placeholder,
-  items,
-  selectedValue,
+  triggerLabel,
+  selectedLabel,
+  options,
+  value,
+  open,
+  onToggle,
   onSelect,
   emptyMessage,
 }: {
   label: string;
-  valueLabel?: string;
-  placeholder: string;
-  items: { value: T; label: string }[];
-  selectedValue: T | null;
+  triggerLabel: string;
+  selectedLabel?: string;
+  options: { value: T; label: string }[];
+  value: T | null;
+  open: boolean;
+  onToggle: () => void;
   onSelect: (value: T) => void;
   emptyMessage?: string;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useOutsideClose<HTMLDivElement>(() => setOpen(false));
-
-  const hasItems = items.length > 0;
+  const hasOptions = options.length > 0;
 
   return (
-    <div ref={ref} className="relative">
+    <div>
       <FieldLabel>{label}</FieldLabel>
 
-      <button
-        type="button"
-        onClick={() => hasItems && setOpen((prev) => !prev)}
-        className={`group flex w-full items-center justify-between rounded-2xl border px-4 py-4 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_10px_24px_rgba(0,0,0,0.16)] transition-all duration-200 ${
-          hasItems
-            ? "border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] hover:border-white/15 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
-            : "cursor-not-allowed border-white/8 bg-white/[0.02] opacity-75"
-        }`}
-      >
-        <span className={`${valueLabel ? "text-white" : "text-zinc-500"} text-sm`}>
-          {valueLabel || placeholder}
-        </span>
+      <div className="flex items-start gap-3">
+        <button
+          type="button"
+          onClick={() => hasOptions && onToggle()}
+          className={`shrink-0 rounded-2xl border px-4 py-4 text-sm font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_10px_24px_rgba(0,0,0,0.16)] transition-all duration-300 ${
+            open
+              ? "min-w-[140px] border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.16),rgba(56,189,248,0.06))] text-white"
+              : "min-w-[220px] border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] text-white hover:border-white/15 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
+          } ${!hasOptions ? "cursor-not-allowed opacity-70" : ""}`}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <span>{triggerLabel}</span>
+            <span
+              className={`text-xs text-zinc-400 transition-transform duration-300 ${
+                open ? "rotate-180" : ""
+              }`}
+            >
+              ▼
+            </span>
+          </div>
+        </button>
 
-        <span
-          className={`text-xs text-zinc-500 transition-transform duration-200 ${
-            open ? "rotate-180" : ""
+        <div
+          className={`overflow-hidden transition-all duration-300 ${
+            open ? "max-w-[1000px] opacity-100" : "max-w-0 opacity-0"
           }`}
         >
-          ▼
-        </span>
-      </button>
-
-      {!hasItems && emptyMessage ? (
-        <p className="mt-2 text-xs text-amber-200/80">{emptyMessage}</p>
-      ) : null}
-
-      {open && hasItems ? (
-        <div className="absolute left-0 right-0 top-[calc(100%+10px)] z-30 rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(9,14,25,0.96),rgba(7,11,21,0.96))] p-2 shadow-[0_24px_60px_rgba(0,0,0,0.38)] backdrop-blur-2xl">
-          <div className="space-y-1">
-            {items.map((item) => {
-              const active = item.value === selectedValue;
+          <div className="flex flex-wrap gap-2 pt-0.5">
+            {options.map((option) => {
+              const active = option.value === value;
 
               return (
                 <button
-                  key={String(item.value)}
+                  key={String(option.value)}
                   type="button"
-                  onClick={() => {
-                    onSelect(item.value);
-                    setOpen(false);
-                  }}
-                  className={`flex w-full items-center justify-between rounded-2xl px-3 py-3 text-sm transition-all duration-200 ${
+                  onClick={() => onSelect(option.value)}
+                  className={`whitespace-nowrap rounded-2xl border px-4 py-3 text-sm font-medium transition-all duration-200 ${
                     active
-                      ? "border border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.16),rgba(56,189,248,0.07))] text-white shadow-[0_10px_24px_rgba(56,189,248,0.12)]"
-                      : "border border-transparent bg-transparent text-zinc-300 hover:border-white/10 hover:bg-white/[0.04] hover:text-white"
+                      ? "border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.08))] text-white shadow-[0_12px_28px_rgba(56,189,248,0.12)]"
+                      : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
                   }`}
                 >
-                  <span>{item.label}</span>
-                  {active ? <span className="text-sky-300">●</span> : null}
+                  {option.label}
                 </button>
               );
             })}
           </div>
         </div>
-      ) : null}
+      </div>
+
+      {!open ? (
+        <div className="mt-2 min-h-[20px]">
+          {selectedLabel ? (
+            <p className="text-sm text-zinc-300">{selectedLabel}</p>
+          ) : emptyMessage ? (
+            <p className="text-xs text-amber-200/80">{emptyMessage}</p>
+          ) : (
+            <p className="text-sm text-zinc-500">Sin seleccionar</p>
+          )}
+        </div>
+      ) : (
+        <div className="mt-2 min-h-[20px]" />
+      )}
     </div>
   );
 }
@@ -232,6 +224,8 @@ export default function ControlPage() {
   const [feedback, setFeedback] = useState<{ type: "ok" | "error"; message: string } | null>(
     null
   );
+
+  const [openControl, setOpenControl] = useState<"preset" | "size" | "propfirm" | null>(null);
 
   useEffect(() => {
     async function cargarDatos() {
@@ -335,6 +329,7 @@ export default function ControlPage() {
       setTipoCuenta("prueba");
       setAccountSize("10K");
       setPropFirmId(null);
+      setOpenControl(null);
     } catch {
       setFeedback({
         type: "error",
@@ -365,7 +360,7 @@ export default function ControlPage() {
         title="Crear cuenta"
         description="Nueva cuenta operativa dentro del sistema."
       >
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
           <div>
             <FieldLabel>Nombre</FieldLabel>
             <PremiumInput
@@ -384,13 +379,20 @@ export default function ControlPage() {
             />
           </div>
 
-          <DropdownCard
+          <ExpandSelector
             label="Preset"
-            valueLabel={selectedPresetLabel}
-            placeholder="Selecciona preset"
-            items={presetItems}
-            selectedValue={presetId}
-            onSelect={setPresetId}
+            triggerLabel="Preset"
+            selectedLabel={selectedPresetLabel}
+            options={presetItems}
+            value={presetId}
+            open={openControl === "preset"}
+            onToggle={() =>
+              setOpenControl((prev) => (prev === "preset" ? null : "preset"))
+            }
+            onSelect={(value) => {
+              setPresetId(value);
+              setOpenControl(null);
+            }}
             emptyMessage="No hay presets disponibles."
           />
 
@@ -399,26 +401,44 @@ export default function ControlPage() {
             <TypeSwitch value={tipoCuenta} onChange={setTipoCuenta} />
           </div>
 
-          <DropdownCard
+          <ExpandSelector
             label="Tamaño de cuenta"
-            valueLabel={accountSize}
-            placeholder="Selecciona tamaño"
-            items={ACCOUNT_SIZES.map((size) => ({
+            triggerLabel="Tamaño"
+            selectedLabel={accountSize}
+            options={ACCOUNT_SIZES.map((size) => ({
               value: size,
               label: size,
             }))}
-            selectedValue={accountSize}
-            onSelect={setAccountSize}
+            value={accountSize}
+            open={openControl === "size"}
+            onToggle={() =>
+              setOpenControl((prev) => (prev === "size" ? null : "size"))
+            }
+            onSelect={(value) => {
+              setAccountSize(value);
+              setOpenControl(null);
+            }}
           />
 
-          <DropdownCard
+          <ExpandSelector
             label="Prop firm"
-            valueLabel={selectedPropFirmLabel}
-            placeholder="Selecciona prop firm"
-            items={propFirmItems}
-            selectedValue={propFirmId}
-            onSelect={setPropFirmId}
-            emptyMessage="No hay prop firms creadas todavía."
+            triggerLabel="Prop firm"
+            selectedLabel={selectedPropFirmLabel}
+            options={propFirmItems}
+            value={propFirmId}
+            open={openControl === "propfirm"}
+            onToggle={() =>
+              setOpenControl((prev) => (prev === "propfirm" ? null : "propfirm"))
+            }
+            onSelect={(value) => {
+              setPropFirmId(value);
+              setOpenControl(null);
+            }}
+            emptyMessage={
+              propFirmItems.length === 0
+                ? "No hay prop firms creadas todavía."
+                : undefined
+            }
           />
         </div>
 
