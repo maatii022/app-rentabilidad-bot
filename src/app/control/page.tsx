@@ -128,26 +128,69 @@ function TypeSwitch({
   );
 }
 
+function GlowOptionButton({
+  label,
+  active,
+  visible,
+  delayMs,
+  onClick,
+}: {
+  label: string;
+  active?: boolean;
+  visible: boolean;
+  delayMs: number;
+  onClick?: () => void;
+}) {
+  const [glow, setGlow] = useState({ x: 50, y: 50 });
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseMove={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * 100;
+        const y = ((e.clientY - rect.top) / rect.height) * 100;
+        setGlow({ x, y });
+      }}
+      className={`relative overflow-hidden rounded-full border px-4 py-2.5 text-sm font-medium transition-all duration-300 ${
+        active
+          ? "border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.07))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(56,189,248,0.12)]"
+          : "border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] text-zinc-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] hover:border-white/14 hover:text-white"
+      } ${
+        visible ? "translate-x-0 opacity-100 blur-0" : "-translate-x-4 opacity-0 blur-[2px]"
+      }`}
+      style={{
+        transitionDelay: `${delayMs}ms`,
+      }}
+    >
+      <span
+        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 hover:opacity-100"
+        style={{
+          background: `radial-gradient(circle at ${glow.x}% ${glow.y}%, rgba(125,211,252,0.16), transparent 45%)`,
+        }}
+      />
+      <span className="relative z-10">{label}</span>
+    </button>
+  );
+}
+
 function InlinePicker<T extends string | number>({
   label,
   triggerLabel,
-  selectedLabel,
   options,
   selectedValue,
   open,
   onToggle,
   onSelect,
-  emptyText,
 }: {
   label: string;
   triggerLabel: string;
-  selectedLabel?: string;
   options: { value: T; label: string }[];
   selectedValue: T | null;
   open: boolean;
   onToggle: () => void;
   onSelect: (value: T) => void;
-  emptyText?: string;
 }) {
   const hasOptions = options.length > 0;
 
@@ -166,62 +209,39 @@ function InlinePicker<T extends string | number>({
                 : "h-11 min-w-[116px] border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
             } ${!hasOptions ? "cursor-not-allowed opacity-70" : ""}`}
           >
-            <div className="flex h-full items-center justify-center relative">
-  {/* TEXTO */}
-  <span
-    className={`absolute text-sm font-medium text-zinc-200 transition-all duration-300 ${
-      open ? "opacity-0 -translate-x-2" : "opacity-100 translate-x-0"
-    }`}
-  >
-    {triggerLabel}
-  </span>
-
-  {/* PUNTO */}
-  <span
-    className={`h-2.5 w-2.5 rounded-full transition-all duration-300 ${
-      open
-        ? "bg-sky-300 shadow-[0_0_14px_rgba(125,211,252,0.8)] scale-110"
-        : "bg-white/25 scale-100"
-    }`}
-  />
-</div>
+            {open ? (
+              <div className="flex h-full items-center justify-center">
+                <span className="h-2.5 w-2.5 rounded-full bg-sky-300 shadow-[0_0_14px_rgba(125,211,252,0.8)]" />
+              </div>
+            ) : (
+              <div className="flex h-full items-center justify-between">
+                <span className="text-sm font-medium text-zinc-200">
+                  {triggerLabel}
+                </span>
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-white/25" />
+              </div>
+            )}
           </button>
 
           <div
-  className={`overflow-hidden transition-all duration-300 ${
-    open
-      ? "max-w-[1400px] max-h-20 opacity-100"
-      : "max-w-0 max-h-0 opacity-0"
-  }`}
-  style={{
-    transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
-  }}
->
-            <div
-              className={`flex flex-wrap gap-2 transition-all duration-300 ${
-                open ? "translate-x-0 opacity-100" : "translate-x-3 opacity-0"
-              }`}
-            >
-              {hasOptions ? (
-                options.map((option) => (
-                  <button
-                    key={String(option.value)}
-                    type="button"
-                    onClick={() => onSelect(option.value)}
-                    className={`rounded-full border px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
-                      selectedValue === option.value
-                        ? "border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.07))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(56,189,248,0.12)]"
-                        : "border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] text-zinc-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] hover:text-white"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))
-              ) : (
-                <p className="whitespace-nowrap text-xs text-amber-200/80">
-                  {emptyText || "Sin opciones disponibles."}
-                </p>
-              )}
+            className={`overflow-hidden transition-all duration-300 ${
+              open ? "max-w-[1400px] max-h-20 opacity-100" : "max-w-0 max-h-0 opacity-0"
+            }`}
+            style={{
+              transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
+            }}
+          >
+            <div className="flex flex-wrap gap-2">
+              {options.map((option, index) => (
+                <GlowOptionButton
+                  key={String(option.value)}
+                  label={option.label}
+                  active={selectedValue === option.value}
+                  delayMs={index * 45}
+                  visible={open}
+                  onClick={() => onSelect(option.value)}
+                />
+              ))}
             </div>
           </div>
         </div>
@@ -440,19 +460,16 @@ export default function ControlPage() {
             <InlinePicker
               label="Preset"
               triggerLabel="Preset"
-              selectedLabel={selectedPresetLabel}
               options={presetItems}
               selectedValue={presetId}
               open={openControls.preset}
               onToggle={() => toggleControl("preset")}
               onSelect={setPresetId}
-              emptyText="No hay presets disponibles."
             />
 
             <InlinePicker
               label="Tamaño de cuenta"
               triggerLabel="Tamaño"
-              selectedLabel={accountSize}
               options={ACCOUNT_SIZES.map((size) => ({
                 value: size,
                 label: size,
@@ -466,13 +483,11 @@ export default function ControlPage() {
             <InlinePicker
               label="Prop firm"
               triggerLabel="Prop firm"
-              selectedLabel={selectedPropFirmLabel}
               options={propFirmItems}
               selectedValue={propFirmId}
               open={openControls.propfirm}
               onToggle={() => toggleControl("propfirm")}
               onSelect={setPropFirmId}
-              emptyText="No hay prop firms creadas todavía."
             />
           </div>
 
