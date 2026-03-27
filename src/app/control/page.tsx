@@ -155,74 +155,76 @@ function InlinePicker<T extends string | number>({
     <div>
       <MiniLabel>{label}</MiniLabel>
 
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => hasOptions && onToggle()}
-          className={`relative shrink-0 overflow-hidden rounded-full border transition-all duration-300 ${
-            open
-              ? "h-11 w-11 border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.07))] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(56,189,248,0.12)]"
-              : "h-11 min-w-[116px] border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
-          } ${!hasOptions ? "cursor-not-allowed opacity-70" : ""}`}
-        >
-          <div className="relative flex h-full items-center justify-center">
-            <span
-              className={`absolute whitespace-nowrap text-sm font-medium text-zinc-200 transition-all duration-300 ${
-                open
-                  ? "translate-x-[-10px] scale-90 opacity-0"
-                  : "translate-x-0 scale-100 opacity-100"
-              }`}
-            >
-              {triggerLabel}
-            </span>
+      <div className="space-y-2">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => hasOptions && onToggle()}
+            className={`relative shrink-0 overflow-hidden rounded-full border transition-all duration-300 ${
+              open
+                ? "h-11 w-11 border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.07))] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(56,189,248,0.12)]"
+                : "h-11 min-w-[116px] border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
+            } ${!hasOptions ? "cursor-not-allowed opacity-70" : ""}`}
+          >
+            <div className="relative flex h-full items-center justify-center">
+              <span
+                className={`absolute whitespace-nowrap text-sm font-medium text-zinc-200 transition-all duration-300 ${
+                  open
+                    ? "translate-x-[-10px] scale-90 opacity-0"
+                    : "translate-x-0 scale-100 opacity-100"
+                }`}
+              >
+                {triggerLabel}
+              </span>
 
-            <span
-              className={`absolute h-2.5 w-2.5 rounded-full transition-all duration-300 ${
-                open
-                  ? "bg-sky-300 shadow-[0_0_14px_rgba(125,211,252,0.8)] opacity-100"
-                  : "bg-white/25 opacity-100"
-              }`}
-            />
-          </div>
-        </button>
+              <span
+                className={`absolute h-2.5 w-2.5 rounded-full transition-all duration-300 ${
+                  open
+                    ? "bg-sky-300 shadow-[0_0_14px_rgba(125,211,252,0.8)] opacity-100"
+                    : "bg-white/25 opacity-100"
+                }`}
+              />
+            </div>
+          </button>
 
-        <div
-          className={`overflow-hidden transition-all duration-300 ${
-            open ? "max-w-[1200px] opacity-100" : "max-w-0 opacity-0"
-          }`}
-        >
           <div
-            className={`flex flex-wrap gap-2 transition-all duration-300 ${
-              open ? "translate-x-0 opacity-100" : "translate-x-3 opacity-0"
+            className={`overflow-hidden transition-all duration-300 ${
+              open ? "max-w-[1200px] opacity-100" : "max-w-0 opacity-0"
             }`}
           >
-            {hasOptions ? (
-              options.map((option) => (
-                <button
-                  key={String(option.value)}
-                  type="button"
-                  onClick={() => onSelect(option.value)}
-                  className={`rounded-full border px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
-                    selectedValue === option.value
-                      ? "border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.07))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(56,189,248,0.12)]"
-                      : "border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] text-zinc-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] hover:text-white"
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))
-            ) : (
-              <p className="whitespace-nowrap text-xs text-amber-200/80">
-                {emptyText || "Sin opciones disponibles."}
-              </p>
-            )}
+            <div
+              className={`flex flex-wrap gap-2 transition-all duration-300 ${
+                open ? "translate-x-0 opacity-100" : "translate-x-3 opacity-0"
+              }`}
+            >
+              {hasOptions ? (
+                options.map((option) => (
+                  <button
+                    key={String(option.value)}
+                    type="button"
+                    onClick={() => onSelect(option.value)}
+                    className={`rounded-full border px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
+                      selectedValue === option.value
+                        ? "border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.07))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(56,189,248,0.12)]"
+                        : "border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] text-zinc-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] hover:text-white"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))
+              ) : (
+                <p className="whitespace-nowrap text-xs text-amber-200/80">
+                  {emptyText || "Sin opciones disponibles."}
+                </p>
+              )}
+            </div>
           </div>
         </div>
-      </div>
 
-      {!open ? (
-        <p className="mt-2 text-sm text-zinc-400">{selectedLabel || "Sin seleccionar"}</p>
-      ) : null}
+        {!open ? (
+          <p className="mt-2 text-sm text-zinc-400">{selectedLabel || "Sin seleccionar"}</p>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -412,103 +414,101 @@ export default function ControlPage() {
       <HeroCard />
 
       <SectionCard title="Crear cuenta">
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-            <div>
-              <MiniLabel>Nombre</MiniLabel>
-              <CompactInput
-                value={alias}
-                onChange={setAlias}
-                placeholder="Ej. Fernet del Mati"
-              />
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_520px]">
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <div>
+                <MiniLabel>Nombre</MiniLabel>
+                <CompactInput
+                  value={alias}
+                  onChange={setAlias}
+                  placeholder="Ej. Fernet del Mati"
+                />
+              </div>
+
+              <div>
+                <MiniLabel>Número de cuenta</MiniLabel>
+                <CompactInput
+                  value={numeroCuenta}
+                  onChange={setNumeroCuenta}
+                  placeholder="Ej. 1111111"
+                />
+              </div>
             </div>
 
-            <div>
-              <MiniLabel>Número de cuenta</MiniLabel>
-              <CompactInput
-                value={numeroCuenta}
-                onChange={setNumeroCuenta}
-                placeholder="Ej. 1111111"
-              />
-            </div>
+            <InlinePicker
+              label="Preset"
+              triggerLabel="Preset"
+              selectedLabel={selectedPresetLabel}
+              options={presetItems}
+              selectedValue={presetId}
+              open={openControls.preset}
+              onToggle={() => toggleControl("preset")}
+              onSelect={setPresetId}
+              emptyText="No hay presets disponibles."
+            />
 
+            <InlinePicker
+              label="Tamaño de cuenta"
+              triggerLabel="Tamaño"
+              selectedLabel={accountSize}
+              options={ACCOUNT_SIZES.map((size) => ({
+                value: size,
+                label: size,
+              }))}
+              selectedValue={accountSize}
+              open={openControls.size}
+              onToggle={() => toggleControl("size")}
+              onSelect={setAccountSize}
+            />
+
+            <InlinePicker
+              label="Prop firm"
+              triggerLabel="Prop firm"
+              selectedLabel={selectedPropFirmLabel}
+              options={propFirmItems}
+              selectedValue={propFirmId}
+              open={openControls.propfirm}
+              onToggle={() => toggleControl("propfirm")}
+              onSelect={setPropFirmId}
+              emptyText="No hay prop firms creadas todavía."
+            />
+          </div>
+
+          <div className="space-y-4">
             <div>
               <MiniLabel>Tipo de cuenta</MiniLabel>
               <TypeSwitch value={tipoCuenta} onChange={setTipoCuenta} />
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-            <div className="space-y-4">
-              <InlinePicker
-                label="Preset"
-                triggerLabel="Preset"
-                selectedLabel={selectedPresetLabel}
-                options={presetItems}
-                selectedValue={presetId}
-                open={openControls.preset}
-                onToggle={() => toggleControl("preset")}
-                onSelect={setPresetId}
-                emptyText="No hay presets disponibles."
-              />
+            <SummaryCard
+              presetLabel={selectedPresetLabel}
+              tipoCuenta={tipoCuenta}
+              accountSize={accountSize}
+              propFirmLabel={selectedPropFirmLabel}
+            />
 
-              <InlinePicker
-                label="Tamaño de cuenta"
-                triggerLabel="Tamaño"
-                selectedLabel={accountSize}
-                options={ACCOUNT_SIZES.map((size) => ({
-                  value: size,
-                  label: size,
-                }))}
-                selectedValue={accountSize}
-                open={openControls.size}
-                onToggle={() => toggleControl("size")}
-                onSelect={setAccountSize}
-              />
-
-              <InlinePicker
-                label="Prop firm"
-                triggerLabel="Prop firm"
-                selectedLabel={selectedPropFirmLabel}
-                options={propFirmItems}
-                selectedValue={propFirmId}
-                open={openControls.propfirm}
-                onToggle={() => toggleControl("propfirm")}
-                onSelect={setPropFirmId}
-                emptyText="No hay prop firms creadas todavía."
-              />
-            </div>
-
-            <div className="space-y-4">
-              <SummaryCard
-                presetLabel={selectedPresetLabel}
-                tipoCuenta={tipoCuenta}
-                accountSize={accountSize}
-                propFirmLabel={selectedPropFirmLabel}
-              />
-
-              {feedback ? (
-                <div
-                  className={`rounded-[20px] border px-4 py-3 text-sm ${
-                    feedback.type === "ok"
-                      ? "border-emerald-300/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.12),rgba(16,185,129,0.04))] text-emerald-100"
-                      : "border-rose-300/20 bg-[linear-gradient(180deg,rgba(244,63,94,0.12),rgba(244,63,94,0.04))] text-rose-100"
-                  }`}
-                >
-                  {feedback.message}
-                </div>
-              ) : null}
-
-              <div className="flex justify-end">
-                <button
-                  type="button"
-                  onClick={crearCuenta}
-                  disabled={saving}
-                  className="h-12 rounded-[18px] border border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.20),rgba(56,189,248,0.08))] px-5 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_30px_rgba(56,189,248,0.12)] transition-all duration-200 hover:-translate-y-[1px] hover:border-sky-300/30 hover:bg-[linear-gradient(180deg,rgba(56,189,248,0.24),rgba(56,189,248,0.10))] disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {saving ? "Creando..." : "Crear cuenta"}
-                </button>
+            {feedback ? (
+              <div
+                className={`rounded-[20px] border px-4 py-3 text-sm ${
+                  feedback.type === "ok"
+                    ? "border-emerald-300/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.12),rgba(16,185,129,0.04))] text-emerald-100"
+                    : "border-rose-300/20 bg-[linear-gradient(180deg,rgba(244,63,94,0.12),rgba(244,63,94,0.04))] text-rose-100"
+                }`}
+              >
+                {feedback.message}
               </div>
+            ) : null}
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={crearCuenta}
+                disabled={saving}
+                className="h-12 rounded-[18px] border border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.20),rgba(56,189,248,0.08))] px-5 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_30px_rgba(56,189,248,0.12)] transition-all duration-200 hover:-translate-y-[1px] hover:border-sky-300/30 hover:bg-[linear-gradient(180deg,rgba(56,189,248,0.24),rgba(56,189,248,0.10))] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? "Creando..." : "Crear cuenta"}
+              </button>
             </div>
           </div>
         </div>
