@@ -18,14 +18,6 @@ type OpenControl = "preset" | "size" | "propfirm" | null;
 
 const ACCOUNT_SIZES: AccountSizeOption[] = ["5K", "10K", "25K", "50K", "100K"];
 
-function PageShell({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  return <div className="space-y-5 text-white">{children}</div>;
-}
-
 function HeroCard() {
   return (
     <section className="rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.10),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-6 shadow-[0_20px_44px_rgba(0,0,0,0.24)]">
@@ -56,7 +48,7 @@ function SectionCard({
   return (
     <section className="rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.06),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-6 shadow-[0_20px_44px_rgba(0,0,0,0.24)]">
       <div className="mb-6">
-        <h2 className="text-[30px] font-semibold tracking-tight text-white">
+        <h2 className="text-[32px] font-semibold tracking-tight text-white">
           {title}
         </h2>
         {description ? (
@@ -143,7 +135,7 @@ function TypeSwitch({
   onChange: (value: TypeOption) => void;
 }) {
   return (
-    <GlassPanel className="p-1">
+    <GlassPanel className="p-1.5">
       <div className="grid grid-cols-2 gap-1.5">
         <SegmentedButton
           label="Prueba"
@@ -184,7 +176,7 @@ function PickerOption({
   );
 }
 
-function ExpandingPillPicker<T extends string | number>({
+function CompactPickerCard<T extends string | number>({
   label,
   triggerLabel,
   selectedLabel,
@@ -208,7 +200,7 @@ function ExpandingPillPicker<T extends string | number>({
   const hasOptions = options.length > 0;
 
   return (
-    <div className="space-y-2">
+    <GlassPanel className="p-4">
       <FieldLabel>{label}</FieldLabel>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -218,7 +210,7 @@ function ExpandingPillPicker<T extends string | number>({
           className={`group relative shrink-0 overflow-hidden rounded-full border px-4 transition-all duration-300 ${
             open
               ? "h-14 w-14 border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.20),rgba(56,189,248,0.08))] shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_16px_34px_rgba(56,189,248,0.16)]"
-              : "h-14 min-w-[180px] border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_12px_26px_rgba(0,0,0,0.16)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))]"
+              : "h-14 min-w-[170px] border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_12px_26px_rgba(0,0,0,0.16)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))]"
           } ${!hasOptions ? "cursor-not-allowed opacity-70" : ""}`}
         >
           <div className="relative flex h-full items-center justify-center">
@@ -242,7 +234,7 @@ function ExpandingPillPicker<T extends string | number>({
 
         <div
           className={`overflow-hidden transition-all duration-300 ${
-            open ? "max-w-[1200px] opacity-100" : "max-w-0 opacity-0"
+            open ? "max-w-[1000px] opacity-100" : "max-w-0 opacity-0"
           }`}
         >
           <div className="flex flex-wrap gap-2">
@@ -260,7 +252,7 @@ function ExpandingPillPicker<T extends string | number>({
         </div>
       </div>
 
-      <div className="min-h-[20px]">
+      <div className="mt-3 min-h-[20px]">
         {!open ? (
           selectedLabel ? (
             <p className="text-sm text-zinc-300">{selectedLabel}</p>
@@ -271,7 +263,7 @@ function ExpandingPillPicker<T extends string | number>({
           )
         ) : null}
       </div>
-    </div>
+    </GlassPanel>
   );
 }
 
@@ -294,7 +286,7 @@ function SummaryStrip({
   ];
 
   return (
-    <GlassPanel className="p-3">
+    <GlassPanel className="p-4">
       <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
         {items.map((item) => (
           <div
@@ -446,135 +438,144 @@ export default function ControlPage() {
   }
 
   return (
-    <PageShell>
+    <div className="space-y-5 text-white">
       <HeroCard />
 
       <SectionCard
         title="Crear cuenta"
         description="Nueva cuenta operativa dentro del sistema."
       >
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-          <div className="space-y-5">
-            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-              <div>
-                <FieldLabel>Nombre</FieldLabel>
-                <PremiumInput
-                  value={alias}
-                  onChange={setAlias}
-                  placeholder="Ej. Fernet del Mati"
-                />
-              </div>
-
-              <div>
-                <FieldLabel>Número de cuenta</FieldLabel>
-                <PremiumInput
-                  value={numeroCuenta}
-                  onChange={setNumeroCuenta}
-                  placeholder="Ej. 1111111"
-                />
-              </div>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+            <div>
+              <FieldLabel>Nombre</FieldLabel>
+              <PremiumInput
+                value={alias}
+                onChange={setAlias}
+                placeholder="Ej. Fernet del Mati"
+              />
             </div>
 
-            <GlassPanel className="p-4">
-              <div className="grid grid-cols-1 gap-5">
-                <ExpandingPillPicker
-                  label="Preset"
-                  triggerLabel="Preset"
-                  selectedLabel={selectedPresetLabel}
-                  options={presetItems}
-                  selectedValue={presetId}
-                  open={openControl === "preset"}
-                  onToggle={() =>
-                    setOpenControl((prev) => (prev === "preset" ? null : "preset"))
-                  }
-                  onSelect={(value) => {
-                    setPresetId(value);
-                    setOpenControl(null);
-                  }}
-                  emptyMessage="No hay presets disponibles."
-                />
+            <div>
+              <FieldLabel>Número de cuenta</FieldLabel>
+              <PremiumInput
+                value={numeroCuenta}
+                onChange={setNumeroCuenta}
+                placeholder="Ej. 1111111"
+              />
+            </div>
 
-                <ExpandingPillPicker
-                  label="Tamaño de cuenta"
-                  triggerLabel="Tamaño"
-                  selectedLabel={accountSize}
-                  options={ACCOUNT_SIZES.map((size) => ({
-                    value: size,
-                    label: size,
-                  }))}
-                  selectedValue={accountSize}
-                  open={openControl === "size"}
-                  onToggle={() =>
-                    setOpenControl((prev) => (prev === "size" ? null : "size"))
-                  }
-                  onSelect={(value) => {
-                    setAccountSize(value);
-                    setOpenControl(null);
-                  }}
-                />
-
-                <ExpandingPillPicker
-                  label="Prop firm"
-                  triggerLabel="Prop firm"
-                  selectedLabel={selectedPropFirmLabel}
-                  options={propFirmItems}
-                  selectedValue={propFirmId}
-                  open={openControl === "propfirm"}
-                  onToggle={() =>
-                    setOpenControl((prev) => (prev === "propfirm" ? null : "propfirm"))
-                  }
-                  onSelect={(value) => {
-                    setPropFirmId(value);
-                    setOpenControl(null);
-                  }}
-                  emptyMessage={
-                    propFirmItems.length === 0
-                      ? "No hay prop firms creadas todavía."
-                      : undefined
-                  }
-                />
-              </div>
-            </GlassPanel>
-          </div>
-
-          <div className="space-y-5">
             <div>
               <FieldLabel>Tipo de cuenta</FieldLabel>
               <TypeSwitch value={tipoCuenta} onChange={setTipoCuenta} />
             </div>
+          </div>
 
-            <SummaryStrip
-              presetLabel={selectedPresetLabel}
-              sizeLabel={accountSize}
-              propFirmLabel={selectedPropFirmLabel}
-              tipoCuenta={tipoCuenta}
-            />
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.15fr_0.85fr]">
+            <div className="space-y-5">
+              <CompactPickerCard
+                label="Preset"
+                triggerLabel="Preset"
+                selectedLabel={selectedPresetLabel}
+                options={presetItems}
+                selectedValue={presetId}
+                open={openControl === "preset"}
+                onToggle={() =>
+                  setOpenControl((prev) => (prev === "preset" ? null : "preset"))
+                }
+                onSelect={(value) => {
+                  setPresetId(value);
+                  setOpenControl(null);
+                }}
+                emptyMessage="No hay presets disponibles."
+              />
 
-            {feedback ? (
-              <div
-                className={`rounded-[22px] border px-4 py-4 text-sm shadow-[0_12px_28px_rgba(0,0,0,0.16)] ${
-                  feedback.type === "ok"
-                    ? "border-emerald-300/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.12),rgba(16,185,129,0.04))] text-emerald-100"
-                    : "border-rose-300/20 bg-[linear-gradient(180deg,rgba(244,63,94,0.12),rgba(244,63,94,0.04))] text-rose-100"
-                }`}
-              >
-                {feedback.message}
-              </div>
-            ) : null}
+              <CompactPickerCard
+                label="Tamaño de cuenta"
+                triggerLabel="Tamaño"
+                selectedLabel={accountSize}
+                options={ACCOUNT_SIZES.map((size) => ({
+                  value: size,
+                  label: size,
+                }))}
+                selectedValue={accountSize}
+                open={openControl === "size"}
+                onToggle={() =>
+                  setOpenControl((prev) => (prev === "size" ? null : "size"))
+                }
+                onSelect={(value) => {
+                  setAccountSize(value);
+                  setOpenControl(null);
+                }}
+              />
 
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={crearCuenta}
-                disabled={saving}
-                className="rounded-[20px] border border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.20),rgba(56,189,248,0.08))] px-6 py-4 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_16px_32px_rgba(56,189,248,0.14)] transition-all duration-200 hover:-translate-y-[1px] hover:border-sky-300/30 hover:bg-[linear-gradient(180deg,rgba(56,189,248,0.24),rgba(56,189,248,0.10))] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {saving ? "Creando..." : "Crear cuenta"}
-              </button>
+              <CompactPickerCard
+                label="Prop firm"
+                triggerLabel="Prop firm"
+                selectedLabel={selectedPropFirmLabel}
+                options={propFirmItems}
+                selectedValue={propFirmId}
+                open={openControl === "propfirm"}
+                onToggle={() =>
+                  setOpenControl((prev) => (prev === "propfirm" ? null : "propfirm"))
+                }
+                onSelect={(value) => {
+                  setPropFirmId(value);
+                  setOpenControl(null);
+                }}
+                emptyMessage={
+                  propFirmItems.length === 0
+                    ? "No hay prop firms creadas todavía."
+                    : undefined
+                }
+              />
+            </div>
+
+            <div className="space-y-5">
+              <SummaryStrip
+                presetLabel={selectedPresetLabel}
+                sizeLabel={accountSize}
+                propFirmLabel={selectedPropFirmLabel}
+                tipoCuenta={tipoCuenta}
+              />
+
+              {feedback ? (
+                <div
+                  className={`rounded-[22px] border px-4 py-4 text-sm shadow-[0_12px_28px_rgba(0,0,0,0.16)] ${
+                    feedback.type === "ok"
+                      ? "border-emerald-300/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.12),rgba(16,185,129,0.04))] text-emerald-100"
+                      : "border-rose-300/20 bg-[linear-gradient(180deg,rgba(244,63,94,0.12),rgba(244,63,94,0.04))] text-rose-100"
+                  }`}
+                >
+                  {feedback.message}
+                </div>
+              ) : null}
+
+              <GlassPanel className="p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-500">
+                      Acción
+                    </p>
+                    <p className="mt-2 text-sm text-zinc-400">
+                      Guarda la nueva cuenta con la configuración actual.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={crearCuenta}
+                    disabled={saving}
+                    className="rounded-[20px] border border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.20),rgba(56,189,248,0.08))] px-6 py-4 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_16px_32px_rgba(56,189,248,0.14)] transition-all duration-200 hover:-translate-y-[1px] hover:border-sky-300/30 hover:bg-[linear-gradient(180deg,rgba(56,189,248,0.24),rgba(56,189,248,0.10))] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {saving ? "Creando..." : "Crear cuenta"}
+                  </button>
+                </div>
+              </GlassPanel>
             </div>
           </div>
         </div>
       </SectionCard>
-    </PageShell>
+    </div>
   );
 }
