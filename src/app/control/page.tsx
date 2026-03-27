@@ -18,6 +18,24 @@ type OpenControl = "preset" | "size" | "propfirm" | null;
 
 const ACCOUNT_SIZES: AccountSizeOption[] = ["5K", "10K", "25K", "50K", "100K"];
 
+function HeroCard() {
+  return (
+    <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
+      <div className="max-w-3xl">
+        <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">
+          App rentabilidad bot
+        </p>
+        <h1 className="mt-2 text-4xl font-semibold tracking-tight text-white">
+          Control
+        </h1>
+        <p className="mt-2 text-sm text-zinc-400">
+          Gestión operativa de cuentas, packs y empresas de fondeo.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function MiniLabel({ children }: { children: React.ReactNode }) {
   return (
     <p className="mb-2 text-[10px] uppercase tracking-[0.16em] text-zinc-500">
@@ -220,6 +238,7 @@ function SummaryCard({
     </div>
   );
 }
+
 
 export default function ControlPage() {
   const [alias, setAlias] = useState("");
