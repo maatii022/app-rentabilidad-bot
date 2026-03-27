@@ -14,6 +14,7 @@ type PropFirmOption = {
 
 type TypeOption = "prueba" | "fondeada";
 type AccountSizeOption = "5K" | "10K" | "25K" | "50K" | "100K";
+type OpenControl = "preset" | "size" | "propfirm" | null;
 
 const ACCOUNT_SIZES: AccountSizeOption[] = ["5K", "10K", "25K", "50K", "100K"];
 
@@ -236,11 +237,11 @@ export default function ControlPage() {
     null
   );
 
-  const [openControls, setOpenControls] = useState<Record<Exclude<OpenControl, null>, boolean>>({
-    preset: false,
-    size: false,
-    propfirm: false,
-  });
+  const [openControls, setOpenControls] = useState<Record<"preset" | "size" | "propfirm", boolean>>({
+  preset: false,
+  size: false,
+  propfirm: false,
+});
 
   useEffect(() => {
     async function cargarDatos() {
@@ -287,7 +288,7 @@ export default function ControlPage() {
   const selectedPropFirmLabel =
     propFirms.find((firm) => firm.id === propFirmId)?.nombre || "";
 
-  function toggleControl(key: Exclude<OpenControl, null>) {
+  function toggleControl(key: "preset" | "size" | "propfirm") {
     setOpenControls((prev) => ({
       ...prev,
       [key]: !prev[key],
