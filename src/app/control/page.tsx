@@ -14,7 +14,6 @@ type PropFirmOption = {
 
 type TypeOption = "prueba" | "fondeada";
 type AccountSizeOption = "5K" | "10K" | "25K" | "50K" | "100K";
-type OpenControl = "preset" | "size" | "propfirm" | null;
 
 const ACCOUNT_SIZES: AccountSizeOption[] = ["5K", "10K", "25K", "50K", "100K"];
 
@@ -36,27 +35,30 @@ function HeroCard() {
   );
 }
 
+function SectionCard({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.06),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
+      <div className="mb-5">
+        <h2 className="text-2xl font-semibold tracking-tight text-white">
+          {title}
+        </h2>
+      </div>
+      {children}
+    </section>
+  );
+}
+
 function MiniLabel({ children }: { children: React.ReactNode }) {
   return (
     <p className="mb-2 text-[10px] uppercase tracking-[0.16em] text-zinc-500">
       {children}
     </p>
-  );
-}
-
-function ShellCard({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <section
-      className={`rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.06),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] shadow-[0_18px_40px_rgba(0,0,0,0.22)] ${className}`}
-    >
-      {children}
-    </section>
   );
 }
 
@@ -190,7 +192,9 @@ function InlinePicker<T extends string | number>({
               ))}
             </div>
           ) : (
-            <p className="text-xs text-amber-200/80">{emptyText || "Sin opciones disponibles."}</p>
+            <p className="text-xs text-amber-200/80">
+              {emptyText || "Sin opciones disponibles."}
+            </p>
           )
         ) : (
           <p className="text-sm text-zinc-400">{selectedLabel || "Sin seleccionar"}</p>
@@ -219,7 +223,7 @@ function SummaryCard({
   ];
 
   return (
-    <div className="rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_14px_34px_rgba(0,0,0,0.18)]">
+    <div className="rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_14px_34px_rgba(0,0,0,0.18)]">
       <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
         {items.map((item) => (
           <div
@@ -239,7 +243,6 @@ function SummaryCard({
   );
 }
 
-
 export default function ControlPage() {
   const [alias, setAlias] = useState("");
   const [numeroCuenta, setNumeroCuenta] = useState("");
@@ -257,10 +260,10 @@ export default function ControlPage() {
   );
 
   const [openControls, setOpenControls] = useState<Record<"preset" | "size" | "propfirm", boolean>>({
-  preset: false,
-  size: false,
-  propfirm: false,
-});
+    preset: false,
+    size: false,
+    propfirm: false,
+  });
 
   useEffect(() => {
     async function cargarDatos() {
