@@ -14,6 +14,7 @@ type PropFirmOption = {
 
 type TypeOption = "prueba" | "fondeada";
 type AccountSizeOption = "5K" | "10K" | "25K" | "50K" | "100K";
+type OpenControl = "preset" | "size" | "propfirm" | null;
 
 const ACCOUNT_SIZES: AccountSizeOption[] = ["5K", "10K", "25K", "50K", "100K"];
 
@@ -115,12 +116,12 @@ function TypeSwitch({
   );
 }
 
-function ExpandSelector<T extends string | number>({
+function ExpandingPillPicker<T extends string | number>({
   label,
   triggerLabel,
   selectedLabel,
   options,
-  value,
+  selectedValue,
   open,
   onToggle,
   onSelect,
@@ -130,7 +131,7 @@ function ExpandSelector<T extends string | number>({
   triggerLabel: string;
   selectedLabel?: string;
   options: { value: T; label: string }[];
-  value: T | null;
+  selectedValue: T | null;
   open: boolean;
   onToggle: () => void;
   onSelect: (value: T) => void;
@@ -139,27 +140,34 @@ function ExpandSelector<T extends string | number>({
   const hasOptions = options.length > 0;
 
   return (
-    <div>
+    <div className="space-y-2">
       <FieldLabel>{label}</FieldLabel>
 
-      <div className="flex items-start gap-3">
+      <div className="flex min-h-[56px] items-center gap-3">
         <button
           type="button"
           onClick={() => hasOptions && onToggle()}
-          className={`shrink-0 rounded-2xl border px-4 py-4 text-sm font-medium shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_10px_24px_rgba(0,0,0,0.16)] transition-all duration-300 ${
+          className={`group shrink-0 overflow-hidden rounded-full border shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_10px_24px_rgba(0,0,0,0.16)] transition-all duration-300 ${
             open
-              ? "min-w-[140px] border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.16),rgba(56,189,248,0.06))] text-white"
-              : "min-w-[220px] border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] text-white hover:border-white/15 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
+              ? "w-14 border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.08))]"
+              : "w-[170px] border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] hover:border-white/15 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
           } ${!hasOptions ? "cursor-not-allowed opacity-70" : ""}`}
         >
-          <div className="flex items-center justify-between gap-3">
-            <span>{triggerLabel}</span>
+          <div className="flex h-14 items-center justify-center px-4">
             <span
-              className={`text-xs text-zinc-400 transition-transform duration-300 ${
-                open ? "rotate-180" : ""
+              className={`whitespace-nowrap text-sm font-medium text-white transition-all duration-200 ${
+                open ? "w-0 scale-75 opacity-0" : "w-auto opacity-100"
               }`}
             >
-              ▼
+              {triggerLabel}
+            </span>
+
+            <span
+              className={`absolute text-sm text-white transition-all duration-300 ${
+                open ? "translate-x-0 opacity-100" : "translate-x-2 opacity-0"
+              }`}
+            >
+              →
             </span>
           </div>
         </button>
@@ -169,16 +177,18 @@ function ExpandSelector<T extends string | number>({
             open ? "max-w-[1000px] opacity-100" : "max-w-0 opacity-0"
           }`}
         >
-          <div className="flex flex-wrap gap-2 pt-0.5">
+          <div className="flex flex-wrap gap-2">
             {options.map((option) => {
-              const active = option.value === value;
+              const active = option.value === selectedValue;
 
               return (
                 <button
                   key={String(option.value)}
                   type="button"
-                  onClick={() => onSelect(option.value)}
-                  className={`whitespace-nowrap rounded-2xl border px-4 py-3 text-sm font-medium transition-all duration-200 ${
+                  onClick={() => {
+                    onSelect(option.value);
+                  }}
+                  className={`whitespace-nowrap rounded-full border px-4 py-3 text-sm font-medium transition-all duration-200 ${
                     active
                       ? "border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.08))] text-white shadow-[0_12px_28px_rgba(56,189,248,0.12)]"
                       : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
@@ -192,19 +202,17 @@ function ExpandSelector<T extends string | number>({
         </div>
       </div>
 
-      {!open ? (
-        <div className="mt-2 min-h-[20px]">
-          {selectedLabel ? (
+      <div className="min-h-[20px]">
+        {!open ? (
+          selectedLabel ? (
             <p className="text-sm text-zinc-300">{selectedLabel}</p>
           ) : emptyMessage ? (
             <p className="text-xs text-amber-200/80">{emptyMessage}</p>
           ) : (
             <p className="text-sm text-zinc-500">Sin seleccionar</p>
-          )}
-        </div>
-      ) : (
-        <div className="mt-2 min-h-[20px]" />
-      )}
+          )
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -225,7 +233,7 @@ export default function ControlPage() {
     null
   );
 
-  const [openControl, setOpenControl] = useState<"preset" | "size" | "propfirm" | null>(null);
+  const [openControl, setOpenControl] = useState<OpenControl>(null);
 
   useEffect(() => {
     async function cargarDatos() {
@@ -379,12 +387,12 @@ export default function ControlPage() {
             />
           </div>
 
-          <ExpandSelector
+          <ExpandingPillPicker
             label="Preset"
             triggerLabel="Preset"
             selectedLabel={selectedPresetLabel}
             options={presetItems}
-            value={presetId}
+            selectedValue={presetId}
             open={openControl === "preset"}
             onToggle={() =>
               setOpenControl((prev) => (prev === "preset" ? null : "preset"))
@@ -401,7 +409,7 @@ export default function ControlPage() {
             <TypeSwitch value={tipoCuenta} onChange={setTipoCuenta} />
           </div>
 
-          <ExpandSelector
+          <ExpandingPillPicker
             label="Tamaño de cuenta"
             triggerLabel="Tamaño"
             selectedLabel={accountSize}
@@ -409,7 +417,7 @@ export default function ControlPage() {
               value: size,
               label: size,
             }))}
-            value={accountSize}
+            selectedValue={accountSize}
             open={openControl === "size"}
             onToggle={() =>
               setOpenControl((prev) => (prev === "size" ? null : "size"))
@@ -420,12 +428,12 @@ export default function ControlPage() {
             }}
           />
 
-          <ExpandSelector
+          <ExpandingPillPicker
             label="Prop firm"
             triggerLabel="Prop firm"
             selectedLabel={selectedPropFirmLabel}
             options={propFirmItems}
-            value={propFirmId}
+            selectedValue={propFirmId}
             open={openControl === "propfirm"}
             onToggle={() =>
               setOpenControl((prev) => (prev === "propfirm" ? null : "propfirm"))
