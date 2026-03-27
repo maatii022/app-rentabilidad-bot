@@ -18,6 +18,32 @@ type OpenControl = "preset" | "size" | "propfirm" | null;
 
 const ACCOUNT_SIZES: AccountSizeOption[] = ["5K", "10K", "25K", "50K", "100K"];
 
+function PageShell({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return <div className="space-y-5 text-white">{children}</div>;
+}
+
+function HeroCard() {
+  return (
+    <section className="rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.10),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-6 shadow-[0_20px_44px_rgba(0,0,0,0.24)]">
+      <div className="max-w-3xl">
+        <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">
+          App rentabilidad bot
+        </p>
+        <h1 className="mt-2 text-4xl font-semibold tracking-tight text-white">
+          Control
+        </h1>
+        <p className="mt-2 text-sm text-zinc-400">
+          Gestión operativa de cuentas, packs y empresas de fondeo.
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function SectionCard({
   title,
   description,
@@ -28,9 +54,11 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.07),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
-      <div className="mb-5">
-        <h2 className="text-xl font-semibold tracking-tight text-white">{title}</h2>
+    <section className="rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.06),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-6 shadow-[0_20px_44px_rgba(0,0,0,0.24)]">
+      <div className="mb-6">
+        <h2 className="text-[30px] font-semibold tracking-tight text-white">
+          {title}
+        </h2>
         {description ? (
           <p className="mt-2 text-sm text-zinc-400">{description}</p>
         ) : null}
@@ -42,9 +70,25 @@ function SectionCard({
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <label className="mb-2 block text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+    <label className="mb-2 block text-[11px] uppercase tracking-[0.16em] text-zinc-500">
       {children}
     </label>
+  );
+}
+
+function GlassPanel({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_14px_34px_rgba(0,0,0,0.18)] backdrop-blur-xl ${className}`}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -62,7 +106,7 @@ function PremiumInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] px-4 py-4 text-sm text-white outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_10px_24px_rgba(0,0,0,0.16)] transition-all duration-200 placeholder:text-zinc-500 focus:border-sky-300/25 focus:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] focus:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(56,189,248,0.08)]"
+      className="w-full rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] px-4 py-4 text-sm text-white outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_10px_24px_rgba(0,0,0,0.16)] transition-all duration-200 placeholder:text-zinc-500 focus:border-sky-300/25 focus:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] focus:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(56,189,248,0.08)]"
     />
   );
 }
@@ -80,10 +124,10 @@ function SegmentedButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-xl border px-4 py-3 text-sm font-medium transition-all duration-200 ${
+      className={`rounded-[18px] border px-4 py-3 text-sm font-medium transition-all duration-200 ${
         active
-          ? "border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.08))] text-white shadow-[0_12px_28px_rgba(56,189,248,0.14)]"
-          : "border-white/10 bg-white/[0.03] text-zinc-300 shadow-[0_10px_22px_rgba(255,255,255,0.03)] hover:bg-white/[0.06] hover:text-white"
+          ? "border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.20),rgba(56,189,248,0.08))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_14px_30px_rgba(56,189,248,0.14)]"
+          : "border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] text-zinc-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.14)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] hover:text-white"
       }`}
     >
       {label}
@@ -99,8 +143,8 @@ function TypeSwitch({
   onChange: (value: TypeOption) => void;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.02))] p-1 shadow-[0_12px_28px_rgba(0,0,0,0.18)]">
-      <div className="grid grid-cols-2 gap-1">
+    <GlassPanel className="p-1">
+      <div className="grid grid-cols-2 gap-1.5">
         <SegmentedButton
           label="Prueba"
           active={value === "prueba"}
@@ -112,7 +156,31 @@ function TypeSwitch({
           onClick={() => onChange("fondeada")}
         />
       </div>
-    </div>
+    </GlassPanel>
+  );
+}
+
+function PickerOption({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`whitespace-nowrap rounded-full border px-4 py-3 text-sm font-medium transition-all duration-200 ${
+        active
+          ? "border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.20),rgba(56,189,248,0.08))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_30px_rgba(56,189,248,0.12)]"
+          : "border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] text-zinc-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.14)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] hover:text-white"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -143,27 +211,27 @@ function ExpandingPillPicker<T extends string | number>({
     <div className="space-y-2">
       <FieldLabel>{label}</FieldLabel>
 
-      <div className="flex min-h-[56px] items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={() => hasOptions && onToggle()}
-          className={`group shrink-0 overflow-hidden rounded-full border shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_10px_24px_rgba(0,0,0,0.16)] transition-all duration-300 ${
+          className={`group relative shrink-0 overflow-hidden rounded-full border px-4 transition-all duration-300 ${
             open
-              ? "w-14 border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.08))]"
-              : "w-[170px] border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] hover:border-white/15 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
+              ? "h-14 w-14 border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.20),rgba(56,189,248,0.08))] shadow-[inset_0_1px_0_rgba(255,255,255,0.10),0_16px_34px_rgba(56,189,248,0.16)]"
+              : "h-14 min-w-[180px] border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_12px_26px_rgba(0,0,0,0.16)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))]"
           } ${!hasOptions ? "cursor-not-allowed opacity-70" : ""}`}
         >
-          <div className="flex h-14 items-center justify-center px-4">
+          <div className="relative flex h-full items-center justify-center">
             <span
-              className={`whitespace-nowrap text-sm font-medium text-white transition-all duration-200 ${
-                open ? "w-0 scale-75 opacity-0" : "w-auto opacity-100"
+              className={`absolute text-sm font-medium text-white transition-all duration-300 ${
+                open ? "scale-75 opacity-0" : "scale-100 opacity-100"
               }`}
             >
               {triggerLabel}
             </span>
 
             <span
-              className={`absolute text-sm text-white transition-all duration-300 ${
+              className={`absolute text-base text-white transition-all duration-300 ${
                 open ? "translate-x-0 opacity-100" : "translate-x-2 opacity-0"
               }`}
             >
@@ -174,30 +242,20 @@ function ExpandingPillPicker<T extends string | number>({
 
         <div
           className={`overflow-hidden transition-all duration-300 ${
-            open ? "max-w-[1000px] opacity-100" : "max-w-0 opacity-0"
+            open ? "max-w-[1200px] opacity-100" : "max-w-0 opacity-0"
           }`}
         >
           <div className="flex flex-wrap gap-2">
-            {options.map((option) => {
-              const active = option.value === selectedValue;
-
-              return (
-                <button
-                  key={String(option.value)}
-                  type="button"
-                  onClick={() => {
-                    onSelect(option.value);
-                  }}
-                  className={`whitespace-nowrap rounded-full border px-4 py-3 text-sm font-medium transition-all duration-200 ${
-                    active
-                      ? "border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.08))] text-white shadow-[0_12px_28px_rgba(56,189,248,0.12)]"
-                      : "border-white/10 bg-white/[0.03] text-zinc-300 hover:border-white/15 hover:bg-white/[0.06] hover:text-white"
-                  }`}
-                >
-                  {option.label}
-                </button>
-              );
-            })}
+            {options.map((option) => (
+              <PickerOption
+                key={String(option.value)}
+                label={option.label}
+                active={option.value === selectedValue}
+                onClick={() => {
+                  onSelect(option.value);
+                }}
+              />
+            ))}
           </div>
         </div>
       </div>
@@ -214,6 +272,45 @@ function ExpandingPillPicker<T extends string | number>({
         ) : null}
       </div>
     </div>
+  );
+}
+
+function SummaryStrip({
+  presetLabel,
+  sizeLabel,
+  propFirmLabel,
+  tipoCuenta,
+}: {
+  presetLabel: string;
+  sizeLabel: string;
+  propFirmLabel: string;
+  tipoCuenta: TypeOption;
+}) {
+  const items = [
+    { label: "Preset", value: presetLabel || "Sin preset" },
+    { label: "Tipo", value: tipoCuenta === "prueba" ? "Prueba" : "Fondeada" },
+    { label: "Tamaño", value: sizeLabel || "Sin tamaño" },
+    { label: "Prop firm", value: propFirmLabel || "Sin prop firm" },
+  ];
+
+  return (
+    <GlassPanel className="p-3">
+      <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+        {items.map((item) => (
+          <div
+            key={item.label}
+            className="rounded-[18px] border border-white/8 bg-black/20 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+          >
+            <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
+              {item.label}
+            </p>
+            <p className="mt-2 truncate text-sm font-medium text-white">
+              {item.value}
+            </p>
+          </div>
+        ))}
+      </div>
+    </GlassPanel>
   );
 }
 
@@ -349,130 +446,135 @@ export default function ControlPage() {
   }
 
   return (
-    <div className="space-y-5 text-white">
-      <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
-        <div className="max-w-3xl">
-          <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">
-            App rentabilidad bot
-          </p>
-          <h1 className="mt-2 text-4xl font-semibold tracking-tight text-white">
-            Control
-          </h1>
-          <p className="mt-2 text-sm text-zinc-400">
-            Gestión operativa de cuentas, packs y empresas de fondeo.
-          </p>
-        </div>
-      </section>
+    <PageShell>
+      <HeroCard />
 
       <SectionCard
         title="Crear cuenta"
         description="Nueva cuenta operativa dentro del sistema."
       >
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-          <div>
-            <FieldLabel>Nombre</FieldLabel>
-            <PremiumInput
-              value={alias}
-              onChange={setAlias}
-              placeholder="Ej. Fernet del Mati"
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+              <div>
+                <FieldLabel>Nombre</FieldLabel>
+                <PremiumInput
+                  value={alias}
+                  onChange={setAlias}
+                  placeholder="Ej. Fernet del Mati"
+                />
+              </div>
+
+              <div>
+                <FieldLabel>Número de cuenta</FieldLabel>
+                <PremiumInput
+                  value={numeroCuenta}
+                  onChange={setNumeroCuenta}
+                  placeholder="Ej. 1111111"
+                />
+              </div>
+            </div>
+
+            <GlassPanel className="p-4">
+              <div className="grid grid-cols-1 gap-5">
+                <ExpandingPillPicker
+                  label="Preset"
+                  triggerLabel="Preset"
+                  selectedLabel={selectedPresetLabel}
+                  options={presetItems}
+                  selectedValue={presetId}
+                  open={openControl === "preset"}
+                  onToggle={() =>
+                    setOpenControl((prev) => (prev === "preset" ? null : "preset"))
+                  }
+                  onSelect={(value) => {
+                    setPresetId(value);
+                    setOpenControl(null);
+                  }}
+                  emptyMessage="No hay presets disponibles."
+                />
+
+                <ExpandingPillPicker
+                  label="Tamaño de cuenta"
+                  triggerLabel="Tamaño"
+                  selectedLabel={accountSize}
+                  options={ACCOUNT_SIZES.map((size) => ({
+                    value: size,
+                    label: size,
+                  }))}
+                  selectedValue={accountSize}
+                  open={openControl === "size"}
+                  onToggle={() =>
+                    setOpenControl((prev) => (prev === "size" ? null : "size"))
+                  }
+                  onSelect={(value) => {
+                    setAccountSize(value);
+                    setOpenControl(null);
+                  }}
+                />
+
+                <ExpandingPillPicker
+                  label="Prop firm"
+                  triggerLabel="Prop firm"
+                  selectedLabel={selectedPropFirmLabel}
+                  options={propFirmItems}
+                  selectedValue={propFirmId}
+                  open={openControl === "propfirm"}
+                  onToggle={() =>
+                    setOpenControl((prev) => (prev === "propfirm" ? null : "propfirm"))
+                  }
+                  onSelect={(value) => {
+                    setPropFirmId(value);
+                    setOpenControl(null);
+                  }}
+                  emptyMessage={
+                    propFirmItems.length === 0
+                      ? "No hay prop firms creadas todavía."
+                      : undefined
+                  }
+                />
+              </div>
+            </GlassPanel>
+          </div>
+
+          <div className="space-y-5">
+            <div>
+              <FieldLabel>Tipo de cuenta</FieldLabel>
+              <TypeSwitch value={tipoCuenta} onChange={setTipoCuenta} />
+            </div>
+
+            <SummaryStrip
+              presetLabel={selectedPresetLabel}
+              sizeLabel={accountSize}
+              propFirmLabel={selectedPropFirmLabel}
+              tipoCuenta={tipoCuenta}
             />
+
+            {feedback ? (
+              <div
+                className={`rounded-[22px] border px-4 py-4 text-sm shadow-[0_12px_28px_rgba(0,0,0,0.16)] ${
+                  feedback.type === "ok"
+                    ? "border-emerald-300/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.12),rgba(16,185,129,0.04))] text-emerald-100"
+                    : "border-rose-300/20 bg-[linear-gradient(180deg,rgba(244,63,94,0.12),rgba(244,63,94,0.04))] text-rose-100"
+                }`}
+              >
+                {feedback.message}
+              </div>
+            ) : null}
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={crearCuenta}
+                disabled={saving}
+                className="rounded-[20px] border border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.20),rgba(56,189,248,0.08))] px-6 py-4 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_16px_32px_rgba(56,189,248,0.14)] transition-all duration-200 hover:-translate-y-[1px] hover:border-sky-300/30 hover:bg-[linear-gradient(180deg,rgba(56,189,248,0.24),rgba(56,189,248,0.10))] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving ? "Creando..." : "Crear cuenta"}
+              </button>
+            </div>
           </div>
-
-          <div>
-            <FieldLabel>Número de cuenta</FieldLabel>
-            <PremiumInput
-              value={numeroCuenta}
-              onChange={setNumeroCuenta}
-              placeholder="Ej. 1111111"
-            />
-          </div>
-
-          <ExpandingPillPicker
-            label="Preset"
-            triggerLabel="Preset"
-            selectedLabel={selectedPresetLabel}
-            options={presetItems}
-            selectedValue={presetId}
-            open={openControl === "preset"}
-            onToggle={() =>
-              setOpenControl((prev) => (prev === "preset" ? null : "preset"))
-            }
-            onSelect={(value) => {
-              setPresetId(value);
-              setOpenControl(null);
-            }}
-            emptyMessage="No hay presets disponibles."
-          />
-
-          <div>
-            <FieldLabel>Tipo de cuenta</FieldLabel>
-            <TypeSwitch value={tipoCuenta} onChange={setTipoCuenta} />
-          </div>
-
-          <ExpandingPillPicker
-            label="Tamaño de cuenta"
-            triggerLabel="Tamaño"
-            selectedLabel={accountSize}
-            options={ACCOUNT_SIZES.map((size) => ({
-              value: size,
-              label: size,
-            }))}
-            selectedValue={accountSize}
-            open={openControl === "size"}
-            onToggle={() =>
-              setOpenControl((prev) => (prev === "size" ? null : "size"))
-            }
-            onSelect={(value) => {
-              setAccountSize(value);
-              setOpenControl(null);
-            }}
-          />
-
-          <ExpandingPillPicker
-            label="Prop firm"
-            triggerLabel="Prop firm"
-            selectedLabel={selectedPropFirmLabel}
-            options={propFirmItems}
-            selectedValue={propFirmId}
-            open={openControl === "propfirm"}
-            onToggle={() =>
-              setOpenControl((prev) => (prev === "propfirm" ? null : "propfirm"))
-            }
-            onSelect={(value) => {
-              setPropFirmId(value);
-              setOpenControl(null);
-            }}
-            emptyMessage={
-              propFirmItems.length === 0
-                ? "No hay prop firms creadas todavía."
-                : undefined
-            }
-          />
-        </div>
-
-        {feedback ? (
-          <div
-            className={`mt-5 rounded-2xl border px-4 py-3 text-sm shadow-[0_10px_24px_rgba(0,0,0,0.16)] ${
-              feedback.type === "ok"
-                ? "border-emerald-300/20 bg-emerald-400/[0.08] text-emerald-100"
-                : "border-rose-300/20 bg-rose-400/[0.08] text-rose-100"
-            }`}
-          >
-            {feedback.message}
-          </div>
-        ) : null}
-
-        <div className="mt-5 flex justify-end">
-          <button
-            type="button"
-            onClick={crearCuenta}
-            disabled={saving}
-            className="rounded-2xl border border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.07))] px-5 py-3 text-sm font-medium text-white shadow-[0_12px_28px_rgba(56,189,248,0.14)] transition-all duration-200 hover:-translate-y-[1px] hover:border-sky-300/30 hover:bg-[linear-gradient(180deg,rgba(56,189,248,0.22),rgba(56,189,248,0.09))] disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving ? "Creando..." : "Crear cuenta"}
-          </button>
         </div>
       </SectionCard>
-    </div>
+    </PageShell>
   );
 }
