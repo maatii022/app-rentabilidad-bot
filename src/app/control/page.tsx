@@ -166,25 +166,37 @@ function InlinePicker<T extends string | number>({
                 : "h-11 min-w-[116px] border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
             } ${!hasOptions ? "cursor-not-allowed opacity-70" : ""}`}
           >
-            {open ? (
-              <div className="flex h-full items-center justify-center">
-                <span className="h-2.5 w-2.5 rounded-full bg-sky-300 shadow-[0_0_14px_rgba(125,211,252,0.8)]" />
-              </div>
-            ) : (
-              <div className="flex h-full items-center justify-between">
-                <span className="text-sm font-medium text-zinc-200 transition-all duration-300">
-                  {triggerLabel}
-                </span>
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-white/25 transition-all duration-300" />
-              </div>
-            )}
+            <div className="flex h-full items-center justify-center relative">
+  {/* TEXTO */}
+  <span
+    className={`absolute text-sm font-medium text-zinc-200 transition-all duration-300 ${
+      open ? "opacity-0 -translate-x-2" : "opacity-100 translate-x-0"
+    }`}
+  >
+    {triggerLabel}
+  </span>
+
+  {/* PUNTO */}
+  <span
+    className={`h-2.5 w-2.5 rounded-full transition-all duration-300 ${
+      open
+        ? "bg-sky-300 shadow-[0_0_14px_rgba(125,211,252,0.8)] scale-110"
+        : "bg-white/25 scale-100"
+    }`}
+  />
+</div>
           </button>
 
           <div
-            className={`overflow-hidden transition-all duration-300 ${
-              open ? "max-w-[1400px] max-h-20 opacity-100" : "max-w-0 max-h-0 opacity-0"
-            }`}
-          >
+  className={`overflow-hidden transition-all duration-300 ${
+    open
+      ? "max-w-[1400px] max-h-20 opacity-100"
+      : "max-w-0 max-h-0 opacity-0"
+  }`}
+  style={{
+    transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
+  }}
+>
             <div
               className={`flex flex-wrap gap-2 transition-all duration-300 ${
                 open ? "translate-x-0 opacity-100" : "translate-x-3 opacity-0"
@@ -213,10 +225,6 @@ function InlinePicker<T extends string | number>({
             </div>
           </div>
         </div>
-
-        {!open ? (
-          <p className="mt-2 text-sm text-zinc-400">{selectedLabel || "Sin seleccionar"}</p>
-        ) : null}
       </div>
     </div>
   );
