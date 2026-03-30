@@ -103,7 +103,7 @@ type NoticeState = {
   mode: "alert" | "confirm";
 };
 
-type PackRefreshState = "idle" | "loading" | "success";
+type RefreshState = "idle" | "loading" | "success";
 
 const REQUIRED_SLOTS = ["A", "B", "C"];
 
@@ -285,8 +285,14 @@ function formatPercent(value?: number | null) {
 }
 
 function formatAccountSize(value?: number | null) {
-  if (typeof value !== "number" || Number.isNaN(value)) return null;
-  return `${Math.round(value).toLocaleString("es-ES")}$`;
+  if (typeof value !== "number" || Number.isNaN(value) || value <= 0) return null;
+
+  if (value >= 1000) {
+    const k = value / 1000;
+    return `${Number.isInteger(k) ? k.toFixed(0) : k.toFixed(1)}K`;
+  }
+
+  return `${Math.round(value)}`;
 }
 
 function normalizeSlotName(slot: string | undefined) {
@@ -415,30 +421,26 @@ function ModalNotice({
 }) {
   if (!state.open) return null;
 
-  const toneStyles: Record<NoticeTone, { icon: string; badge: string; value: string }> = {
+  const toneStyles: Record<NoticeTone, { icon: string; badge: string }> = {
     info: {
       icon: "●",
       badge:
         "border-sky-300/20 bg-sky-400/[0.10] text-sky-200 shadow-[0_12px_24px_rgba(56,189,248,0.12)]",
-      value: "text-sky-300",
     },
     success: {
       icon: "✓",
       badge:
         "border-emerald-300/20 bg-emerald-400/[0.10] text-emerald-200 shadow-[0_12px_24px_rgba(16,185,129,0.12)]",
-      value: "text-emerald-300",
     },
     warning: {
       icon: "!",
       badge:
         "border-amber-300/20 bg-amber-300/[0.10] text-amber-100 shadow-[0_12px_24px_rgba(251,191,36,0.12)]",
-      value: "text-amber-300",
     },
     danger: {
       icon: "×",
       badge:
         "border-rose-300/20 bg-rose-400/[0.10] text-rose-200 shadow-[0_12px_24px_rgba(244,63,94,0.12)]",
-      value: "text-rose-300",
     },
   };
 
@@ -463,20 +465,12 @@ function ModalNotice({
           </div>
         </div>
 
-        <div className="mt-5 text-center">
+        <div className="mt-6 text-center">
           <h3 className="text-2xl font-semibold tracking-tight text-white">{state.title}</h3>
-          <p className="mt-2 text-sm leading-6 text-zinc-400">{state.message}</p>
+          <p className="mt-3 text-sm leading-6 text-zinc-400">{state.message}</p>
         </div>
 
-        <div className="mx-auto mt-5 h-px w-full max-w-[420px] bg-white/8" />
-
-        <div className="mt-5 text-center">
-          <p className={`text-4xl font-semibold leading-none ${tone.value}`}>
-            {state.mode === "confirm" ? "Confirmación" : "Notificación"}
-          </p>
-        </div>
-
-        <div className="mx-auto mt-5 h-px w-full max-w-[420px] bg-white/8" />
+        <div className="mx-auto mt-6 h-px w-full max-w-[420px] bg-white/8" />
 
         <div className="mt-6 flex items-center justify-center gap-2">
           {state.mode === "confirm" && (
@@ -533,6 +527,41 @@ function CheckIcon() {
   );
 }
 
+function RefreshStatusButton({
+  state,
+  onClick,
+  disabled,
+  title,
+}: {
+  state: RefreshState;
+  onClick: () => void;
+  disabled?: boolean;
+  title?: string;
+}) {
+  const classes =
+    state === "success"
+      ? "border-emerald-300/20 bg-emerald-400/[0.10] text-emerald-200 hover:bg-emerald-400/[0.12]"
+      : "border-white/10 bg-transparent text-zinc-300 hover:bg-white/[0.05] hover:text-white";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || state === "loading"}
+      title={title}
+      className={`flex h-[34px] w-[34px] items-center justify-center rounded-xl border transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${classes}`}
+    >
+      {state === "loading" ? (
+        <RefreshIcon spinning />
+      ) : state === "success" ? (
+        <CheckIcon />
+      ) : (
+        <RefreshIcon />
+      )}
+    </button>
+  );
+}
+
 export default function DashboardPage() {
   const [packs, setPacks] = useState<Pack[]>([]);
   const [events, setEvents] = useState<AccountEvent[]>([]);
@@ -556,7 +585,8 @@ export default function DashboardPage() {
   const [resultadosRevision, setResultadosRevision] = useState<ResultadoRevisionDiaria[]>([]);
   const [persistedPerformance, setPersistedPerformance] = useState<PersistedPerformanceMap>({});
   const [liveStatus, setLiveStatus] = useState<LiveStatusMap>({});
-  const [packRefreshState, setPackRefreshState] = useState<Record<number, PackRefreshState>>({});
+  const [packRefreshState, setPackRefreshState] = useState<Record<number, RefreshState>>({});
+  const [globalRefreshState, setGlobalRefreshState] = useState<RefreshState>("idle");
 
   const [notice, setNotice] = useState<NoticeState>({
     open: false,
@@ -567,7 +597,7 @@ export default function DashboardPage() {
   });
 
   const confirmResolverRef = useRef<((value: boolean) => void) | null>(null);
-  const refreshTimeoutsRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  const refreshTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const reemplazoRef = useRef<HTMLDivElement | null>(null);
 
   function showAlert(
@@ -615,47 +645,29 @@ export default function DashboardPage() {
     }
   }
 
-  function setPackRefreshLoading(packId: number) {
-    if (refreshTimeoutsRef.current[packId]) {
-      clearTimeout(refreshTimeoutsRef.current[packId]);
-      delete refreshTimeoutsRef.current[packId];
+  function clearRefreshTimeout(key: string) {
+    if (refreshTimeoutsRef.current[key]) {
+      clearTimeout(refreshTimeoutsRef.current[key]);
+      delete refreshTimeoutsRef.current[key];
     }
-
-    setPackRefreshState((prev) => ({
-      ...prev,
-      [packId]: "loading",
-    }));
   }
 
-  function setPackRefreshSuccess(packId: number) {
-    if (refreshTimeoutsRef.current[packId]) {
-      clearTimeout(refreshTimeoutsRef.current[packId]);
-    }
+  function markRefreshLoading(key: string, setter: () => void) {
+    clearRefreshTimeout(key);
+    setter();
+  }
 
-    setPackRefreshState((prev) => ({
-      ...prev,
-      [packId]: "success",
-    }));
-
-    refreshTimeoutsRef.current[packId] = setTimeout(() => {
-      setPackRefreshState((prev) => ({
-        ...prev,
-        [packId]: "idle",
-      }));
-      delete refreshTimeoutsRef.current[packId];
+  function markRefreshSuccess(
+    key: string,
+    setterSuccess: () => void,
+    setterIdle: () => void
+  ) {
+    clearRefreshTimeout(key);
+    setterSuccess();
+    refreshTimeoutsRef.current[key] = setTimeout(() => {
+      setterIdle();
+      delete refreshTimeoutsRef.current[key];
     }, 1200);
-  }
-
-  function setPackRefreshIdle(packId: number) {
-    if (refreshTimeoutsRef.current[packId]) {
-      clearTimeout(refreshTimeoutsRef.current[packId]);
-      delete refreshTimeoutsRef.current[packId];
-    }
-
-    setPackRefreshState((prev) => ({
-      ...prev,
-      [packId]: "idle",
-    }));
   }
 
   async function cargarDatos() {
@@ -755,26 +767,52 @@ export default function DashboardPage() {
     }
   }
 
-  async function recargarEstado(showSuccess = true) {
+  async function recargarEstadoSilencioso() {
     await Promise.all([cargarPerformancePersistida(true), cargarLiveStatus(true)]);
-    if (showSuccess) {
-      showAlert(
-        "Estado actualizado",
-        "La información de performance y live status se ha recargado correctamente.",
-        "success"
+  }
+
+  async function recargarEstadoGlobal() {
+    markRefreshLoading("global", () => setGlobalRefreshState("loading"));
+
+    try {
+      await recargarEstadoSilencioso();
+      markRefreshSuccess(
+        "global",
+        () => setGlobalRefreshState("success"),
+        () => setGlobalRefreshState("idle")
       );
+    } catch (error) {
+      console.error("Error en recarga global silenciosa:", error);
+      setGlobalRefreshState("idle");
     }
   }
 
   async function recargarEstadoPack(packId: number) {
-    setPackRefreshLoading(packId);
+    markRefreshLoading(`pack-${packId}`, () =>
+      setPackRefreshState((prev) => ({ ...prev, [packId]: "loading" }))
+    );
 
     try {
-      await Promise.all([cargarPerformancePersistida(true), cargarLiveStatus(true)]);
-      setPackRefreshSuccess(packId);
+      await recargarEstadoSilencioso();
+      markRefreshSuccess(
+        `pack-${packId}`,
+        () =>
+          setPackRefreshState((prev) => ({
+            ...prev,
+            [packId]: "success",
+          })),
+        () =>
+          setPackRefreshState((prev) => ({
+            ...prev,
+            [packId]: "idle",
+          }))
+      );
     } catch (error) {
       console.error("Error en recarga silenciosa del pack:", error);
-      setPackRefreshIdle(packId);
+      setPackRefreshState((prev) => ({
+        ...prev,
+        [packId]: "idle",
+      }));
     }
   }
 
@@ -804,7 +842,7 @@ export default function DashboardPage() {
       setResultadosRevision(data.resultados || []);
       await cargarDatos();
       await cargarResumenHistorico();
-      await recargarEstado(false);
+      await recargarEstadoSilencioso();
 
       showAlert(
         "Revisión diaria ejecutada",
@@ -841,7 +879,7 @@ export default function DashboardPage() {
 
       await cargarDatos();
       await cargarResumenHistorico();
-      await recargarEstado(false);
+      await recargarEstadoSilencioso();
 
       showAlert(
         "Rotación completada",
@@ -888,7 +926,7 @@ export default function DashboardPage() {
 
       await cargarDatos();
       await cargarResumenHistorico();
-      await recargarEstado(false);
+      await recargarEstadoSilencioso();
       showAlert(
         "Cuenta actualizada",
         "La cuenta se ha marcado como perdida correctamente.",
@@ -934,7 +972,7 @@ export default function DashboardPage() {
 
       await cargarDatos();
       await cargarResumenHistorico();
-      await recargarEstado(false);
+      await recargarEstadoSilencioso();
       showAlert(
         "Cuenta actualizada",
         "La cuenta se ha marcado como fondeada correctamente.",
@@ -991,7 +1029,7 @@ export default function DashboardPage() {
 
       await cargarDatos();
       await cargarResumenHistorico();
-      await recargarEstado(false);
+      await recargarEstadoSilencioso();
       showAlert(
         "Reemplazo completado",
         "La cuenta se ha reemplazado correctamente.",
@@ -1156,14 +1194,13 @@ export default function DashboardPage() {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <ActionButton
-                onClick={() => recargarEstado(true)}
-                disabled={loadingPerformance || loadingLive}
-                variant="secondary"
-              >
-                {loadingPerformance || loadingLive ? "Recargando..." : "Recargar estado"}
-              </ActionButton>
+            <div className="flex flex-wrap items-center gap-2">
+              <RefreshStatusButton
+                state={globalRefreshState}
+                onClick={recargarEstadoGlobal}
+                disabled={loading}
+                title="Recargar estado"
+              />
 
               <ActionButton
                 onClick={ejecutarRevisionDiaria}
@@ -1188,17 +1225,12 @@ export default function DashboardPage() {
           title="Filtros y estado"
           compact
           right={
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-xl border border-amber-300/20 bg-amber-300/[0.08] px-3 py-1.5 text-xs font-medium text-amber-100">
-                Pendientes: {pendingSlotOptions.length}
-              </span>
-              <ActionButton
-                onClick={() => setSoloIncidencias((prev) => !prev)}
-                variant={soloIncidencias ? "warning" : "secondary"}
-              >
-                {soloIncidencias ? "Solo alertas" : "Ver todas"}
-              </ActionButton>
-            </div>
+            <ActionButton
+              onClick={() => setSoloIncidencias((prev) => !prev)}
+              variant={soloIncidencias ? "warning" : "secondary"}
+            >
+              Alertas
+            </ActionButton>
           }
         >
           <div className="flex flex-col gap-3">
@@ -1456,7 +1488,7 @@ function PackCard({
   persistedPerformance: PersistedPerformanceMap;
   liveStatus: LiveStatusMap;
   loading: boolean;
-  refreshState: PackRefreshState;
+  refreshState: RefreshState;
   onRotar: (packId: number, packNombre: string) => void;
   onPerder: (accountId: number) => void;
   onFondear: (accountId: number) => void;
@@ -1466,11 +1498,6 @@ function PackCard({
 }) {
   const flags = getPackFlags(pack);
   const displaySlots = buildDisplaySlots(pack);
-
-  const refreshButtonClasses =
-    refreshState === "success"
-      ? "border-emerald-300/20 bg-emerald-400/[0.10] text-emerald-200 hover:bg-emerald-400/[0.12]"
-      : "border-white/10 bg-transparent text-zinc-300 hover:bg-white/[0.05] hover:text-white";
 
   return (
     <div className="overflow-hidden rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(255,255,255,0.01))] shadow-[0_14px_30px_rgba(0,0,0,0.18)] transition-all duration-300 hover:shadow-[0_18px_38px_rgba(0,0,0,0.20)]">
@@ -1518,21 +1545,12 @@ function PackCard({
               Rotar
             </ActionButton>
 
-            <button
-              type="button"
+            <RefreshStatusButton
+              state={refreshState}
               onClick={onRefresh}
-              disabled={loading || refreshState === "loading"}
+              disabled={loading}
               title="Recargar estado"
-              className={`flex h-[34px] w-[34px] items-center justify-center rounded-xl border transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${refreshButtonClasses}`}
-            >
-              {refreshState === "loading" ? (
-                <RefreshIcon spinning />
-              ) : refreshState === "success" ? (
-                <CheckIcon />
-              ) : (
-                <RefreshIcon />
-              )}
-            </button>
+            />
           </div>
         </div>
       </div>
@@ -1587,7 +1605,7 @@ function PackCard({
                     </p>
 
                     {accountSizeLabel ? (
-                      <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium text-zinc-300">
+                      <span className="shrink-0 rounded-full border border-sky-300/20 bg-sky-400/[0.10] px-2.5 py-1 text-[11px] font-semibold tracking-[0.04em] text-sky-100 shadow-[0_10px_22px_rgba(56,189,248,0.10)]">
                         {accountSizeLabel}
                       </span>
                     ) : null}
