@@ -12,6 +12,7 @@ export async function GET() {
       supabaseAdmin
         .from("prop_firms")
         .select("id, nombre")
+        .eq("activo", true)
         .order("nombre", { ascending: true }),
 
       supabaseAdmin
@@ -43,6 +44,7 @@ export async function GET() {
     let accountsQuery = supabaseAdmin
       .from("accounts")
       .select("id, alias, numero_cuenta, preset_id, tipo_cuenta, estado")
+      .eq("estado", "activa")
       .order("alias", { ascending: true });
 
     if (assignedAccountIds.length > 0) {

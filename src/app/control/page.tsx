@@ -262,23 +262,10 @@ function InlinePicker<T extends string | number>({
 }
 
 function SummaryCard({
-  presetLabel,
-  tipoCuenta,
-  accountSize,
-  propFirmLabel,
+  items,
 }: {
-  presetLabel: string;
-  tipoCuenta: TypeOption;
-  accountSize: string;
-  propFirmLabel: string;
+  items: { label: string; value: string }[];
 }) {
-  const items = [
-    { label: "Preset", value: presetLabel || "Sin preset" },
-    { label: "Tipo", value: tipoCuenta === "prueba" ? "Prueba" : "Fondeada" },
-    { label: "Tamaño", value: accountSize || "Sin tamaño" },
-    { label: "Prop firm", value: propFirmLabel || "Sin prop firm" },
-  ];
-
   return (
     <div className="rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_14px_34px_rgba(0,0,0,0.18)]">
       <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
@@ -300,6 +287,19 @@ function SummaryCard({
   );
 }
 
+function normalizeTipoCuenta(value: string | null | undefined): TypeOption | null {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "prueba") return "prueba";
+  if (normalized === "fondeada") return "fondeada";
+  return null;
+}
+
+function buildAccountLabel(account: AvailableAccountOption) {
+  const alias = account.alias || "Sin alias";
+  const numero = account.numero_cuenta || "-";
+  return `${alias} · ${numero}`;
+}
+
 export default function ControlPage() {
   const [alias, setAlias] = useState("");
   const [numeroCuenta, setNumeroCuenta] = useState("");
@@ -307,19 +307,39 @@ export default function ControlPage() {
   const [tipoCuenta, setTipoCuenta] = useState<TypeOption>("prueba");
   const [accountSize, setAccountSize] = useState<AccountSizeOption>("10K");
   const [propFirmId, setPropFirmId] = useState<number | null>(null);
+  const [preassignSlot, setPreassignSlot] = useState<SlotKey | null>(null);
+
+  const [packNombre, setPackNombre] = useState("");
+  const [packPresetId, setPackPresetId] = useState<number | null>(null);
+  const [packTipo, setPackTipo] = useState<TypeOption>("prueba");
+  const [slotAssignments, setSlotAssignments] = useState<Record<SlotKey, number | null>>({
+    A: null,
+    B: null,
+    C: null,
+  });
 
   const [presets, setPresets] = useState<PresetOption[]>([]);
   const [propFirms, setPropFirms] = useState<PropFirmOption[]>([]);
+  const [availableAccounts, setAvailableAccounts] = useState<AvailableAccountOption[]>([]);
 
   const [saving, setSaving] = useState(false);
+  const [savingPack, setSavingPack] = useState(false);
+
   const [feedback, setFeedback] = useState<{ type: "ok" | "error"; message: string } | null>(
     null
   );
+  const [packFeedback, setPackFeedback] = useState<{ type: "ok" | "error"; message: string } | null>(
+    null
+  );
 
-  const [openControls, setOpenControls] = useState<Record<"preset" | "size" | "propfirm", boolean>>({
+  const [openControls, setOpenControls] = useState<Record<string, boolean>>({
     preset: false,
     size: false,
     propfirm: false,
+    packPreset: false,
+    slotA: false,
+    slotB: false,
+    slotC: false,
   });
 
   useEffect(() => {
@@ -334,9 +354,11 @@ export default function ControlPage() {
 
         setPresets(data.presets || []);
         setPropFirms(data.propFirms || []);
+        setAvailableAccounts(data.availableAccounts || []);
       } catch {
         setPresets([]);
         setPropFirms([]);
+        setAvailableAccounts([]);
       }
     }
 
@@ -367,11 +389,69 @@ export default function ControlPage() {
   const selectedPropFirmLabel =
     propFirms.find((firm) => firm.id === propFirmId)?.nombre || "";
 
-  function toggleControl(key: "preset" | "size" | "propfirm") {
+  const selectedPackPresetLabel =
+    presets.find((preset) => preset.id === packPresetId)?.nombre || "";
+
+  const filteredPackAccounts = useMemo(() => {
+    return availableAccounts.filter((account) => {
+      const tipo = normalizeTipoCuenta(account.tipo_cuenta);
+      const sameTipo = tipo === packTipo;
+      const samePreset = packPresetId ? account.preset_id === packPresetId : true;
+      return sameTipo && samePreset;
+    });
+  }, [availableAccounts, packPresetId, packTipo]);
+
+  useEffect(() => {
+    setSlotAssignments((prev) => {
+      const allowedIds = new Set(filteredPackAccounts.map((account) => account.id));
+      const next = { ...prev };
+      let changed = false;
+
+      for (const slot of SLOT_KEYS) {
+        const value = prev[slot];
+        if (value !== null && !allowedIds.has(value)) {
+          next[slot] = null;
+          changed = true;
+        }
+      }
+
+      return changed ? next : prev;
+    });
+  }, [filteredPackAccounts]);
+
+  function toggleControl(key: string) {
     setOpenControls((prev) => ({
       ...prev,
       [key]: !prev[key],
     }));
+  }
+
+  function getAccountById(accountId: number | null) {
+    if (!accountId) return null;
+    return availableAccounts.find((account) => account.id === accountId) || null;
+  }
+
+  function getSlotOptions(slot: SlotKey) {
+    const usedInOtherSlots = new Set(
+      SLOT_KEYS.filter((item) => item !== slot)
+        .map((item) => slotAssignments[item])
+        .filter((value): value is number => typeof value === "number")
+    );
+
+    const accountOptions = filteredPackAccounts
+      .filter((account) => {
+        if (slotAssignments[slot] === account.id) return true;
+        return !usedInOtherSlots.has(account.id);
+      })
+      .map((account) => ({
+        value: account.id,
+        label: buildAccountLabel(account),
+      }));
+
+    return [
+      { value: 0, label: "Vacío" },
+      ...accountOptions,
+    ];
   }
 
   async function crearCuenta() {
@@ -420,9 +500,32 @@ export default function ControlPage() {
         return;
       }
 
+      const createdAccount = data?.account as AvailableAccountOption | undefined;
+
+      if (createdAccount) {
+        setAvailableAccounts((prev) => {
+          const exists = prev.some((item) => item.id === createdAccount.id);
+          if (exists) return prev;
+          return [...prev, createdAccount].sort((a, b) =>
+            String(a.alias || "").localeCompare(String(b.alias || ""))
+          );
+        });
+
+        if (preassignSlot) {
+          setPackPresetId(Number(createdAccount.preset_id) || Number(presetId));
+          setPackTipo(normalizeTipoCuenta(createdAccount.tipo_cuenta) || tipoCuenta);
+          setSlotAssignments((prev) => ({
+            ...prev,
+            [preassignSlot]: createdAccount.id,
+          }));
+        }
+      }
+
       setFeedback({
         type: "ok",
-        message: "Cuenta creada correctamente.",
+        message: preassignSlot
+          ? `Cuenta creada y preasignada al slot ${preassignSlot}.`
+          : "Cuenta creada correctamente.",
       });
 
       setAlias("");
@@ -431,6 +534,7 @@ export default function ControlPage() {
       setTipoCuenta("prueba");
       setAccountSize("10K");
       setPropFirmId(null);
+      setPreassignSlot(null);
     } catch {
       setFeedback({
         type: "error",
@@ -440,6 +544,98 @@ export default function ControlPage() {
       setSaving(false);
     }
   }
+
+  async function crearPack() {
+    setPackFeedback(null);
+
+    if (!packNombre.trim()) {
+      setPackFeedback({ type: "error", message: "Introduce un nombre de pack válido." });
+      return;
+    }
+
+    if (!packPresetId) {
+      setPackFeedback({ type: "error", message: "Selecciona un preset para el pack." });
+      return;
+    }
+
+    setSavingPack(true);
+
+    try {
+      const res = await fetch("/api/packs/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          nombre: packNombre.trim(),
+          presetId: packPresetId,
+          tipoPack: packTipo,
+          slotAssignments,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setPackFeedback({
+          type: "error",
+          message: data?.error || "No se pudo crear el pack.",
+        });
+        return;
+      }
+
+      const assignedIds = SLOT_KEYS.map((slot) => slotAssignments[slot]).filter(
+        (value): value is number => typeof value === "number"
+      );
+
+      if (assignedIds.length > 0) {
+        setAvailableAccounts((prev) =>
+          prev.filter((account) => !assignedIds.includes(account.id))
+        );
+      }
+
+      setPackFeedback({
+        type: "ok",
+        message: "Pack creado correctamente.",
+      });
+
+      setPackNombre("");
+      setPackPresetId(null);
+      setPackTipo("prueba");
+      setSlotAssignments({
+        A: null,
+        B: null,
+        C: null,
+      });
+    } catch {
+      setPackFeedback({
+        type: "error",
+        message: "No se pudo crear el pack.",
+      });
+    } finally {
+      setSavingPack(false);
+    }
+  }
+
+  const accountSummaryItems = [
+    { label: "Preset", value: selectedPresetLabel || "Sin preset" },
+    { label: "Tipo", value: tipoCuenta === "prueba" ? "Prueba" : "Fondeada" },
+    { label: "Tamaño", value: accountSize || "Sin tamaño" },
+    { label: "Prop firm", value: selectedPropFirmLabel || "Sin prop firm" },
+  ];
+
+  const packSummaryItems = [
+    { label: "Preset", value: selectedPackPresetLabel || "Sin preset" },
+    { label: "Tipo", value: packTipo === "prueba" ? "Prueba" : "Fondeada" },
+    {
+      label: "Slots",
+      value: `${SLOT_KEYS.filter((slot) => slotAssignments[slot] !== null).length}/3`,
+    },
+    {
+      label: "Activa",
+      value: getAccountById(slotAssignments.A)?.alias || "Slot A vacío",
+    },
+  ];
 
   return (
     <div className="space-y-5 text-white">
@@ -508,12 +704,25 @@ export default function ControlPage() {
               <TypeSwitch value={tipoCuenta} onChange={setTipoCuenta} />
             </div>
 
-            <SummaryCard
-              presetLabel={selectedPresetLabel}
-              tipoCuenta={tipoCuenta}
-              accountSize={accountSize}
-              propFirmLabel={selectedPropFirmLabel}
-            />
+            <SummaryCard items={accountSummaryItems} />
+
+            <div className="rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_14px_34px_rgba(0,0,0,0.18)]">
+              <MiniLabel>Preasignar a nuevo pack</MiniLabel>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {SLOT_KEYS.map((slot) => (
+                  <GlowOptionButton
+                    key={slot}
+                    label={`Slot ${slot}`}
+                    active={preassignSlot === slot}
+                    visible={true}
+                    delayMs={0}
+                    onClick={() =>
+                      setPreassignSlot((prev) => (prev === slot ? null : slot))
+                    }
+                  />
+                ))}
+              </div>
+            </div>
 
             {feedback ? (
               <div
@@ -535,6 +744,113 @@ export default function ControlPage() {
                 className="h-12 rounded-[18px] border border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.20),rgba(56,189,248,0.08))] px-5 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_30px_rgba(56,189,248,0.12)] transition-all duration-200 hover:-translate-y-[1px] hover:border-sky-300/30 hover:bg-[linear-gradient(180deg,rgba(56,189,248,0.24),rgba(56,189,248,0.10))] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {saving ? "Creando..." : "Crear cuenta"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Crear pack">
+        <div className="grid items-start grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_760px]">
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <div>
+                <MiniLabel>Nombre del pack</MiniLabel>
+                <CompactInput
+                  value={packNombre}
+                  onChange={setPackNombre}
+                  placeholder="Ej. Pack 1 Fernet"
+                />
+              </div>
+
+              <div>
+                <MiniLabel>Preset</MiniLabel>
+                <InlinePicker
+                  label=""
+                  triggerLabel="Preset pack"
+                  options={presetItems}
+                  selectedValue={packPresetId}
+                  open={openControls.packPreset}
+                  onToggle={() => toggleControl("packPreset")}
+                  onSelect={setPackPresetId}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+              {SLOT_KEYS.map((slot) => (
+                <div
+                  key={slot}
+                  className="rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_14px_34px_rgba(0,0,0,0.18)]"
+                >
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-sm font-medium text-white">Slot {slot}</p>
+                    {slot === "A" ? (
+                      <span className="rounded-full border border-sky-300/20 bg-sky-300/[0.10] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-sky-100">
+                        Activa
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <InlinePicker
+                    label=""
+                    triggerLabel={`Elegir ${slot}`}
+                    options={getSlotOptions(slot)}
+                    selectedValue={slotAssignments[slot] ?? 0}
+                    open={openControls[`slot${slot}`]}
+                    onToggle={() => toggleControl(`slot${slot}`)}
+                    onSelect={(value) =>
+                      setSlotAssignments((prev) => ({
+                        ...prev,
+                        [slot]: Number(value) === 0 ? null : Number(value),
+                      }))
+                    }
+                  />
+
+                  <div className="mt-3 rounded-[16px] border border-white/8 bg-black/20 px-3 py-3">
+                    <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
+                      Cuenta
+                    </p>
+                    <p className="mt-2 truncate text-sm font-medium text-white">
+                      {getAccountById(slotAssignments[slot])?.alias || "Vacío"}
+                    </p>
+                    <p className="mt-1 truncate text-xs text-zinc-400">
+                      {getAccountById(slotAssignments[slot])?.numero_cuenta || "-"}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <MiniLabel>Tipo del pack</MiniLabel>
+              <TypeSwitch value={packTipo} onChange={setPackTipo} />
+            </div>
+
+            <SummaryCard items={packSummaryItems} />
+
+            {packFeedback ? (
+              <div
+                className={`rounded-[20px] border px-4 py-3 text-sm ${
+                  packFeedback.type === "ok"
+                    ? "border-emerald-300/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.12),rgba(16,185,129,0.04))] text-emerald-100"
+                    : "border-rose-300/20 bg-[linear-gradient(180deg,rgba(244,63,94,0.12),rgba(244,63,94,0.04))] text-rose-100"
+                }`}
+              >
+                {packFeedback.message}
+              </div>
+            ) : null}
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={crearPack}
+                disabled={savingPack}
+                className="h-12 rounded-[18px] border border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.20),rgba(56,189,248,0.08))] px-5 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_30px_rgba(56,189,248,0.12)] transition-all duration-200 hover:-translate-y-[1px] hover:border-sky-300/30 hover:bg-[linear-gradient(180deg,rgba(56,189,248,0.24),rgba(56,189,248,0.10))] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {savingPack ? "Creando..." : "Crear pack"}
               </button>
             </div>
           </div>
