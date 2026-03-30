@@ -84,7 +84,6 @@ type CalendarDayData = {
 
 type TradingMode = "pnl" | "events";
 type CuentaTipoFiltro = "prueba" | "fondeada";
-type ChartMode = "equity" | "daily";
 
 type CalendarApiResultItem = {
   id: number;
@@ -137,13 +136,6 @@ type KpiItem = {
   icon?: "target" | "bars" | "trend" | "ratio";
 };
 
-type GrowthPoint = {
-  label: string;
-  date: string;
-  value: number;
-  dailyUsd: number;
-};
-
 const DAY_LABELS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom", "Semana"];
 const SLOT_ORDER = ["A", "B", "C"];
 
@@ -167,10 +159,6 @@ function getSinglePack(
   return Array.isArray(pack) ? pack[0] : pack;
 }
 
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
-}
-
 function formatUsd(value: number) {
   const sign = value < 0 ? "-" : "";
   return `${sign}$${Math.abs(value).toFixed(2)}`;
@@ -190,17 +178,8 @@ function formatPct(value: number) {
   return `${sign}${Math.abs(value).toFixed(1)}%`;
 }
 
-function formatChartPct(value: number) {
+function formatPlainPct(value: number) {
   return `${value.toFixed(1)}%`;
-}
-
-function formatShortDateLabel(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("es-ES", {
-    month: "2-digit",
-    day: "2-digit",
-  });
 }
 
 function getMonthLabel(date: Date) {
@@ -310,22 +289,6 @@ function calcProfitFactor(values: number[]) {
   if (grossProfit === 0 && grossLoss === 0) return null;
   if (grossLoss === 0) return null;
   return grossProfit / grossLoss;
-}
-
-function buildLinePath(points: { x: number; y: number }[]) {
-  if (!points.length) return "";
-  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
-  return points
-    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
-    .join(" ");
-}
-
-function buildAreaPath(points: { x: number; y: number }[], baseY: number) {
-  if (!points.length) return "";
-  const line = buildLinePath(points);
-  const last = points[points.length - 1];
-  const first = points[0];
-  return `${line} L ${last.x} ${baseY} L ${first.x} ${baseY} Z`;
 }
 
 function FilterButton({
@@ -512,316 +475,6 @@ function RatioIcon() {
   );
 }
 
-function ChartCard({
-  title,
-  right,
-  children,
-}: {
-  title: string;
-  right?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.026),rgba(255,255,255,0.012))] p-4 shadow-[0_18px_36px_rgba(0,0,0,0.18)]">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-lg font-semibold text-white">{title}</h2>
-        {right}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function InteractiveGrowthChart({
-  points,
-  chartMode,
-  onModeChange,
-  totalLabel,
-}: {
-  points: GrowthPoint[];
-  chartMode: ChartMode;
-  onModeChange: (mode: ChartMode) => void;
-  totalLabel: string;
-}) {
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-
-  const width = 920;
-  const height = 320;
-  const paddingLeft = 74;
-  const paddingRight = 18;
-  const paddingTop = 18;
-  const paddingBottom = 36;
-  const innerWidth = width - paddingLeft - paddingRight;
-  const innerHeight = height - paddingTop - paddingBottom;
-
-  const series = points.map((point) =>
-    chartMode === "equity" ? point.value : point.dailyUsd
-  );
-
-  const minValue = Math.min(0, ...series);
-  const maxValue = Math.max(0, ...series, 1);
-  const range = maxValue - minValue || 1;
-
-  const svgPoints = points.map((point, index) => {
-    const value = chartMode === "equity" ? point.value : point.dailyUsd;
-    const x =
-      paddingLeft +
-      (points.length === 1 ? innerWidth / 2 : (index / (points.length - 1)) * innerWidth);
-    const y =
-      paddingTop + innerHeight - ((value - minValue) / range) * innerHeight;
-    return { x, y, value, point };
-  });
-
-  const linePath = buildLinePath(svgPoints);
-  const baselineY =
-    paddingTop + innerHeight - ((0 - minValue) / range) * innerHeight;
-  const areaPath = buildAreaPath(svgPoints, baselineY);
-
-  const ticks = 4;
-  const yTicks = Array.from({ length: ticks + 1 }, (_, index) => {
-    const ratio = index / ticks;
-    const value = maxValue - (maxValue - minValue) * ratio;
-    const y = paddingTop + innerHeight * ratio;
-    return { value, y };
-  });
-
-  const hoveredPoint =
-    hoveredIndex !== null && svgPoints[hoveredIndex] ? svgPoints[hoveredIndex] : null;
-
-  const activeColor =
-    hoveredPoint && hoveredPoint.value < 0 ? "rgba(244,63,94,0.95)" : "rgba(22,223,110,0.95)";
-  const strokeColor =
-    chartMode === "daily" && series.some((value) => value < 0)
-      ? "url(#lineGradient)"
-      : "rgba(22,223,110,0.95)";
-
-  return (
-    <div className="h-full w-full">
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <div className="inline-flex rounded-xl border border-white/10 bg-white/[0.03] p-1 text-xs">
-          <button
-            type="button"
-            onClick={() => onModeChange("equity")}
-            className={`rounded-lg px-3 py-1 font-medium transition ${
-              chartMode === "equity"
-                ? "bg-emerald-400 text-black"
-                : "text-zinc-500 hover:text-white"
-            }`}
-          >
-            Equity
-          </button>
-          <button
-            type="button"
-            onClick={() => onModeChange("daily")}
-            className={`rounded-lg px-3 py-1 font-medium transition ${
-              chartMode === "daily"
-                ? "bg-emerald-400 text-black"
-                : "text-zinc-500 hover:text-white"
-            }`}
-          >
-            Daily P&L
-          </button>
-        </div>
-        <p
-          className={`text-lg font-semibold ${
-            chartMode === "equity"
-              ? points.length && points[points.length - 1].value < 0
-                ? "text-rose-300"
-                : "text-emerald-300"
-              : points.reduce((acc, point) => acc + point.dailyUsd, 0) < 0
-              ? "text-rose-300"
-              : "text-emerald-300"
-          }`}
-        >
-          {totalLabel}
-        </p>
-      </div>
-
-      <div className="relative h-[255px] w-full">
-        <svg
-          viewBox={`0 0 ${width} ${height}`}
-          className="h-full w-full"
-          onMouseLeave={() => setHoveredIndex(null)}
-        >
-          <defs>
-            <linearGradient id="fillGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgba(22,223,110,0.22)" />
-              <stop offset="100%" stopColor="rgba(22,223,110,0.02)" />
-            </linearGradient>
-            <linearGradient id="lineGradient" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="rgba(244,63,94,0.95)" />
-              <stop offset="100%" stopColor="rgba(22,223,110,0.95)" />
-            </linearGradient>
-          </defs>
-
-          {yTicks.map((tick, index) => (
-            <g key={index}>
-              <line
-                x1={paddingLeft}
-                y1={tick.y}
-                x2={width - paddingRight}
-                y2={tick.y}
-                stroke="rgba(56,189,248,0.10)"
-                strokeDasharray="3 6"
-              />
-              <text
-                x={paddingLeft - 10}
-                y={tick.y + 4}
-                textAnchor="end"
-                fill="#7eb9ff"
-                fontSize="10"
-              >
-                {formatCompactUsd(tick.value)}
-              </text>
-            </g>
-          ))}
-
-          {svgPoints.map((point, index) => (
-            <line
-              key={index}
-              x1={point.x}
-              y1={paddingTop}
-              x2={point.x}
-              y2={height - paddingBottom}
-              stroke="rgba(56,189,248,0.08)"
-              strokeDasharray="3 6"
-            />
-          ))}
-
-          {chartMode === "daily" ? (
-            svgPoints.map((point, index) => {
-              const barWidth = Math.max(innerWidth / Math.max(points.length * 2.4, 8), 14);
-              const top = Math.min(point.y, baselineY);
-              const barHeight = Math.max(Math.abs(point.y - baselineY), 2);
-              const positive = point.value >= 0;
-
-              return (
-                <g key={index}>
-                  <rect
-                    x={point.x - barWidth / 2}
-                    y={top}
-                    width={barWidth}
-                    height={barHeight}
-                    rx="4"
-                    fill={positive ? "rgba(22,223,110,0.24)" : "rgba(244,63,94,0.22)"}
-                    stroke={positive ? "rgba(22,223,110,0.55)" : "rgba(244,63,94,0.5)"}
-                  />
-                  <rect
-                    x={point.x - Math.max(barWidth, 24)}
-                    y={paddingTop}
-                    width={Math.max(barWidth * 2, 48)}
-                    height={innerHeight}
-                    fill="transparent"
-                    onMouseEnter={() => setHoveredIndex(index)}
-                  />
-                </g>
-              );
-            })
-          ) : (
-            <>
-              <path d={areaPath} fill="url(#fillGradient)" />
-              <path
-                d={linePath}
-                fill="none"
-                stroke={strokeColor}
-                strokeWidth="2.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-
-              {svgPoints.map((point, index) => (
-                <g key={index}>
-                  <circle
-                    cx={point.x}
-                    cy={point.y}
-                    r="4.5"
-                    fill="#071018"
-                    stroke={point.value < 0 ? "rgba(244,63,94,0.95)" : "rgba(22,223,110,0.95)"}
-                    strokeWidth="2"
-                  />
-                  <rect
-                    x={point.x - 24}
-                    y={paddingTop}
-                    width={48}
-                    height={innerHeight}
-                    fill="transparent"
-                    onMouseEnter={() => setHoveredIndex(index)}
-                  />
-                </g>
-              ))}
-            </>
-          )}
-
-          {hoveredPoint ? (
-            <>
-              <line
-                x1={hoveredPoint.x}
-                y1={paddingTop}
-                x2={hoveredPoint.x}
-                y2={height - paddingBottom}
-                stroke="rgba(255,255,255,0.45)"
-                strokeWidth="1.2"
-              />
-              <circle
-                cx={hoveredPoint.x}
-                cy={hoveredPoint.y}
-                r="5.5"
-                fill="#071018"
-                stroke={activeColor}
-                strokeWidth="2.2"
-              />
-            </>
-          ) : null}
-
-          {svgPoints.map((point, index) => (
-            <text
-              key={index}
-              x={point.x}
-              y={height - 8}
-              textAnchor="middle"
-              fill="#7eb9ff"
-              fontSize="10"
-            >
-              {point.point.label}
-            </text>
-          ))}
-        </svg>
-
-        {hoveredPoint ? (
-          <div
-            className="pointer-events-none absolute z-10 rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 shadow-[0_20px_40px_rgba(0,0,0,0.35)]"
-            style={{
-              left: `calc(${((hoveredPoint.x - 10) / width) * 100}% )`,
-              top: "18%",
-              transform: "translateX(-10%)",
-            }}
-          >
-            <p className="text-sm font-medium text-white">{hoveredPoint.point.date}</p>
-            <p
-              className={`mt-1 text-sm font-semibold ${
-                hoveredPoint.value < 0 ? "text-rose-300" : "text-emerald-300"
-              }`}
-            >
-              {chartMode === "equity"
-                ? `Equity: ${formatUsd(hoveredPoint.point.value)}`
-                : `P&L: ${formatUsd(hoveredPoint.point.dailyUsd)}`}
-            </p>
-            {chartMode === "daily" ? (
-              <p
-                className={`mt-1 text-xs ${
-                  hoveredPoint.point.dailyUsd < 0 ? "text-rose-300" : "text-emerald-300"
-                }`}
-              >
-                Día: {formatUsd(hoveredPoint.point.dailyUsd)}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 function MonthStatsPanel({
   monthSummary,
   monthAnalytics,
@@ -831,18 +484,21 @@ function MonthStatsPanel({
     winRate: number;
     profitFactor: number | null;
     bestDayUsd: number;
+    bestDayPct: number;
     worstDayUsd: number;
+    worstDayPct: number;
     avgDayUsd: number;
+    avgDayPct: number;
     totalTrades: number;
     riskReward: number | null;
   };
 }) {
   return (
     <section className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.024),rgba(255,255,255,0.012))] p-4 shadow-[0_18px_36px_rgba(0,0,0,0.18)]">
-      <h3 className="text-[1.15rem] font-semibold text-white">Monthly Stats Summary</h3>
+      <h3 className="text-[1.15rem] font-semibold text-white">Resumen mensual</h3>
 
       <div className="mt-5 space-y-5">
-        <StatRow label="Win rate" value={formatChartPct(monthAnalytics.winRate)} tone="green" />
+        <StatRow label="Win rate" value={formatPlainPct(monthAnalytics.winRate)} tone="green" />
         <StatRow
           label="Risk/Reward"
           value={
@@ -865,20 +521,28 @@ function MonthStatsPanel({
               : "red"
           }
         />
-        <StatRow label="Best day P/L" value={formatCompactUsd(monthAnalytics.bestDayUsd)} tone="green" />
-        <StatRow
+        <StatRowDual
+          label="Best day P/L"
+          primary={formatCompactUsd(monthAnalytics.bestDayUsd)}
+          secondary={formatPct(monthAnalytics.bestDayPct)}
+          tone="green"
+        />
+        <StatRowDual
           label="Worst day P/L"
-          value={formatCompactUsd(monthAnalytics.worstDayUsd)}
+          primary={formatCompactUsd(monthAnalytics.worstDayUsd)}
+          secondary={formatPct(monthAnalytics.worstDayPct)}
           tone={monthAnalytics.worstDayUsd < 0 ? "red" : "green"}
         />
-        <StatRow
+        <StatRowDual
           label="Avg daily P/L"
-          value={formatCompactUsd(monthAnalytics.avgDayUsd)}
+          primary={formatCompactUsd(monthAnalytics.avgDayUsd)}
+          secondary={formatPct(monthAnalytics.avgDayPct)}
           tone={monthAnalytics.avgDayUsd < 0 ? "red" : "green"}
         />
-        <StatRow
+        <StatRowDual
           label="Month P/L"
-          value={formatCompactUsd(monthSummary.totalUsd)}
+          primary={formatCompactUsd(monthSummary.totalUsd)}
+          secondary={formatPct(monthSummary.totalPct)}
           tone={monthSummary.totalUsd < 0 ? "red" : "green"}
         />
         <StatRow label="Trades" value={String(monthAnalytics.totalTrades)} tone="neutral" />
@@ -903,6 +567,31 @@ function StatRow({
     <div>
       <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">{label}</p>
       <p className={`mt-1.5 text-[1.05rem] font-semibold ${toneClass}`}>{value}</p>
+    </div>
+  );
+}
+
+function StatRowDual({
+  label,
+  primary,
+  secondary,
+  tone = "green",
+}: {
+  label: string;
+  primary: string;
+  secondary: string;
+  tone?: "green" | "red" | "neutral";
+}) {
+  const toneClass =
+    tone === "red" ? "text-rose-400" : tone === "neutral" ? "text-white" : "text-emerald-300";
+
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">{label}</p>
+      <div className="mt-1.5 flex items-center justify-between gap-3">
+        <p className={`text-[1.05rem] font-semibold ${toneClass}`}>{primary}</p>
+        <p className={`text-sm font-medium ${toneClass}`}>{secondary}</p>
+      </div>
     </div>
   );
 }
@@ -1182,7 +871,6 @@ export default function CalendarioPage() {
   const [presets, setPresets] = useState<PresetOption[]>([]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [packs, setPacks] = useState<PackFilterItem[]>([]);
-  const [chartMode, setChartMode] = useState<ChartMode>("equity");
 
   const [viewMode, setViewMode] = useState<TradingMode>("pnl");
   const [selectedCuentaTipo, setSelectedCuentaTipo] = useState<CuentaTipoFiltro>("prueba");
@@ -1601,10 +1289,12 @@ export default function CalendarioPage() {
     const resultItems = currentMonthDays.flatMap((day) => day.resultDetails);
     const positiveResults = resultItems.filter((item) => item.pnlUsd > 0).length;
     const totalResults = resultItems.length;
-    const totalTrades = resultItems.reduce((acc, item) => acc + item.numeroTrades, 0);
 
     const resultPnlValues = resultItems.map((item) => item.pnlUsd);
     const dayPnlValues = currentMonthDays.map((day) => day.totalUsd).filter((value) => value !== 0);
+    const dayPctValues = currentMonthDays.map((day) => day.totalPct).filter((value) => value !== 0);
+
+    const totalTrades = currentMonthDays.reduce((acc, day) => acc + day.totalTrades, 0);
 
     const winRate = totalResults === 0 ? 0 : (positiveResults / totalResults) * 100;
     const profitFactor = calcProfitFactor(resultPnlValues);
@@ -1614,13 +1304,30 @@ export default function CalendarioPage() {
       average(resultItems.filter((item) => item.pnlUsd < 0).map((item) => item.pnlUsd))
     );
 
+    let bestDayUsd = 0;
+    let bestDayPct = 0;
+    let worstDayUsd = 0;
+    let worstDayPct = 0;
+
+    if (currentMonthDays.length > 0) {
+      const bestDay = [...currentMonthDays].sort((a, b) => b.totalUsd - a.totalUsd)[0];
+      const worstDay = [...currentMonthDays].sort((a, b) => a.totalUsd - b.totalUsd)[0];
+      bestDayUsd = bestDay?.totalUsd ?? 0;
+      bestDayPct = bestDay?.totalPct ?? 0;
+      worstDayUsd = worstDay?.totalUsd ?? 0;
+      worstDayPct = worstDay?.totalPct ?? 0;
+    }
+
     return {
       winRate,
       totalTrades,
       profitFactor,
-      bestDayUsd: dayPnlValues.length ? Math.max(...dayPnlValues) : 0,
-      worstDayUsd: dayPnlValues.length ? Math.min(...dayPnlValues) : 0,
+      bestDayUsd,
+      bestDayPct,
+      worstDayUsd,
+      worstDayPct,
       avgDayUsd: dayPnlValues.length ? average(dayPnlValues) : 0,
+      avgDayPct: dayPctValues.length ? average(dayPctValues) : 0,
       riskReward: avgWin > 0 && avgLossAbs > 0 ? avgWin / avgLossAbs : null,
     };
   }, [currentMonthDays]);
@@ -1629,7 +1336,7 @@ export default function CalendarioPage() {
     return [
       {
         label: "Win rate",
-        value: formatChartPct(monthAnalytics.winRate),
+        value: formatPlainPct(monthAnalytics.winRate),
         tone: monthAnalytics.winRate >= 50 ? "green" : "red",
         icon: "target",
       },
@@ -1641,7 +1348,7 @@ export default function CalendarioPage() {
       },
       {
         label: "Returns",
-        value: formatChartPct(monthSummary.totalPct),
+        value: formatPlainPct(monthSummary.totalPct),
         tone: monthSummary.totalPct >= 0 ? "green" : "red",
         icon: "trend",
       },
@@ -1659,20 +1366,6 @@ export default function CalendarioPage() {
       },
     ];
   }, [monthAnalytics, monthSummary]);
-
-  const growthPoints = useMemo<GrowthPoint[]>(() => {
-    let cumulative = 0;
-
-    return currentMonthDays.map((day) => {
-      cumulative += day.totalUsd;
-      return {
-        label: formatShortDateLabel(day.fecha),
-        date: day.fecha,
-        value: cumulative,
-        dailyUsd: day.totalUsd,
-      };
-    });
-  }, [currentMonthDays]);
 
   const selectedDay = selectedDayKey ? dailyMap.get(selectedDayKey) : undefined;
 
@@ -1835,162 +1528,128 @@ export default function CalendarioPage() {
           Error: {error}
         </div>
       ) : (
-        <>
-          <ChartCard
-            title="Evolución de cuenta"
-            right={
-              <p
-                className={`text-lg font-semibold ${
-                  chartMode === "equity"
-                    ? (growthPoints[growthPoints.length - 1]?.value ?? 0) < 0
-                      ? "text-rose-300"
-                      : "text-emerald-300"
-                    : monthSummary.totalUsd < 0
-                    ? "text-rose-300"
-                    : "text-emerald-300"
-                }`}
-              >
-                {chartMode === "equity"
-                  ? formatUsd(growthPoints[growthPoints.length - 1]?.value ?? 0)
-                  : formatUsd(monthSummary.totalUsd)}
-              </p>
-            }
-          >
-            <InteractiveGrowthChart
-              points={growthPoints}
-              chartMode={chartMode}
-              onModeChange={setChartMode}
-              totalLabel={
-                chartMode === "equity"
-                  ? formatUsd(growthPoints[growthPoints.length - 1]?.value ?? 0)
-                  : formatUsd(monthSummary.totalUsd)
-              }
-            />
-          </ChartCard>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <section className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.026),rgba(255,255,255,0.012))] p-4 shadow-[0_18px_36px_rgba(0,0,0,0.18)]">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={previousMonth}
+                  className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-zinc-300 transition hover:bg-white/[0.06]"
+                >
+                  ‹
+                </button>
 
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-            <section className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.026),rgba(255,255,255,0.012))] p-4 shadow-[0_18px_36px_rgba(0,0,0,0.18)]">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={previousMonth}
-                    className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-zinc-300 transition hover:bg-white/[0.06]"
-                  >
-                    ‹
-                  </button>
+                <p className="min-w-[148px] text-center text-xl font-semibold text-white">
+                  {getMonthLabel(currentMonth)}
+                </p>
 
-                  <p className="min-w-[148px] text-center text-xl font-semibold text-white">
-                    {getMonthLabel(currentMonth)}
-                  </p>
+                <button
+                  type="button"
+                  onClick={nextMonth}
+                  className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-zinc-300 transition hover:bg-white/[0.06]"
+                >
+                  ›
+                </button>
 
-                  <button
-                    type="button"
-                    onClick={nextMonth}
-                    className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-zinc-300 transition hover:bg-white/[0.06]"
-                  >
-                    ›
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => void cargarDatos()}
-                    className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
-                  >
-                    ↻
-                  </button>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-4 text-sm">
-                  <p className={`font-medium ${monthSummary.totalUsd < 0 ? "text-rose-300" : "text-emerald-300"}`}>
-                    P/L: {formatCompactUsd(monthSummary.totalUsd)}
-                  </p>
-                  <p className="text-zinc-400">Trades: {monthAnalytics.totalTrades}</p>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => void cargarDatos()}
+                  className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
+                >
+                  ↻
+                </button>
               </div>
 
-              <div
-                className="mb-2 grid gap-2"
-                style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr 0.72fr 0.72fr 0.9fr" }}
-              >
-                {DAY_LABELS.map((label) => (
-                  <div
-                    key={label}
-                    className="px-2 py-1 text-center text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500"
-                  >
-                    {label}
-                  </div>
-                ))}
+              <div className="flex flex-wrap items-center gap-4 text-sm">
+                <p className={`font-medium ${monthSummary.totalUsd < 0 ? "text-rose-300" : "text-emerald-300"}`}>
+                  P/L: {formatCompactUsd(monthSummary.totalUsd)}
+                </p>
+                <p className="text-zinc-400">Trades: {monthAnalytics.totalTrades}</p>
               </div>
-
-              <div className="space-y-2">
-                {calendarWeeks.map((week, weekIndex) => {
-                  const compactWeek = compactWeekFlags[weekIndex];
-                  const weekDays = week
-                    .filter((date) => date.getMonth() === currentMonth.getMonth())
-                    .map((date) => dailyMap.get(toDateKey(date)))
-                    .filter((item): item is CalendarDayData => Boolean(item));
-
-                  const weekUsd = weekDays.reduce((acc, day) => acc + day.totalUsd, 0);
-                  const weekPct = weekDays.reduce((acc, day) => acc + day.totalPct, 0);
-                  const weekTrades = weekDays.reduce((acc, day) => acc + day.totalTrades, 0);
-
-                  return (
-                    <div
-                      key={`week_${weekIndex}`}
-                      className="grid gap-2"
-                      style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr 0.72fr 0.72fr 0.9fr" }}
-                    >
-                      {week.map((date) => {
-                        const dateKey = toDateKey(date);
-
-                        return (
-                          <CalendarDayCell
-                            key={dateKey}
-                            date={date}
-                            currentMonth={currentMonth}
-                            dayData={dailyMap.get(dateKey)}
-                            viewMode={viewMode}
-                            compact={compactWeek}
-                            isSelected={selectedDayKey === dateKey && isDetailOpen}
-                            onClick={() => {
-                              if (date.getMonth() !== currentMonth.getMonth()) return;
-
-                              if (selectedDayKey === dateKey && isDetailOpen) {
-                                setIsDetailOpen(false);
-                                return;
-                              }
-
-                              setSelectedDayKey(dateKey);
-                              setIsDetailOpen(true);
-                            }}
-                          />
-                        );
-                      })}
-
-                      <WeekSummaryCell usd={weekUsd} pct={weekPct} trades={weekTrades} />
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-
-            <div className="space-y-4">
-              <MonthStatsPanel
-                monthSummary={monthSummary}
-                monthAnalytics={monthAnalytics}
-              />
-
-              {isDetailOpen ? (
-                <DayDetailPanel
-                  selectedDayKey={selectedDayKey}
-                  selectedDay={selectedDay}
-                  onClose={() => setIsDetailOpen(false)}
-                />
-              ) : null}
             </div>
+
+            <div
+              className="mb-2 grid gap-2"
+              style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr 0.72fr 0.72fr 0.9fr" }}
+            >
+              {DAY_LABELS.map((label) => (
+                <div
+                  key={label}
+                  className="px-2 py-1 text-center text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500"
+                >
+                  {label}
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-2">
+              {calendarWeeks.map((week, weekIndex) => {
+                const compactWeek = compactWeekFlags[weekIndex];
+                const weekDays = week
+                  .filter((date) => date.getMonth() === currentMonth.getMonth())
+                  .map((date) => dailyMap.get(toDateKey(date)))
+                  .filter((item): item is CalendarDayData => Boolean(item));
+
+                const weekUsd = weekDays.reduce((acc, day) => acc + day.totalUsd, 0);
+                const weekPct = weekDays.reduce((acc, day) => acc + day.totalPct, 0);
+                const weekTrades = weekDays.reduce((acc, day) => acc + day.totalTrades, 0);
+
+                return (
+                  <div
+                    key={`week_${weekIndex}`}
+                    className="grid gap-2"
+                    style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr 0.72fr 0.72fr 0.9fr" }}
+                  >
+                    {week.map((date) => {
+                      const dateKey = toDateKey(date);
+
+                      return (
+                        <CalendarDayCell
+                          key={dateKey}
+                          date={date}
+                          currentMonth={currentMonth}
+                          dayData={dailyMap.get(dateKey)}
+                          viewMode={viewMode}
+                          compact={compactWeek}
+                          isSelected={selectedDayKey === dateKey && isDetailOpen}
+                          onClick={() => {
+                            if (date.getMonth() !== currentMonth.getMonth()) return;
+
+                            if (selectedDayKey === dateKey && isDetailOpen) {
+                              setIsDetailOpen(false);
+                              return;
+                            }
+
+                            setSelectedDayKey(dateKey);
+                            setIsDetailOpen(true);
+                          }}
+                        />
+                      );
+                    })}
+
+                    <WeekSummaryCell usd={weekUsd} pct={weekPct} trades={weekTrades} />
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <div className="space-y-4">
+            <MonthStatsPanel
+              monthSummary={monthSummary}
+              monthAnalytics={monthAnalytics}
+            />
+
+            {isDetailOpen ? (
+              <DayDetailPanel
+                selectedDayKey={selectedDayKey}
+                selectedDay={selectedDay}
+                onClose={() => setIsDetailOpen(false)}
+              />
+            ) : null}
           </div>
-        </>
+        </div>
       )}
     </div>
   );
