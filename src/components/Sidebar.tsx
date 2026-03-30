@@ -18,16 +18,6 @@ function isActivePath(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function SidebarToggleIcon() {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="block h-0.5 w-5 rounded-full bg-white" />
-      <span className="block h-0.5 w-5 rounded-full bg-white" />
-      <span className="block h-0.5 w-5 rounded-full bg-white" />
-    </div>
-  );
-}
-
 function DashboardIcon() {
   return (
     <svg
@@ -116,26 +106,11 @@ export default function Sidebar() {
 
   return (
     <aside className="sticky top-0 h-screen w-[92px] shrink-0 border-r border-white/8 bg-[linear-gradient(180deg,#020814_0%,#040b16_35%,#050d18_68%,#030914_100%)]">
-      <div className="relative flex h-full flex-col items-center px-3 py-4">
+      <div className="relative flex h-full flex-col items-center px-3 py-5">
         <div className="pointer-events-none absolute inset-y-0 right-0 w-px bg-[linear-gradient(180deg,transparent,rgba(255,255,255,0.06),transparent)]" />
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.035),transparent_22%),radial-gradient(circle_at_bottom,rgba(16,185,129,0.025),transparent_20%)]" />
 
-        <button
-          type="button"
-          className="relative z-10 flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white shadow-[0_10px_24px_rgba(0,0,0,0.18)] transition hover:bg-white/[0.08]"
-        >
-          <SidebarToggleIcon />
-        </button>
-
-        <div className="relative z-10 mt-5 w-full overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.022),rgba(255,255,255,0.008))] shadow-[0_22px_50px_rgba(0,0,0,0.24)] backdrop-blur-sm">
-          <div className="flex justify-center border-b border-white/8 px-2 py-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.015))] shadow-[0_10px_24px_rgba(0,0,0,0.2)]">
-              <span className="text-[11px] font-semibold tracking-[0.18em] text-zinc-300">
-                BT
-              </span>
-            </div>
-          </div>
-
+        <div className="relative z-10 w-full overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.022),rgba(255,255,255,0.008))] shadow-[0_22px_50px_rgba(0,0,0,0.24)] backdrop-blur-sm">
           <nav className="p-2.5">
             <div className="space-y-1.5">
               {links.map((link) => {
