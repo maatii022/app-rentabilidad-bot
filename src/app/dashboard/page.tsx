@@ -586,6 +586,7 @@ export default function DashboardPage() {
   const [persistedPerformance, setPersistedPerformance] = useState<PersistedPerformanceMap>({});
   const [liveStatus, setLiveStatus] = useState<LiveStatusMap>({});
   const [packRefreshState, setPackRefreshState] = useState<Record<number, RefreshState>>({});
+  const [packFlashState, setPackFlashState] = useState<Record<number, boolean>>({});
   const [globalRefreshState, setGlobalRefreshState] = useState<RefreshState>("idle");
 
   const [notice, setNotice] = useState<NoticeState>({
@@ -598,6 +599,7 @@ export default function DashboardPage() {
 
   const confirmResolverRef = useRef<((value: boolean) => void) | null>(null);
   const refreshTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const flashTimeoutsRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const reemplazoRef = useRef<HTMLDivElement | null>(null);
 
   function showAlert(
@@ -668,6 +670,26 @@ export default function DashboardPage() {
       setterIdle();
       delete refreshTimeoutsRef.current[key];
     }, 1200);
+  }
+
+  function triggerPackFlash(packId: number) {
+    if (flashTimeoutsRef.current[packId]) {
+      clearTimeout(flashTimeoutsRef.current[packId]);
+      delete flashTimeoutsRef.current[packId];
+    }
+
+    setPackFlashState((prev) => ({
+      ...prev,
+      [packId]: true,
+    }));
+
+    flashTimeoutsRef.current[packId] = setTimeout(() => {
+      setPackFlashState((prev) => ({
+        ...prev,
+        [packId]: false,
+      }));
+      delete flashTimeoutsRef.current[packId];
+    }, 650);
   }
 
   async function cargarDatos() {
@@ -794,6 +816,7 @@ export default function DashboardPage() {
 
     try {
       await recargarEstadoSilencioso();
+      triggerPackFlash(packId);
       markRefreshSuccess(
         `pack-${packId}`,
         () =>
@@ -1169,6 +1192,10 @@ export default function DashboardPage() {
       Object.values(refreshTimeoutsRef.current).forEach((timeoutId) => {
         clearTimeout(timeoutId);
       });
+
+      Object.values(flashTimeoutsRef.current).forEach((timeoutId) => {
+        clearTimeout(timeoutId);
+      });
     };
   }, []);
 
@@ -1228,8 +1255,15 @@ export default function DashboardPage() {
             <ActionButton
               onClick={() => setSoloIncidencias((prev) => !prev)}
               variant={soloIncidencias ? "warning" : "secondary"}
+              className="inline-flex items-center gap-2"
             >
-              Alertas
+              <span>Alertas</span>
+              {resumen.cuentasConAlertas > 0 ? (
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-300 opacity-70" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-amber-200 shadow-[0_0_10px_rgba(251,191,36,0.9)]" />
+                </span>
+              ) : null}
             </ActionButton>
           }
         >
@@ -1304,6 +1338,7 @@ export default function DashboardPage() {
                     liveStatus={liveStatus}
                     loading={loading}
                     refreshState={packRefreshState[pack.id] ?? "idle"}
+                    flashActive={Boolean(packFlashState[pack.id])}
                     onRotar={rotarPack}
                     onPerder={marcarPerdida}
                     onFondear={marcarFondeada}
@@ -1477,6 +1512,7 @@ function PackCard({
   liveStatus,
   loading,
   refreshState,
+  flashActive,
   onRotar,
   onPerder,
   onFondear,
@@ -1489,6 +1525,7 @@ function PackCard({
   liveStatus: LiveStatusMap;
   loading: boolean;
   refreshState: RefreshState;
+  flashActive: boolean;
   onRotar: (packId: number, packNombre: string) => void;
   onPerder: (accountId: number) => void;
   onFondear: (accountId: number) => void;
@@ -1500,8 +1537,18 @@ function PackCard({
   const displaySlots = buildDisplaySlots(pack);
 
   return (
-    <div className="overflow-hidden rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(255,255,255,0.01))] shadow-[0_14px_30px_rgba(0,0,0,0.18)] transition-all duration-300 hover:shadow-[0_18px_38px_rgba(0,0,0,0.20)]">
-      <div className="border-b border-white/8 px-4 py-3">
+    <div
+      className={`overflow-hidden rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(255,255,255,0.01))] shadow-[0_14px_30px_rgba(0,0,0,0.18)] transition-all duration-500 hover:shadow-[0_18px_38px_rgba(0,0,0,0.20)] ${
+        flashActive
+          ? "shadow-[0_0_0_1px_rgba(125,211,252,0.16),0_0_32px_rgba(56,189,248,0.12),0_14px_30px_rgba(0,0,0,0.18)]"
+          : ""
+      }`}
+    >
+      <div
+        className={`border-b border-white/8 px-4 py-3 transition-all duration-500 ${
+          flashActive ? "bg-sky-400/[0.04]" : ""
+        }`}
+      >
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
