@@ -103,6 +103,8 @@ type NoticeState = {
   mode: "alert" | "confirm";
 };
 
+type PackRefreshState = "idle" | "loading" | "success";
+
 const REQUIRED_SLOTS = ["A", "B", "C"];
 
 function SectionCard({
@@ -496,12 +498,12 @@ function ModalNotice({
   );
 }
 
-function RefreshIcon() {
+function RefreshIcon({ spinning = false }: { spinning?: boolean }) {
   return (
     <svg
       viewBox="0 0 24 24"
       fill="none"
-      className="h-4 w-4"
+      className={`h-4 w-4 ${spinning ? "animate-spin" : ""}`}
       stroke="currentColor"
       strokeWidth="2"
       strokeLinecap="round"
@@ -510,6 +512,23 @@ function RefreshIcon() {
     >
       <path d="M21 12a9 9 0 1 1-2.64-6.36" />
       <path d="M21 3v6h-6" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-4 w-4"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M20 6 9 17l-5-5" />
     </svg>
   );
 }
@@ -537,6 +556,7 @@ export default function DashboardPage() {
   const [resultadosRevision, setResultadosRevision] = useState<ResultadoRevisionDiaria[]>([]);
   const [persistedPerformance, setPersistedPerformance] = useState<PersistedPerformanceMap>({});
   const [liveStatus, setLiveStatus] = useState<LiveStatusMap>({});
+  const [packRefreshState, setPackRefreshState] = useState<Record<number, PackRefreshState>>({});
 
   const [notice, setNotice] = useState<NoticeState>({
     open: false,
@@ -547,6 +567,7 @@ export default function DashboardPage() {
   });
 
   const confirmResolverRef = useRef<((value: boolean) => void) | null>(null);
+  const refreshTimeoutsRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const reemplazoRef = useRef<HTMLDivElement | null>(null);
 
   function showAlert(
@@ -592,6 +613,49 @@ export default function DashboardPage() {
       confirmResolverRef.current(result);
       confirmResolverRef.current = null;
     }
+  }
+
+  function setPackRefreshLoading(packId: number) {
+    if (refreshTimeoutsRef.current[packId]) {
+      clearTimeout(refreshTimeoutsRef.current[packId]);
+      delete refreshTimeoutsRef.current[packId];
+    }
+
+    setPackRefreshState((prev) => ({
+      ...prev,
+      [packId]: "loading",
+    }));
+  }
+
+  function setPackRefreshSuccess(packId: number) {
+    if (refreshTimeoutsRef.current[packId]) {
+      clearTimeout(refreshTimeoutsRef.current[packId]);
+    }
+
+    setPackRefreshState((prev) => ({
+      ...prev,
+      [packId]: "success",
+    }));
+
+    refreshTimeoutsRef.current[packId] = setTimeout(() => {
+      setPackRefreshState((prev) => ({
+        ...prev,
+        [packId]: "idle",
+      }));
+      delete refreshTimeoutsRef.current[packId];
+    }, 1200);
+  }
+
+  function setPackRefreshIdle(packId: number) {
+    if (refreshTimeoutsRef.current[packId]) {
+      clearTimeout(refreshTimeoutsRef.current[packId]);
+      delete refreshTimeoutsRef.current[packId];
+    }
+
+    setPackRefreshState((prev) => ({
+      ...prev,
+      [packId]: "idle",
+    }));
   }
 
   async function cargarDatos() {
@@ -699,6 +763,18 @@ export default function DashboardPage() {
         "La información de performance y live status se ha recargado correctamente.",
         "success"
       );
+    }
+  }
+
+  async function recargarEstadoPack(packId: number) {
+    setPackRefreshLoading(packId);
+
+    try {
+      await Promise.all([cargarPerformancePersistida(true), cargarLiveStatus(true)]);
+      setPackRefreshSuccess(packId);
+    } catch (error) {
+      console.error("Error en recarga silenciosa del pack:", error);
+      setPackRefreshIdle(packId);
     }
   }
 
@@ -1050,6 +1126,14 @@ export default function DashboardPage() {
     void cargarResumenHistorico();
   }, [presetFilter, tipoFilter]);
 
+  useEffect(() => {
+    return () => {
+      Object.values(refreshTimeoutsRef.current).forEach((timeoutId) => {
+        clearTimeout(timeoutId);
+      });
+    };
+  }, []);
+
   return (
     <>
       <div className="space-y-4 text-white">
@@ -1186,12 +1270,13 @@ export default function DashboardPage() {
                     pack={pack}
                     persistedPerformance={persistedPerformance}
                     liveStatus={liveStatus}
-                    loading={loading || loadingPerformance || loadingLive}
+                    loading={loading}
+                    refreshState={packRefreshState[pack.id] ?? "idle"}
                     onRotar={rotarPack}
                     onPerder={marcarPerdida}
                     onFondear={marcarFondeada}
                     onSelectReplace={seleccionarSlotPendiente}
-                    onRefresh={() => recargarEstado(true)}
+                    onRefresh={() => recargarEstadoPack(pack.id)}
                     getLivePnlClass={getLivePnlClass}
                   />
                 ))}
@@ -1359,6 +1444,7 @@ function PackCard({
   persistedPerformance,
   liveStatus,
   loading,
+  refreshState,
   onRotar,
   onPerder,
   onFondear,
@@ -1370,6 +1456,7 @@ function PackCard({
   persistedPerformance: PersistedPerformanceMap;
   liveStatus: LiveStatusMap;
   loading: boolean;
+  refreshState: PackRefreshState;
   onRotar: (packId: number, packNombre: string) => void;
   onPerder: (accountId: number) => void;
   onFondear: (accountId: number) => void;
@@ -1379,6 +1466,11 @@ function PackCard({
 }) {
   const flags = getPackFlags(pack);
   const displaySlots = buildDisplaySlots(pack);
+
+  const refreshButtonClasses =
+    refreshState === "success"
+      ? "border-emerald-300/20 bg-emerald-400/[0.10] text-emerald-200 hover:bg-emerald-400/[0.12]"
+      : "border-white/10 bg-transparent text-zinc-300 hover:bg-white/[0.05] hover:text-white";
 
   return (
     <div className="overflow-hidden rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(255,255,255,0.01))] shadow-[0_14px_30px_rgba(0,0,0,0.18)] transition-all duration-300 hover:shadow-[0_18px_38px_rgba(0,0,0,0.20)]">
@@ -1420,21 +1512,27 @@ function PackCard({
           <div className="flex flex-wrap gap-1.5">
             <ActionButton
               onClick={() => onRotar(pack.id, pack.nombre)}
-              disabled={loading}
+              disabled={loading || refreshState === "loading"}
               variant="secondary"
             >
               Rotar
             </ActionButton>
 
-            <ActionButton
+            <button
+              type="button"
               onClick={onRefresh}
-              disabled={loading}
-              variant="ghost"
-              className="flex h-[34px] w-[34px] items-center justify-center px-0"
+              disabled={loading || refreshState === "loading"}
               title="Recargar estado"
+              className={`flex h-[34px] w-[34px] items-center justify-center rounded-xl border transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${refreshButtonClasses}`}
             >
-              <RefreshIcon />
-            </ActionButton>
+              {refreshState === "loading" ? (
+                <RefreshIcon spinning />
+              ) : refreshState === "success" ? (
+                <CheckIcon />
+              ) : (
+                <RefreshIcon />
+              )}
+            </button>
           </div>
         </div>
       </div>
@@ -1575,7 +1673,7 @@ function PackCard({
               <div className="mt-2.5 flex flex-wrap gap-1.5">
                 <ActionButton
                   onClick={() => slot.accounts?.id && onPerder(slot.accounts.id)}
-                  disabled={loading || !puedePerder}
+                  disabled={loading || refreshState === "loading" || !puedePerder}
                   variant="ghost"
                 >
                   Perder
@@ -1583,7 +1681,7 @@ function PackCard({
 
                 <ActionButton
                   onClick={() => slot.accounts?.id && onFondear(slot.accounts.id)}
-                  disabled={loading || !puedeFondear}
+                  disabled={loading || refreshState === "loading" || !puedeFondear}
                   variant="ghost"
                 >
                   Fondear
@@ -1598,7 +1696,7 @@ function PackCard({
                         slotId: slot.id > 0 ? slot.id : undefined,
                       })
                     }
-                    disabled={loading}
+                    disabled={loading || refreshState === "loading"}
                     variant="secondary"
                   >
                     Reemplazo
