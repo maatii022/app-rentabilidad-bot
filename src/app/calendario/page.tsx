@@ -84,6 +84,7 @@ type CalendarDayData = {
 
 type TradingMode = "pnl" | "events";
 type CuentaTipoFiltro = "prueba" | "fondeada";
+type ChartMode = "equity" | "daily";
 
 type CalendarApiResultItem = {
   id: number;
@@ -140,14 +141,10 @@ type GrowthPoint = {
   label: string;
   date: string;
   value: number;
+  dailyUsd: number;
 };
 
-type RadarMetric = {
-  label: string;
-  value: number;
-};
-
-const DAY_LABELS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+const DAY_LABELS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom", "Semana"];
 const SLOT_ORDER = ["A", "B", "C"];
 
 function getSinglePack(
@@ -189,6 +186,11 @@ function formatCompactUsd(value: number) {
 }
 
 function formatPct(value: number) {
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  return `${sign}${Math.abs(value).toFixed(1)}%`;
+}
+
+function formatChartPct(value: number) {
   return `${value.toFixed(1)}%`;
 }
 
@@ -270,15 +272,9 @@ function buildCalendarMatrix(currentMonth: Date) {
 }
 
 function getEventPillClasses(kind: CalendarEventItem["kind"]) {
-  if (kind === "perdida") {
-    return "border-amber-300/20 bg-amber-300/[0.10] text-amber-200";
-  }
-  if (kind === "fondeada") {
-    return "border-violet-300/20 bg-violet-300/[0.10] text-violet-200";
-  }
-  if (kind === "reemplazo") {
-    return "border-emerald-300/20 bg-emerald-300/[0.10] text-emerald-200";
-  }
+  if (kind === "perdida") return "border-amber-300/20 bg-amber-300/[0.10] text-amber-200";
+  if (kind === "fondeada") return "border-violet-300/20 bg-violet-300/[0.10] text-violet-200";
+  if (kind === "reemplazo") return "border-emerald-300/20 bg-emerald-300/[0.10] text-emerald-200";
   return "border-white/10 bg-white/[0.05] text-zinc-300";
 }
 
@@ -307,24 +303,13 @@ function average(values: number[]) {
   return values.reduce((acc, item) => acc + item, 0) / values.length;
 }
 
-function calcStdDev(values: number[]) {
-  if (values.length <= 1) return 0;
-  const avg = average(values);
-  const variance =
-    values.reduce((acc, item) => acc + (item - avg) ** 2, 0) / values.length;
-  return Math.sqrt(variance);
-}
+function calcProfitFactor(values: number[]) {
+  const grossProfit = values.filter((v) => v > 0).reduce((acc, v) => acc + v, 0);
+  const grossLoss = Math.abs(values.filter((v) => v < 0).reduce((acc, v) => acc + v, 0));
 
-function calcMaxDrawdown(series: number[]) {
-  let peak = 0;
-  let maxDrawdown = 0;
-
-  for (const value of series) {
-    peak = Math.max(peak, value);
-    maxDrawdown = Math.min(maxDrawdown, value - peak);
-  }
-
-  return Math.abs(maxDrawdown);
+  if (grossProfit === 0 && grossLoss === 0) return null;
+  if (grossLoss === 0) return null;
+  return grossProfit / grossLoss;
 }
 
 function buildLinePath(points: { x: number; y: number }[]) {
@@ -343,39 +328,79 @@ function buildAreaPath(points: { x: number; y: number }[], baseY: number) {
   return `${line} L ${last.x} ${baseY} L ${first.x} ${baseY} Z`;
 }
 
-function ChartTransition({
-  chartKey,
-  children,
-  className = "",
+function FilterButton({
+  label,
+  active,
+  onClick,
+  compact = false,
 }: {
-  chartKey: string;
-  children: React.ReactNode;
-  className?: string;
+  label: string;
+  active?: boolean;
+  onClick?: () => void;
+  compact?: boolean;
 }) {
   return (
-    <div
-      key={chartKey}
-      className={`animate-[fadeChart_420ms_ease] ${className}`}
-      style={{
-        animationName: "fadeChart",
-        animationDuration: "420ms",
-        animationTimingFunction: "ease",
-      }}
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl border text-sm font-medium transition-all duration-200 ${
+        compact ? "px-3 py-2" : "px-4 py-2.5"
+      } ${
+        active
+          ? "scale-[0.985] border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.16),rgba(56,189,248,0.07))] text-white shadow-[0_12px_30px_rgba(56,189,248,0.16)]"
+          : "border-white/10 bg-white/[0.03] text-zinc-200 hover:border-white/15 hover:bg-white/[0.06] hover:text-white hover:shadow-[0_10px_24px_rgba(255,255,255,0.04)]"
+      }`}
     >
-      {children}
-      <style jsx>{`
-        @keyframes fadeChart {
-          0% {
-            opacity: 0;
-            transform: translateY(6px) scale(0.995);
-          }
-          100% {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-      `}</style>
-    </div>
+      {label}
+    </button>
+  );
+}
+
+function SegmentedButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl border px-4 py-2 text-sm font-medium transition-all duration-200 ${
+        active
+          ? "border-emerald-300/20 bg-emerald-400 text-black shadow-[0_12px_30px_rgba(16,185,129,0.18)]"
+          : "border-white/10 bg-white/[0.03] text-zinc-200 hover:bg-white/[0.06] hover:shadow-[0_10px_24px_rgba(255,255,255,0.04)]"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function SlotButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-lg border px-3 py-2 text-sm font-medium transition-all duration-200 ${
+        active
+          ? "scale-[0.985] border-emerald-300/20 bg-emerald-300/[0.14] text-emerald-200 shadow-[0_10px_24px_rgba(16,185,129,0.14)]"
+          : "border-white/10 bg-white/[0.03] text-zinc-200 hover:bg-white/[0.06] hover:shadow-[0_8px_18px_rgba(255,255,255,0.04)]"
+      }`}
+    >
+      {label}
+    </button>
   );
 }
 
@@ -507,310 +532,293 @@ function ChartCard({
   );
 }
 
-function RadarProfileChart({
-  metrics,
-  chartKey,
-}: {
-  metrics: RadarMetric[];
-  chartKey: string;
-}) {
-  const size = 320;
-  const center = size / 2;
-  const radius = 102;
-  const levels = 4;
-
-  const points = metrics.map((metric, index) => {
-    const angle = (Math.PI * 2 * index) / metrics.length - Math.PI / 2;
-    const valueRadius = (clamp(metric.value, 0, 100) / 100) * radius;
-    return {
-      x: center + Math.cos(angle) * valueRadius,
-      y: center + Math.sin(angle) * valueRadius,
-      labelX: center + Math.cos(angle) * (radius + 20),
-      labelY: center + Math.sin(angle) * (radius + 20),
-      label: metric.label,
-      value: metric.value,
-    };
-  });
-
-  const polygon = points.map((point) => `${point.x},${point.y}`).join(" ");
-
-  return (
-    <ChartTransition chartKey={chartKey} className="h-[290px] w-full">
-      <div className="flex h-full items-center justify-center">
-        <svg viewBox={`0 0 ${size} ${size}`} className="h-full w-full max-w-[420px]">
-          {[...Array(levels)].map((_, levelIndex) => {
-            const levelRadius = (radius * (levelIndex + 1)) / levels;
-            const ringPoints = metrics
-              .map((_, index) => {
-                const angle = (Math.PI * 2 * index) / metrics.length - Math.PI / 2;
-                return `${center + Math.cos(angle) * levelRadius},${
-                  center + Math.sin(angle) * levelRadius
-                }`;
-              })
-              .join(" ");
-
-            return (
-              <polygon
-                key={levelIndex}
-                points={ringPoints}
-                fill="none"
-                stroke="rgba(56,189,248,0.12)"
-                strokeWidth="1"
-              />
-            );
-          })}
-
-          {metrics.map((_, index) => {
-            const angle = (Math.PI * 2 * index) / metrics.length - Math.PI / 2;
-            return (
-              <line
-                key={index}
-                x1={center}
-                y1={center}
-                x2={center + Math.cos(angle) * radius}
-                y2={center + Math.sin(angle) * radius}
-                stroke="rgba(56,189,248,0.10)"
-                strokeWidth="1"
-              />
-            );
-          })}
-
-          <polygon
-            points={polygon}
-            fill="rgba(16,185,129,0.18)"
-            stroke="rgba(52,211,153,0.95)"
-            strokeWidth="2"
-            style={{
-              transition: "all 420ms ease",
-            }}
-          />
-
-          {points.map((point) => (
-            <circle
-              key={point.label}
-              cx={point.x}
-              cy={point.y}
-              r="3"
-              fill="rgba(52,211,153,1)"
-              style={{
-                transition: "all 420ms ease",
-              }}
-            />
-          ))}
-
-          {points.map((point) => (
-            <text
-              key={`${point.label}-text`}
-              x={point.labelX}
-              y={point.labelY}
-              textAnchor={point.labelX >= center ? "start" : "end"}
-              dominantBaseline="middle"
-              fill="#8dc3ff"
-              fontSize="11"
-            >
-              {point.label}
-            </text>
-          ))}
-        </svg>
-      </div>
-    </ChartTransition>
-  );
-}
-
-function GrowthLineChart({
+function InteractiveGrowthChart({
   points,
-  chartKey,
+  chartMode,
+  onModeChange,
   totalLabel,
 }: {
   points: GrowthPoint[];
-  chartKey: string;
+  chartMode: ChartMode;
+  onModeChange: (mode: ChartMode) => void;
   totalLabel: string;
 }) {
-  const width = 720;
-  const height = 280;
-  const paddingX = 28;
-  const paddingY = 24;
-  const innerWidth = width - paddingX * 2;
-  const innerHeight = height - paddingY * 2;
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
-  const values = points.map((point) => point.value);
-  const minValue = Math.min(0, ...values);
-  const maxValue = Math.max(...values, 1);
+  const width = 920;
+  const height = 320;
+  const paddingLeft = 74;
+  const paddingRight = 18;
+  const paddingTop = 18;
+  const paddingBottom = 36;
+  const innerWidth = width - paddingLeft - paddingRight;
+  const innerHeight = height - paddingTop - paddingBottom;
+
+  const series = points.map((point) =>
+    chartMode === "equity" ? point.value : point.dailyUsd
+  );
+
+  const minValue = Math.min(0, ...series);
+  const maxValue = Math.max(0, ...series, 1);
   const range = maxValue - minValue || 1;
 
   const svgPoints = points.map((point, index) => {
+    const value = chartMode === "equity" ? point.value : point.dailyUsd;
     const x =
-      paddingX +
+      paddingLeft +
       (points.length === 1 ? innerWidth / 2 : (index / (points.length - 1)) * innerWidth);
     const y =
-      paddingY + innerHeight - ((point.value - minValue) / range) * innerHeight;
-
-    return { x, y, label: point.label, value: point.value };
+      paddingTop + innerHeight - ((value - minValue) / range) * innerHeight;
+    return { x, y, value, point };
   });
 
   const linePath = buildLinePath(svgPoints);
-  const areaPath = buildAreaPath(svgPoints, height - paddingY);
+  const baselineY =
+    paddingTop + innerHeight - ((0 - minValue) / range) * innerHeight;
+  const areaPath = buildAreaPath(svgPoints, baselineY);
+
+  const ticks = 4;
+  const yTicks = Array.from({ length: ticks + 1 }, (_, index) => {
+    const ratio = index / ticks;
+    const value = maxValue - (maxValue - minValue) * ratio;
+    const y = paddingTop + innerHeight * ratio;
+    return { value, y };
+  });
+
+  const hoveredPoint =
+    hoveredIndex !== null && svgPoints[hoveredIndex] ? svgPoints[hoveredIndex] : null;
+
+  const activeColor =
+    hoveredPoint && hoveredPoint.value < 0 ? "rgba(244,63,94,0.95)" : "rgba(22,223,110,0.95)";
+  const strokeColor =
+    chartMode === "daily" && series.some((value) => value < 0)
+      ? "url(#lineGradient)"
+      : "rgba(22,223,110,0.95)";
 
   return (
-    <ChartTransition chartKey={chartKey} className="h-[290px] w-full">
-      <div className="h-full w-full">
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <div className="inline-flex rounded-xl border border-white/10 bg-white/[0.03] p-1 text-xs">
-            <span className="rounded-lg bg-emerald-400 px-3 py-1 font-medium text-black">
-              Equity
-            </span>
-            <span className="px-3 py-1 text-zinc-500">Daily P&L</span>
-          </div>
-          <p className="text-lg font-semibold text-emerald-300">{totalLabel}</p>
+    <div className="h-full w-full">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <div className="inline-flex rounded-xl border border-white/10 bg-white/[0.03] p-1 text-xs">
+          <button
+            type="button"
+            onClick={() => onModeChange("equity")}
+            className={`rounded-lg px-3 py-1 font-medium transition ${
+              chartMode === "equity"
+                ? "bg-emerald-400 text-black"
+                : "text-zinc-500 hover:text-white"
+            }`}
+          >
+            Equity
+          </button>
+          <button
+            type="button"
+            onClick={() => onModeChange("daily")}
+            className={`rounded-lg px-3 py-1 font-medium transition ${
+              chartMode === "daily"
+                ? "bg-emerald-400 text-black"
+                : "text-zinc-500 hover:text-white"
+            }`}
+          >
+            Daily P&L
+          </button>
         </div>
+        <p
+          className={`text-lg font-semibold ${
+            chartMode === "equity"
+              ? points.length && points[points.length - 1].value < 0
+                ? "text-rose-300"
+                : "text-emerald-300"
+              : points.reduce((acc, point) => acc + point.dailyUsd, 0) < 0
+              ? "text-rose-300"
+              : "text-emerald-300"
+          }`}
+        >
+          {totalLabel}
+        </p>
+      </div>
 
-        <svg viewBox={`0 0 ${width} ${height}`} className="h-[240px] w-full">
-          {[0, 1, 2, 3].map((index) => {
-            const y = paddingY + (innerHeight / 3) * index;
-            return (
+      <div className="relative h-[255px] w-full">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          className="h-full w-full"
+          onMouseLeave={() => setHoveredIndex(null)}
+        >
+          <defs>
+            <linearGradient id="fillGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgba(22,223,110,0.22)" />
+              <stop offset="100%" stopColor="rgba(22,223,110,0.02)" />
+            </linearGradient>
+            <linearGradient id="lineGradient" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="rgba(244,63,94,0.95)" />
+              <stop offset="100%" stopColor="rgba(22,223,110,0.95)" />
+            </linearGradient>
+          </defs>
+
+          {yTicks.map((tick, index) => (
+            <g key={index}>
               <line
-                key={`h-${index}`}
-                x1={paddingX}
-                y1={y}
-                x2={width - paddingX}
-                y2={y}
+                x1={paddingLeft}
+                y1={tick.y}
+                x2={width - paddingRight}
+                y2={tick.y}
                 stroke="rgba(56,189,248,0.10)"
-                strokeDasharray="3 5"
+                strokeDasharray="3 6"
               />
-            );
-          })}
-
-          {svgPoints.map((point) => (
-            <line
-              key={`v-${point.label}`}
-              x1={point.x}
-              y1={paddingY}
-              x2={point.x}
-              y2={height - paddingY}
-              stroke="rgba(56,189,248,0.08)"
-              strokeDasharray="3 5"
-            />
-          ))}
-
-          <path
-            d={areaPath}
-            fill="rgba(16,185,129,0.12)"
-            style={{ transition: "all 420ms ease" }}
-          />
-          <path
-            d={linePath}
-            fill="none"
-            stroke="rgba(22,223,110,0.95)"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            style={{ transition: "all 420ms ease" }}
-          />
-
-          {svgPoints.map((point) => (
-            <circle
-              key={`c-${point.label}`}
-              cx={point.x}
-              cy={point.y}
-              r="4"
-              fill="#071018"
-              stroke="rgba(22,223,110,0.95)"
-              strokeWidth="2"
-              style={{ transition: "all 420ms ease" }}
-            />
+              <text
+                x={paddingLeft - 10}
+                y={tick.y + 4}
+                textAnchor="end"
+                fill="#7eb9ff"
+                fontSize="10"
+              >
+                {formatCompactUsd(tick.value)}
+              </text>
+            </g>
           ))}
 
           {svgPoints.map((point, index) => (
+            <line
+              key={index}
+              x1={point.x}
+              y1={paddingTop}
+              x2={point.x}
+              y2={height - paddingBottom}
+              stroke="rgba(56,189,248,0.08)"
+              strokeDasharray="3 6"
+            />
+          ))}
+
+          {chartMode === "daily" ? (
+            svgPoints.map((point, index) => {
+              const barWidth = Math.max(innerWidth / Math.max(points.length * 2.4, 8), 14);
+              const top = Math.min(point.y, baselineY);
+              const barHeight = Math.max(Math.abs(point.y - baselineY), 2);
+              const positive = point.value >= 0;
+
+              return (
+                <g key={index}>
+                  <rect
+                    x={point.x - barWidth / 2}
+                    y={top}
+                    width={barWidth}
+                    height={barHeight}
+                    rx="4"
+                    fill={positive ? "rgba(22,223,110,0.24)" : "rgba(244,63,94,0.22)"}
+                    stroke={positive ? "rgba(22,223,110,0.55)" : "rgba(244,63,94,0.5)"}
+                  />
+                  <rect
+                    x={point.x - Math.max(barWidth, 24)}
+                    y={paddingTop}
+                    width={Math.max(barWidth * 2, 48)}
+                    height={innerHeight}
+                    fill="transparent"
+                    onMouseEnter={() => setHoveredIndex(index)}
+                  />
+                </g>
+              );
+            })
+          ) : (
+            <>
+              <path d={areaPath} fill="url(#fillGradient)" />
+              <path
+                d={linePath}
+                fill="none"
+                stroke={strokeColor}
+                strokeWidth="2.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+
+              {svgPoints.map((point, index) => (
+                <g key={index}>
+                  <circle
+                    cx={point.x}
+                    cy={point.y}
+                    r="4.5"
+                    fill="#071018"
+                    stroke={point.value < 0 ? "rgba(244,63,94,0.95)" : "rgba(22,223,110,0.95)"}
+                    strokeWidth="2"
+                  />
+                  <rect
+                    x={point.x - 24}
+                    y={paddingTop}
+                    width={48}
+                    height={innerHeight}
+                    fill="transparent"
+                    onMouseEnter={() => setHoveredIndex(index)}
+                  />
+                </g>
+              ))}
+            </>
+          )}
+
+          {hoveredPoint ? (
+            <>
+              <line
+                x1={hoveredPoint.x}
+                y1={paddingTop}
+                x2={hoveredPoint.x}
+                y2={height - paddingBottom}
+                stroke="rgba(255,255,255,0.45)"
+                strokeWidth="1.2"
+              />
+              <circle
+                cx={hoveredPoint.x}
+                cy={hoveredPoint.y}
+                r="5.5"
+                fill="#071018"
+                stroke={activeColor}
+                strokeWidth="2.2"
+              />
+            </>
+          ) : null}
+
+          {svgPoints.map((point, index) => (
             <text
-              key={`label-${index}`}
+              key={index}
               x={point.x}
-              y={height - 6}
+              y={height - 8}
               textAnchor="middle"
               fill="#7eb9ff"
               fontSize="10"
             >
-              {point.label}
+              {point.point.label}
             </text>
           ))}
         </svg>
+
+        {hoveredPoint ? (
+          <div
+            className="pointer-events-none absolute z-10 rounded-2xl border border-white/10 bg-[#071120] px-4 py-3 shadow-[0_20px_40px_rgba(0,0,0,0.35)]"
+            style={{
+              left: `calc(${((hoveredPoint.x - 10) / width) * 100}% )`,
+              top: "18%",
+              transform: "translateX(-10%)",
+            }}
+          >
+            <p className="text-sm font-medium text-white">{hoveredPoint.point.date}</p>
+            <p
+              className={`mt-1 text-sm font-semibold ${
+                hoveredPoint.value < 0 ? "text-rose-300" : "text-emerald-300"
+              }`}
+            >
+              {chartMode === "equity"
+                ? `Equity: ${formatUsd(hoveredPoint.point.value)}`
+                : `P&L: ${formatUsd(hoveredPoint.point.dailyUsd)}`}
+            </p>
+            {chartMode === "daily" ? (
+              <p
+                className={`mt-1 text-xs ${
+                  hoveredPoint.point.dailyUsd < 0 ? "text-rose-300" : "text-emerald-300"
+                }`}
+              >
+                Día: {formatUsd(hoveredPoint.point.dailyUsd)}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </div>
-    </ChartTransition>
-  );
-}
-
-function FilterButton({
-  label,
-  active,
-  onClick,
-  compact = false,
-}: {
-  label: string;
-  active?: boolean;
-  onClick?: () => void;
-  compact?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-xl border text-sm font-medium transition-all duration-200 ${
-        compact ? "px-3 py-2" : "px-4 py-2.5"
-      } ${
-        active
-          ? "scale-[0.985] border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.16),rgba(56,189,248,0.07))] text-white shadow-[0_12px_30px_rgba(56,189,248,0.16)]"
-          : "border-white/10 bg-white/[0.03] text-zinc-200 hover:border-white/15 hover:bg-white/[0.06] hover:text-white hover:shadow-[0_10px_24px_rgba(255,255,255,0.04)]"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function SegmentedButton({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-xl border px-4 py-2 text-sm font-medium transition-all duration-200 ${
-        active
-          ? "border-emerald-300/20 bg-emerald-400 text-black shadow-[0_12px_30px_rgba(16,185,129,0.18)]"
-          : "border-white/10 bg-white/[0.03] text-zinc-200 hover:bg-white/[0.06] hover:shadow-[0_10px_24px_rgba(255,255,255,0.04)]"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-function SlotButton({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-lg border px-3 py-2 text-sm font-medium transition-all duration-200 ${
-        active
-          ? "scale-[0.985] border-emerald-300/20 bg-emerald-300/[0.14] text-emerald-200 shadow-[0_10px_24px_rgba(16,185,129,0.14)]"
-          : "border-white/10 bg-white/[0.03] text-zinc-200 hover:bg-white/[0.06] hover:shadow-[0_8px_18px_rgba(255,255,255,0.04)]"
-      }`}
-    >
-      {label}
-    </button>
+    </div>
   );
 }
 
@@ -834,11 +842,7 @@ function MonthStatsPanel({
       <h3 className="text-[1.15rem] font-semibold text-white">Monthly Stats Summary</h3>
 
       <div className="mt-5 space-y-5">
-        <StatRow
-          label="Win rate"
-          value={formatPct(monthAnalytics.winRate)}
-          tone="green"
-        />
+        <StatRow label="Win rate" value={formatChartPct(monthAnalytics.winRate)} tone="green" />
         <StatRow
           label="Risk/Reward"
           value={
@@ -855,13 +859,13 @@ function MonthStatsPanel({
               ? "∞"
               : monthAnalytics.profitFactor.toFixed(2)
           }
-          tone="green"
+          tone={
+            monthAnalytics.profitFactor === null || monthAnalytics.profitFactor > 1
+              ? "green"
+              : "red"
+          }
         />
-        <StatRow
-          label="Best day P/L"
-          value={formatCompactUsd(monthAnalytics.bestDayUsd)}
-          tone="green"
-        />
+        <StatRow label="Best day P/L" value={formatCompactUsd(monthAnalytics.bestDayUsd)} tone="green" />
         <StatRow
           label="Worst day P/L"
           value={formatCompactUsd(monthAnalytics.worstDayUsd)}
@@ -872,7 +876,11 @@ function MonthStatsPanel({
           value={formatCompactUsd(monthAnalytics.avgDayUsd)}
           tone={monthAnalytics.avgDayUsd < 0 ? "red" : "green"}
         />
-        <StatRow label="Month P/L" value={formatCompactUsd(monthSummary.totalUsd)} tone={monthSummary.totalUsd < 0 ? "red" : "green"} />
+        <StatRow
+          label="Month P/L"
+          value={formatCompactUsd(monthSummary.totalUsd)}
+          tone={monthSummary.totalUsd < 0 ? "red" : "green"}
+        />
         <StatRow label="Trades" value={String(monthAnalytics.totalTrades)} tone="neutral" />
       </div>
     </section>
@@ -1057,6 +1065,20 @@ function CalendarDayCell({
     (viewMode === "pnl" && !!dayData?.resultCount) ||
     (viewMode === "events" && !!dayData?.events.length);
 
+  const usdClass =
+    (dayData?.totalUsd ?? 0) > 0
+      ? "text-emerald-300"
+      : (dayData?.totalUsd ?? 0) < 0
+      ? "text-rose-300"
+      : "text-white";
+
+  const pctClass =
+    (dayData?.totalPct ?? 0) > 0
+      ? "text-emerald-300"
+      : (dayData?.totalPct ?? 0) < 0
+      ? "text-rose-300"
+      : "text-zinc-300";
+
   return (
     <button
       type="button"
@@ -1068,59 +1090,35 @@ function CalendarDayCell({
         isSelected
           ? "shadow-[0_0_0_1px_rgba(255,255,255,0.18),0_16px_28px_rgba(255,255,255,0.04)]"
           : "hover:shadow-[0_10px_22px_rgba(255,255,255,0.03)]"
-      } ${compact ? "min-h-[76px]" : "min-h-[122px]"}`}
+      } ${compact ? "min-h-[76px]" : "min-h-[118px]"}`}
     >
       <div className="flex h-full flex-col">
         <div className="flex items-start justify-between gap-2">
           <p className={`text-sm font-semibold ${isCurrentMonth ? "text-white" : "text-zinc-500"}`}>
             {date.getDate()}
           </p>
-
-          {dayData && dayData.totalTrades > 0 ? (
-            <span className="text-[10px] text-zinc-500">{dayData.totalTrades}t</span>
-          ) : null}
         </div>
 
-        <div className="mt-1.5 flex flex-1 flex-col justify-end">
+        <div className="flex flex-1 items-center justify-center">
           {hasVisibleContent ? (
             viewMode === "pnl" ? (
-              <>
-                <p
-                  className={`text-sm font-semibold leading-none ${
-                    dayData && dayData.totalUsd > 0
-                      ? "text-emerald-300"
-                      : dayData && dayData.totalUsd < 0
-                      ? "text-rose-300"
-                      : "text-white"
-                  }`}
-                >
+              <div className="w-full text-center">
+                <p className={`text-[1rem] font-semibold leading-none ${usdClass}`}>
                   {dayData ? formatCompactUsd(dayData.totalUsd) : "-"}
                 </p>
-                {!compact ? (
-                  <>
-                    <p
-                      className={`mt-1 text-[11px] ${
-                        dayData && dayData.totalPct > 0
-                          ? "text-emerald-300"
-                          : dayData && dayData.totalPct < 0
-                          ? "text-rose-300"
-                          : "text-zinc-300"
-                      }`}
-                    >
-                      {dayData ? formatPct(dayData.totalPct) : "-"}
-                    </p>
-                    <p className="mt-1 text-[10px] text-zinc-500">
-                      {dayData?.resultCount ?? 0} cuenta{dayData?.resultCount === 1 ? "" : "s"}
-                    </p>
-                  </>
-                ) : null}
-              </>
+                <p className={`mt-1 text-[11px] font-medium ${pctClass}`}>
+                  {dayData ? formatPct(dayData.totalPct) : "-"}
+                </p>
+                <p className="mt-1 text-[10px] text-zinc-500">
+                  {dayData?.totalTrades ?? 0} trade{dayData?.totalTrades === 1 ? "" : "s"}
+                </p>
+              </div>
             ) : (
-              <div className="flex flex-wrap gap-1">
+              <div className="flex w-full flex-col items-center gap-1.5">
                 {dayData?.events.slice(0, compact ? 1 : 2).map((event) => (
                   <span
                     key={event.id}
-                    className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] ${getEventPillClasses(
+                    className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-[10px] ${getEventPillClasses(
                       event.kind
                     )}`}
                   >
@@ -1133,6 +1131,31 @@ function CalendarDayCell({
         </div>
       </div>
     </button>
+  );
+}
+
+function WeekSummaryCell({
+  usd,
+  pct,
+  trades,
+}: {
+  usd: number;
+  pct: number;
+  trades: number;
+}) {
+  const usdClass = usd > 0 ? "text-emerald-300" : usd < 0 ? "text-rose-300" : "text-zinc-300";
+  const pctClass = pct > 0 ? "text-emerald-300" : pct < 0 ? "text-rose-300" : "text-zinc-400";
+
+  return (
+    <div className={`rounded-[18px] border p-2.5 ${getToneByValue(usd)} min-h-[118px]`}>
+      <div className="flex h-full flex-col items-center justify-center text-center">
+        <p className={`text-sm font-semibold ${usdClass}`}>{formatCompactUsd(usd)}</p>
+        <p className={`mt-1 text-[11px] font-medium ${pctClass}`}>{formatPct(pct)}</p>
+        <p className="mt-1 text-[10px] text-zinc-500">
+          {trades} trade{trades === 1 ? "" : "s"}
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -1159,10 +1182,10 @@ export default function CalendarioPage() {
   const [presets, setPresets] = useState<PresetOption[]>([]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [packs, setPacks] = useState<PackFilterItem[]>([]);
+  const [chartMode, setChartMode] = useState<ChartMode>("equity");
 
   const [viewMode, setViewMode] = useState<TradingMode>("pnl");
-  const [selectedCuentaTipo, setSelectedCuentaTipo] =
-    useState<CuentaTipoFiltro>("prueba");
+  const [selectedCuentaTipo, setSelectedCuentaTipo] = useState<CuentaTipoFiltro>("prueba");
 
   const [selectedPresetIds, setSelectedPresetIds] = useState<string[]>(["all"]);
   const [selectedPackId, setSelectedPackId] = useState<number | null>(null);
@@ -1356,9 +1379,7 @@ export default function CalendarioPage() {
   const availableSlots = useMemo(() => {
     if (!selectedPack) return [];
     const set = new Set(
-      selectedPack.slots
-        .map((slot) => slot.slot)
-        .filter((slot) => SLOT_ORDER.includes(slot))
+      selectedPack.slots.map((slot) => slot.slot).filter((slot) => SLOT_ORDER.includes(slot))
     );
     return SLOT_ORDER.filter((slot) => set.has(slot));
   }, [selectedPack]);
@@ -1582,60 +1603,33 @@ export default function CalendarioPage() {
     const totalResults = resultItems.length;
     const totalTrades = resultItems.reduce((acc, item) => acc + item.numeroTrades, 0);
 
-    const grossProfit = resultItems
-      .filter((item) => item.pnlUsd > 0)
-      .reduce((acc, item) => acc + item.pnlUsd, 0);
-
-    const grossLossAbs = Math.abs(
-      resultItems
-        .filter((item) => item.pnlUsd < 0)
-        .reduce((acc, item) => acc + item.pnlUsd, 0)
-    );
-
+    const resultPnlValues = resultItems.map((item) => item.pnlUsd);
     const dayPnlValues = currentMonthDays.map((day) => day.totalUsd).filter((value) => value !== 0);
-    const growthSeriesRaw = currentMonthDays.reduce<number[]>((acc, day) => {
-      const previous = acc[acc.length - 1] ?? 0;
-      acc.push(previous + day.totalUsd);
-      return acc;
-    }, []);
 
-    const maxDrawdown = calcMaxDrawdown(growthSeriesRaw);
-    const netProfit = monthSummary.totalUsd;
-    const profitFactor = grossLossAbs === 0 ? (grossProfit > 0 ? null : null) : grossProfit / grossLossAbs;
     const winRate = totalResults === 0 ? 0 : (positiveResults / totalResults) * 100;
+    const profitFactor = calcProfitFactor(resultPnlValues);
 
     const avgWin = average(resultItems.filter((item) => item.pnlUsd > 0).map((item) => item.pnlUsd));
     const avgLossAbs = Math.abs(
       average(resultItems.filter((item) => item.pnlUsd < 0).map((item) => item.pnlUsd))
     );
-    const riskReward =
-      avgWin > 0 && avgLossAbs > 0 ? avgWin / avgLossAbs : null;
 
     return {
       winRate,
-      totalResults,
       totalTrades,
       profitFactor,
       bestDayUsd: dayPnlValues.length ? Math.max(...dayPnlValues) : 0,
       worstDayUsd: dayPnlValues.length ? Math.min(...dayPnlValues) : 0,
       avgDayUsd: dayPnlValues.length ? average(dayPnlValues) : 0,
-      grossProfit,
-      grossLossAbs,
-      maxDrawdown,
-      netProfit,
-      riskReward,
-      growthSeriesRaw,
+      riskReward: avgWin > 0 && avgLossAbs > 0 ? avgWin / avgLossAbs : null,
     };
-  }, [currentMonthDays, monthSummary.totalUsd]);
+  }, [currentMonthDays]);
 
   const kpis = useMemo<KpiItem[]>(() => {
-    const returnsTone =
-      monthSummary.totalPct > 0 ? "green" : monthSummary.totalPct < 0 ? "red" : "neutral";
-
     return [
       {
         label: "Win rate",
-        value: formatPct(monthAnalytics.winRate),
+        value: formatChartPct(monthAnalytics.winRate),
         tone: monthAnalytics.winRate >= 50 ? "green" : "red",
         icon: "target",
       },
@@ -1647,22 +1641,18 @@ export default function CalendarioPage() {
       },
       {
         label: "Returns",
-        value: formatPct(monthSummary.totalPct),
-        tone: returnsTone,
+        value: formatChartPct(monthSummary.totalPct),
+        tone: monthSummary.totalPct >= 0 ? "green" : "red",
         icon: "trend",
       },
       {
         label: "Profit factor",
         value:
           monthAnalytics.profitFactor === null
-            ? monthAnalytics.grossProfit > 0
-              ? "∞"
-              : "0.00"
+            ? "∞"
             : monthAnalytics.profitFactor.toFixed(2),
         tone:
-          monthAnalytics.profitFactor === null
-            ? "green"
-            : monthAnalytics.profitFactor >= 1
+          monthAnalytics.profitFactor === null || monthAnalytics.profitFactor >= 1
             ? "green"
             : "red",
         icon: "ratio",
@@ -1679,56 +1669,12 @@ export default function CalendarioPage() {
         label: formatShortDateLabel(day.fecha),
         date: day.fecha,
         value: cumulative,
+        dailyUsd: day.totalUsd,
       };
     });
   }, [currentMonthDays]);
 
-  const radarMetrics = useMemo<RadarMetric[]>(() => {
-    const values = currentMonthDays.map((day) => day.totalUsd);
-    const positiveDays = values.filter((value) => value > 0).length;
-    const activeDays = values.filter((value) => value !== 0).length || 1;
-    const dayWinRate = (positiveDays / activeDays) * 100;
-
-    const drawdownSafe = monthAnalytics.maxDrawdown || 1;
-    const recoveryFactor = clamp((monthAnalytics.netProfit / drawdownSafe) * 45, 0, 100);
-
-    const pfNormalized =
-      monthAnalytics.profitFactor === null
-        ? 100
-        : clamp((monthAnalytics.profitFactor / 2.5) * 100, 0, 100);
-
-    const volatility = calcStdDev(values);
-    const consistencyScore = clamp(100 - volatility * 12, 20, 100);
-
-    const redRatio =
-      monthAnalytics.totalResults === 0
-        ? 0
-        : currentMonthDays.reduce((acc, day) => acc + day.redDayCount, 0) /
-          monthAnalytics.totalResults;
-
-    const adherenceScore = clamp(100 - redRatio * 100, 20, 100);
-
-    return [
-      { label: "Win Rate", value: dayWinRate },
-      { label: "Recovery Factor", value: recoveryFactor },
-      { label: "Profit Factor", value: pfNormalized },
-      { label: "Consistency Score", value: consistencyScore },
-      { label: "Plan Adherence", value: adherenceScore },
-    ];
-  }, [currentMonthDays, monthAnalytics]);
-
   const selectedDay = selectedDayKey ? dailyMap.get(selectedDayKey) : undefined;
-
-  const transitionKey = useMemo(() => {
-    return JSON.stringify({
-      month: currentMonth.toISOString(),
-      mode: viewMode,
-      tipo: selectedCuentaTipo,
-      presets: selectedPresetIds,
-      packId: selectedPackId,
-      slots: selectedSlots,
-    });
-  }, [currentMonth, viewMode, selectedCuentaTipo, selectedPresetIds, selectedPackId, selectedSlots]);
 
   function previousMonth() {
     setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -1753,9 +1699,6 @@ export default function CalendarioPage() {
             <h1 className="mt-1 text-3xl font-semibold tracking-tight text-white">
               Calendario
             </h1>
-            <p className="mt-1.5 text-sm text-zinc-400">
-              Rendimiento mensual, evolución, eventos y detalle operativo por día.
-            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -1893,22 +1836,37 @@ export default function CalendarioPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1fr]">
-            <ChartCard title="Performance Profile">
-              <RadarProfileChart metrics={radarMetrics} chartKey={`radar-${transitionKey}`} />
-            </ChartCard>
-
-            <ChartCard
-              title="Account Growth"
-              right={<p className="text-lg font-semibold text-emerald-300">{formatUsd(monthSummary.totalUsd)}</p>}
-            >
-              <GrowthLineChart
-                points={growthPoints}
-                chartKey={`growth-${transitionKey}`}
-                totalLabel={formatUsd(monthSummary.totalUsd)}
-              />
-            </ChartCard>
-          </div>
+          <ChartCard
+            title="Evolución de cuenta"
+            right={
+              <p
+                className={`text-lg font-semibold ${
+                  chartMode === "equity"
+                    ? (growthPoints[growthPoints.length - 1]?.value ?? 0) < 0
+                      ? "text-rose-300"
+                      : "text-emerald-300"
+                    : monthSummary.totalUsd < 0
+                    ? "text-rose-300"
+                    : "text-emerald-300"
+                }`}
+              >
+                {chartMode === "equity"
+                  ? formatUsd(growthPoints[growthPoints.length - 1]?.value ?? 0)
+                  : formatUsd(monthSummary.totalUsd)}
+              </p>
+            }
+          >
+            <InteractiveGrowthChart
+              points={growthPoints}
+              chartMode={chartMode}
+              onModeChange={setChartMode}
+              totalLabel={
+                chartMode === "equity"
+                  ? formatUsd(growthPoints[growthPoints.length - 1]?.value ?? 0)
+                  : formatUsd(monthSummary.totalUsd)
+              }
+            />
+          </ChartCard>
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
             <section className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.026),rgba(255,255,255,0.012))] p-4 shadow-[0_18px_36px_rgba(0,0,0,0.18)]">
@@ -1944,14 +1902,17 @@ export default function CalendarioPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-4 text-sm">
-                  <p className="font-medium text-emerald-300">
+                  <p className={`font-medium ${monthSummary.totalUsd < 0 ? "text-rose-300" : "text-emerald-300"}`}>
                     P/L: {formatCompactUsd(monthSummary.totalUsd)}
                   </p>
                   <p className="text-zinc-400">Trades: {monthAnalytics.totalTrades}</p>
                 </div>
               </div>
 
-              <div className="mb-2 grid grid-cols-7 gap-2">
+              <div
+                className="mb-2 grid gap-2"
+                style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr 0.72fr 0.72fr 0.9fr" }}
+              >
                 {DAY_LABELS.map((label) => (
                   <div
                     key={label}
@@ -1965,9 +1926,21 @@ export default function CalendarioPage() {
               <div className="space-y-2">
                 {calendarWeeks.map((week, weekIndex) => {
                   const compactWeek = compactWeekFlags[weekIndex];
+                  const weekDays = week
+                    .filter((date) => date.getMonth() === currentMonth.getMonth())
+                    .map((date) => dailyMap.get(toDateKey(date)))
+                    .filter((item): item is CalendarDayData => Boolean(item));
+
+                  const weekUsd = weekDays.reduce((acc, day) => acc + day.totalUsd, 0);
+                  const weekPct = weekDays.reduce((acc, day) => acc + day.totalPct, 0);
+                  const weekTrades = weekDays.reduce((acc, day) => acc + day.totalTrades, 0);
 
                   return (
-                    <div key={`week_${weekIndex}`} className="grid grid-cols-7 gap-2">
+                    <div
+                      key={`week_${weekIndex}`}
+                      className="grid gap-2"
+                      style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr 0.72fr 0.72fr 0.9fr" }}
+                    >
                       {week.map((date) => {
                         const dateKey = toDateKey(date);
 
@@ -1994,6 +1967,8 @@ export default function CalendarioPage() {
                           />
                         );
                       })}
+
+                      <WeekSummaryCell usd={weekUsd} pct={weekPct} trades={weekTrades} />
                     </div>
                   );
                 })}
