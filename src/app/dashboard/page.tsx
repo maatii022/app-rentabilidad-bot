@@ -91,20 +91,38 @@ type ReplaceTarget = {
   slot: string;
 };
 
+type NoticeTone = "info" | "success" | "warning" | "danger";
+
+type NoticeState = {
+  open: boolean;
+  tone: NoticeTone;
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  mode: "alert" | "confirm";
+};
+
 const REQUIRED_SLOTS = ["A", "B", "C"];
 
 function SectionCard({
   title,
   children,
   right,
+  compact = false,
 }: {
   title: string;
   children: React.ReactNode;
   right?: React.ReactNode;
+  compact?: boolean;
 }) {
   return (
-    <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
-      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <section
+      className={`rounded-[24px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.07),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.014))] shadow-[0_18px_40px_rgba(0,0,0,0.22)] ${
+        compact ? "p-4" : "p-4 md:p-5"
+      }`}
+    >
+      <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <h2 className="text-sm font-medium text-white">{title}</h2>
         {right ? <div className="flex flex-wrap gap-2">{right}</div> : null}
       </div>
@@ -124,23 +142,23 @@ function StatCard({
 }) {
   const toneClasses = {
     neutral:
-      "border-white/10 bg-white/[0.03] shadow-[0_12px_28px_rgba(255,255,255,0.03)]",
+      "border-white/10 bg-white/[0.03] shadow-[0_10px_24px_rgba(255,255,255,0.03)]",
     blue:
-      "border-sky-400/20 bg-sky-400/[0.08] shadow-[0_14px_30px_rgba(56,189,248,0.08)]",
+      "border-sky-400/20 bg-sky-400/[0.08] shadow-[0_12px_24px_rgba(56,189,248,0.08)]",
     amber:
-      "border-amber-300/20 bg-amber-300/[0.08] shadow-[0_14px_30px_rgba(251,191,36,0.08)]",
+      "border-amber-300/20 bg-amber-300/[0.08] shadow-[0_12px_24px_rgba(251,191,36,0.08)]",
     green:
-      "border-emerald-400/20 bg-emerald-400/[0.08] shadow-[0_14px_30px_rgba(16,185,129,0.08)]",
+      "border-emerald-400/20 bg-emerald-400/[0.08] shadow-[0_12px_24px_rgba(16,185,129,0.08)]",
     violet:
-      "border-violet-400/20 bg-violet-400/[0.08] shadow-[0_14px_30px_rgba(167,139,250,0.08)]",
+      "border-violet-400/20 bg-violet-400/[0.08] shadow-[0_12px_24px_rgba(167,139,250,0.08)]",
     red:
-      "border-rose-400/20 bg-rose-400/[0.08] shadow-[0_14px_30px_rgba(244,63,94,0.08)]",
+      "border-rose-400/20 bg-rose-400/[0.08] shadow-[0_12px_24px_rgba(244,63,94,0.08)]",
   };
 
   return (
     <div className={`rounded-2xl border p-3 ${toneClasses[tone]}`}>
       <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-400">{label}</p>
-      <p className="mt-2 text-2xl font-semibold leading-none text-white">{value}</p>
+      <p className="mt-1.5 text-xl font-semibold leading-none text-white md:text-2xl">{value}</p>
     </div>
   );
 }
@@ -150,11 +168,13 @@ function ActionButton({
   onClick,
   disabled,
   variant = "primary",
+  className = "",
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   variant?: "primary" | "secondary" | "danger" | "ghost" | "warning";
+  className?: string;
 }) {
   const styles = {
     primary:
@@ -173,7 +193,7 @@ function ActionButton({
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${styles[variant]}`}
+      className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${styles[variant]} ${className}`}
     >
       {children}
     </button>
@@ -200,7 +220,7 @@ function FilterPill({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-xl border px-3 py-2 text-sm font-medium transition-all duration-200 ${
+      className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition-all duration-200 ${
         active
           ? `scale-[0.985] ${activeClasses}`
           : "border-white/10 bg-white/[0.03] text-zinc-200 shadow-[0_10px_22px_rgba(255,255,255,0.03)] hover:bg-white/[0.06] hover:text-white"
@@ -309,8 +329,7 @@ function buildDisplaySlots(pack: Pack): PackSlot[] {
 
   for (const requiredSlot of REQUIRED_SLOTS) {
     if (!existing.has(requiredSlot)) {
-      const orden =
-        requiredSlot === "A" ? 1 : requiredSlot === "B" ? 2 : 3;
+      const orden = requiredSlot === "A" ? 1 : requiredSlot === "B" ? 2 : 3;
 
       original.push({
         id: -(pack.id * 100 + orden),
@@ -375,6 +394,100 @@ function resolveDisplayTotalPct(
   return null;
 }
 
+function ModalNotice({
+  state,
+  onClose,
+  onConfirm,
+}: {
+  state: NoticeState;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  if (!state.open) return null;
+
+  const toneStyles: Record<NoticeTone, { icon: string; badge: string; value: string }> = {
+    info: {
+      icon: "●",
+      badge:
+        "border-sky-300/20 bg-sky-400/[0.10] text-sky-200 shadow-[0_12px_24px_rgba(56,189,248,0.12)]",
+      value: "text-sky-300",
+    },
+    success: {
+      icon: "✓",
+      badge:
+        "border-emerald-300/20 bg-emerald-400/[0.10] text-emerald-200 shadow-[0_12px_24px_rgba(16,185,129,0.12)]",
+      value: "text-emerald-300",
+    },
+    warning: {
+      icon: "!",
+      badge:
+        "border-amber-300/20 bg-amber-300/[0.10] text-amber-100 shadow-[0_12px_24px_rgba(251,191,36,0.12)]",
+      value: "text-amber-300",
+    },
+    danger: {
+      icon: "×",
+      badge:
+        "border-rose-300/20 bg-rose-400/[0.10] text-rose-200 shadow-[0_12px_24px_rgba(244,63,94,0.12)]",
+      value: "text-rose-300",
+    },
+  };
+
+  const tone = toneStyles[state.tone];
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/65 px-4 backdrop-blur-md">
+      <div className="relative w-full max-w-[520px] overflow-hidden rounded-[30px] border border-white/10 bg-[radial-gradient(circle_at_top_center,rgba(56,189,248,0.08),transparent_26%),linear-gradient(180deg,rgba(12,14,20,0.96),rgba(10,11,16,0.94))] p-6 shadow-[0_30px_80px_rgba(0,0,0,0.45)]">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-4 top-4 rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
+        >
+          ×
+        </button>
+
+        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_18px_40px_rgba(0,0,0,0.25)]">
+          <div
+            className={`flex h-12 w-12 items-center justify-center rounded-2xl border text-2xl font-semibold ${tone.badge}`}
+          >
+            {tone.icon}
+          </div>
+        </div>
+
+        <div className="mt-5 text-center">
+          <h3 className="text-2xl font-semibold tracking-tight text-white">{state.title}</h3>
+          <p className="mt-2 text-sm leading-6 text-zinc-400">{state.message}</p>
+        </div>
+
+        <div className="mx-auto mt-5 h-px w-full max-w-[420px] bg-white/8" />
+
+        <div className="mt-5 text-center">
+          <p className={`text-4xl font-semibold leading-none ${tone.value}`}>
+            {state.mode === "confirm" ? "Confirmación" : "Notificación"}
+          </p>
+        </div>
+
+        <div className="mx-auto mt-5 h-px w-full max-w-[420px] bg-white/8" />
+
+        <div className="mt-6 flex items-center justify-center gap-2">
+          {state.mode === "confirm" && (
+            <ActionButton onClick={onClose} variant="ghost" className="min-w-[110px]">
+              {state.cancelLabel || "Cancelar"}
+            </ActionButton>
+          )}
+
+          <ActionButton
+            onClick={onConfirm}
+            variant={state.tone === "danger" ? "danger" : "primary"}
+            className="min-w-[140px]"
+          >
+            {state.confirmLabel || "Aceptar"}
+          </ActionButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const [packs, setPacks] = useState<Pack[]>([]);
   const [events, setEvents] = useState<AccountEvent[]>([]);
@@ -399,7 +512,61 @@ export default function DashboardPage() {
   const [persistedPerformance, setPersistedPerformance] = useState<PersistedPerformanceMap>({});
   const [liveStatus, setLiveStatus] = useState<LiveStatusMap>({});
 
+  const [notice, setNotice] = useState<NoticeState>({
+    open: false,
+    tone: "info",
+    title: "",
+    message: "",
+    mode: "alert",
+  });
+
+  const confirmResolverRef = useRef<((value: boolean) => void) | null>(null);
   const reemplazoRef = useRef<HTMLDivElement | null>(null);
+
+  function showAlert(
+    title: string,
+    message: string,
+    tone: NoticeTone = "info",
+    confirmLabel = "Aceptar"
+  ) {
+    setNotice({
+      open: true,
+      tone,
+      title,
+      message,
+      confirmLabel,
+      mode: "alert",
+    });
+  }
+
+  function showConfirm(
+    title: string,
+    message: string,
+    tone: NoticeTone = "warning",
+    confirmLabel = "Confirmar",
+    cancelLabel = "Cancelar"
+  ) {
+    return new Promise<boolean>((resolve) => {
+      confirmResolverRef.current = resolve;
+      setNotice({
+        open: true,
+        tone,
+        title,
+        message,
+        confirmLabel,
+        cancelLabel,
+        mode: "confirm",
+      });
+    });
+  }
+
+  function closeNotice(result = false) {
+    setNotice((prev) => ({ ...prev, open: false }));
+    if (confirmResolverRef.current) {
+      confirmResolverRef.current(result);
+      confirmResolverRef.current = null;
+    }
+  }
 
   async function cargarDatos() {
     const res = await fetch("/api/dashboard-packs", { cache: "no-store" });
@@ -441,14 +608,22 @@ export default function DashboardPage() {
       const json = await res.json();
 
       if (!res.ok || !json?.ok) {
-        alert(`No se pudo cargar la performance persistida: ${json?.error || "Error desconocido"}`);
+        showAlert(
+          "No se pudo cargar la performance",
+          json?.error || "Error desconocido",
+          "danger"
+        );
         return;
       }
 
       setPersistedPerformance(json.data || {});
     } catch (error) {
       console.error("Error cargando performance persistida:", error);
-      alert("No se pudo cargar la performance persistida");
+      showAlert(
+        "No se pudo cargar la performance",
+        "Se produjo un error al cargar la performance persistida.",
+        "danger"
+      );
     } finally {
       setLoadingPerformance(false);
     }
@@ -480,10 +655,12 @@ export default function DashboardPage() {
   }
 
   async function recargarEstado() {
-    await Promise.all([
-      cargarPerformancePersistida(),
-      cargarLiveStatus(),
-    ]);
+    await Promise.all([cargarPerformancePersistida(), cargarLiveStatus()]);
+    showAlert(
+      "Estado actualizado",
+      "La información de performance y live status se ha recargado correctamente.",
+      "success"
+    );
   }
 
   async function ejecutarRevisionDiaria() {
@@ -501,7 +678,11 @@ export default function DashboardPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(`Error en revisión diaria: ${data?.error || "Error desconocido"}`);
+        showAlert(
+          "Error en la revisión diaria",
+          data?.error || "Error desconocido",
+          "danger"
+        );
         return;
       }
 
@@ -510,7 +691,11 @@ export default function DashboardPage() {
       await cargarResumenHistorico();
       await recargarEstado();
 
-      alert(`Revisión diaria ejecutada para fecha de negocio ${data?.fecha}`);
+      showAlert(
+        "Revisión diaria ejecutada",
+        `La revisión diaria se ejecutó para la fecha de negocio ${data?.fecha}.`,
+        "success"
+      );
     } finally {
       setLoading(false);
     }
@@ -531,10 +716,10 @@ export default function DashboardPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(
-          `Error al rotar ${packNombre}: ${
-            data?.error?.message || JSON.stringify(data?.error) || "Error desconocido"
-          }`
+        showAlert(
+          `Error al rotar ${packNombre}`,
+          data?.error?.message || JSON.stringify(data?.error) || "Error desconocido",
+          "danger"
         );
         return;
       }
@@ -542,7 +727,12 @@ export default function DashboardPage() {
       await cargarDatos();
       await cargarResumenHistorico();
       await recargarEstado();
-      alert(`Rotación ejecutada en ${packNombre}`);
+
+      showAlert(
+        "Rotación completada",
+        `La rotación se ejecutó correctamente en ${packNombre}.`,
+        "success"
+      );
     } finally {
       setLoading(false);
     }
@@ -563,10 +753,10 @@ export default function DashboardPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(
-          `Error al evaluar ${packNombre}: ${
-            data?.error?.message || JSON.stringify(data?.error) || "Error desconocido"
-          }`
+        showAlert(
+          `Error al evaluar ${packNombre}`,
+          data?.error?.message || JSON.stringify(data?.error) || "Error desconocido",
+          "danger"
         );
         return;
       }
@@ -580,14 +770,22 @@ export default function DashboardPage() {
         data?.resultado?.detalle?.mensaje ||
         `Evaluación ejecutada en ${packNombre}`;
 
-      alert(String(mensaje));
+      showAlert("Evaluación completada", String(mensaje), "success");
     } finally {
       setLoading(false);
     }
   }
 
   async function marcarPerdida(accountId: number) {
-    if (!confirm("¿Seguro que quieres marcar esta cuenta como perdida?")) return;
+    const confirmed = await showConfirm(
+      "Marcar cuenta como perdida",
+      "Esta acción cambiará el estado de la cuenta a perdida. ¿Quieres continuar?",
+      "warning",
+      "Sí, marcar",
+      "Cancelar"
+    );
+
+    if (!confirmed) return;
 
     setLoading(true);
 
@@ -603,10 +801,10 @@ export default function DashboardPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(
-          `Error al marcar pérdida: ${
-            data?.error?.message || JSON.stringify(data?.error) || "Error desconocido"
-          }`
+        showAlert(
+          "Error al marcar pérdida",
+          data?.error?.message || JSON.stringify(data?.error) || "Error desconocido",
+          "danger"
         );
         return;
       }
@@ -614,14 +812,26 @@ export default function DashboardPage() {
       await cargarDatos();
       await cargarResumenHistorico();
       await recargarEstado();
-      alert("Cuenta marcada como perdida correctamente");
+      showAlert(
+        "Cuenta actualizada",
+        "La cuenta se ha marcado como perdida correctamente.",
+        "success"
+      );
     } finally {
       setLoading(false);
     }
   }
 
   async function marcarFondeada(accountId: number) {
-    if (!confirm("¿Seguro que quieres marcar esta cuenta como fondeada?")) return;
+    const confirmed = await showConfirm(
+      "Marcar cuenta como fondeada",
+      "Esta acción cambiará el estado de la cuenta a fondeada. ¿Quieres continuar?",
+      "warning",
+      "Sí, marcar",
+      "Cancelar"
+    );
+
+    if (!confirmed) return;
 
     setLoading(true);
 
@@ -637,10 +847,10 @@ export default function DashboardPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(
-          `Error al marcar fondeada: ${
-            data?.error?.message || JSON.stringify(data?.error) || "Error desconocido"
-          }`
+        showAlert(
+          "Error al marcar fondeada",
+          data?.error?.message || JSON.stringify(data?.error) || "Error desconocido",
+          "danger"
         );
         return;
       }
@@ -648,7 +858,11 @@ export default function DashboardPage() {
       await cargarDatos();
       await cargarResumenHistorico();
       await recargarEstado();
-      alert("Cuenta marcada como fondeada correctamente");
+      showAlert(
+        "Cuenta actualizada",
+        "La cuenta se ha marcado como fondeada correctamente.",
+        "success"
+      );
     } finally {
       setLoading(false);
     }
@@ -658,7 +872,11 @@ export default function DashboardPage() {
     const target = parsePendingSlotValue(selectedPendingSlotValue);
 
     if (!target) {
-      alert("Selecciona un slot pendiente válido");
+      showAlert(
+        "Slot no válido",
+        "Selecciona un slot pendiente válido antes de continuar.",
+        "warning"
+      );
       return;
     }
 
@@ -682,10 +900,10 @@ export default function DashboardPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(
-          `Error al reemplazar cuenta: ${
-            data?.error?.message || JSON.stringify(data?.error) || "Error desconocido"
-          }`
+        showAlert(
+          "Error al reemplazar cuenta",
+          data?.error?.message || JSON.stringify(data?.error) || "Error desconocido",
+          "danger"
         );
         return;
       }
@@ -697,7 +915,11 @@ export default function DashboardPage() {
       await cargarDatos();
       await cargarResumenHistorico();
       await recargarEstado();
-      alert("Cuenta reemplazada correctamente");
+      showAlert(
+        "Reemplazo completado",
+        "La cuenta se ha reemplazado correctamente.",
+        "success"
+      );
     } finally {
       setLoading(false);
     }
@@ -828,250 +1050,306 @@ export default function DashboardPage() {
   }, [presetFilter, tipoFilter]);
 
   return (
-    <div className="space-y-5 text-white">
-      <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-3xl">
-            <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">
-              App rentabilidad bot
-            </p>
-            <h1 className="mt-2 text-4xl font-semibold tracking-tight text-white">
-              Dashboard
-            </h1>
-            <p className="mt-2 text-sm text-zinc-400">
-              Control de rendimiento diario, rotación y seguimiento operativo de cuentas.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <ActionButton
-              onClick={recargarEstado}
-              disabled={loadingPerformance || loadingLive}
-              variant="secondary"
-            >
-              {loadingPerformance || loadingLive ? "Recargando..." : "Recargar estado"}
-            </ActionButton>
-
-            <ActionButton
-              onClick={ejecutarRevisionDiaria}
-              disabled={loading}
-              variant="primary"
-            >
-              {loading ? "Procesando..." : "Ejecutar revisión diaria"}
-            </ActionButton>
-          </div>
-        </div>
-
-        <div className="mt-6 grid grid-cols-2 gap-2.5 xl:grid-cols-5">
-          <StatCard label="Packs" value={resumen.packsVisibles} tone="blue" />
-          <StatCard label="Cuentas activas" value={resumen.cuentasActivas} tone="green" />
-          <StatCard label="Cuentas con alertas" value={resumen.cuentasConAlertas} tone="amber" />
-          <StatCard label="Fondeadas" value={summary.fondeadasHistoricas} tone="violet" />
-          <StatCard label="Perdidas" value={summary.perdidasHistoricas} tone="red" />
-        </div>
-      </section>
-
-      <SectionCard
-        title="Filtros"
-        right={
-          <ActionButton
-            onClick={() => setSoloIncidencias((prev) => !prev)}
-            variant={soloIncidencias ? "warning" : "secondary"}
-          >
-            Alertas
-          </ActionButton>
-        }
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <FilterPill
-            label="Todos los presets"
-            active={presetFilter === "todos"}
-            onClick={() => setPresetFilter("todos")}
-          />
-
-          {presetOptions.map((preset) => (
-            <FilterPill
-              key={preset}
-              label={preset}
-              active={presetFilter === preset}
-              onClick={() => setPresetFilter(preset)}
-            />
-          ))}
-
-          <div className="mx-1 hidden h-8 w-px bg-white/10 lg:block" />
-
-          <FilterPill
-            label="Todos"
-            active={tipoFilter === "todos"}
-            onClick={() => setTipoFilter("todos")}
-          />
-          <FilterPill
-            label="Prueba"
-            active={tipoFilter === "prueba"}
-            onClick={() => setTipoFilter("prueba")}
-          />
-          <FilterPill
-            label="Fondeada"
-            active={tipoFilter === "fondeada"}
-            onClick={() => setTipoFilter("fondeada")}
-          />
-        </div>
-      </SectionCard>
-
-      <SectionCard title="Packs activos">
-        <div className="space-y-4">
-          {packsFiltrados.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-center text-sm text-zinc-500">
-              No hay packs que coincidan con los filtros actuales.
-            </div>
-          )}
-
-          {packsFiltrados.map((pack) => (
-            <PackCard
-              key={pack.id}
-              pack={pack}
-              persistedPerformance={persistedPerformance}
-              liveStatus={liveStatus}
-              loading={loading}
-              onRotar={rotarPack}
-              onEvaluar={evaluarPack}
-              onPerder={marcarPerdida}
-              onFondear={marcarFondeada}
-              onSelectReplace={seleccionarSlotPendiente}
-              getLivePnlClass={getLivePnlClass}
-            />
-          ))}
-        </div>
-      </SectionCard>
-
-      {pendingSlotOptions.length > 0 && (
-        <SectionCard title="Incidencias y reemplazos">
-          <div
-            ref={reemplazoRef}
-            className="grid grid-cols-1 gap-3 xl:grid-cols-[0.85fr_1.15fr]"
-          >
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-4 shadow-[0_12px_28px_rgba(255,255,255,0.03)] transition-all duration-300 hover:shadow-[0_16px_34px_rgba(255,255,255,0.04)]">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
-                Pendientes
+    <>
+      <div className="space-y-4 text-white">
+        <section className="rounded-[24px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.22)] md:p-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-zinc-500">
+                App rentabilidad bot
               </p>
-              <p className="mt-2 text-3xl font-semibold text-white">
-                {pendingSlotOptions.length}
-              </p>
-              <p className="mt-2 text-sm text-zinc-400">
-                Slots pendientes de reemplazo.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-4 shadow-[0_12px_28px_rgba(255,255,255,0.03)] transition-all duration-300 hover:shadow-[0_16px_34px_rgba(255,255,255,0.04)]">
-              <div className="grid grid-cols-1 gap-2.5">
-                <div>
-                  <FieldLabel>Slot pendiente</FieldLabel>
-                  <Select
-                    value={selectedPendingSlotValue}
-                    onChange={(e) => setSelectedPendingSlotValue(e.target.value)}
-                  >
-                    <option value="">Selecciona un slot pendiente</option>
-                    {pendingSlotOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-
-                <div>
-                  <FieldLabel>Número de cuenta</FieldLabel>
-                  <Input
-                    value={numeroCuenta}
-                    onChange={(e) => setNumeroCuenta(e.target.value)}
-                    placeholder="Ej. 128999"
-                  />
-                </div>
-
-                <div>
-                  <FieldLabel>Alias</FieldLabel>
-                  <Input
-                    value={alias}
-                    onChange={(e) => setAlias(e.target.value)}
-                    placeholder="Ej. Fernet B2"
-                  />
-                </div>
-
-                <div>
-                  <ActionButton
-                    onClick={reemplazarCuenta}
-                    disabled={loading || !selectedPendingSlotValue || !numeroCuenta || !alias}
-                    variant="primary"
-                  >
-                    Reemplazar cuenta
-                  </ActionButton>
-                </div>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <h1 className="text-3xl font-semibold tracking-tight text-white md:text-[2rem]">
+                  Dashboard
+                </h1>
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-[0.14em] text-zinc-400">
+                  Vista operativa
+                </span>
               </div>
+              <p className="mt-1.5 max-w-3xl text-sm text-zinc-400">
+                Control diario de packs, incidencias, rotación y seguimiento de cuentas.
+              </p>
             </div>
-          </div>
-        </SectionCard>
-      )}
 
-      {resultadosRevision.length > 0 && (
-        <SectionCard title="Resultado de la revisión diaria">
-          <div className="space-y-2.5">
-            {resultadosRevision.map((resultado) => (
-              <div
-                key={`${resultado.packId}-${resultado.packNombre}`}
-                className="rounded-2xl border border-white/10 bg-black/20 p-3 shadow-[0_12px_28px_rgba(255,255,255,0.03)] transition-all duration-300 hover:shadow-[0_16px_34px_rgba(255,255,255,0.04)]"
+            <div className="flex flex-wrap gap-2">
+              <ActionButton
+                onClick={recargarEstado}
+                disabled={loadingPerformance || loadingLive}
+                variant="secondary"
               >
-                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                  <p className="text-sm font-medium text-white">{resultado.packNombre}</p>
-                  <span
-                    className={`rounded-full border px-3 py-1 text-xs shadow-[0_10px_22px_rgba(255,255,255,0.03)] ${
-                      resultado.ok
-                        ? "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-200"
-                        : "border-amber-300/20 bg-amber-300/[0.08] text-amber-200"
-                    }`}
-                  >
-                    {resultado.ok ? "Correcto" : "Revisar"}
-                  </span>
-                </div>
-                <p className="mt-2 text-sm text-zinc-400">{resultado.mensaje}</p>
-              </div>
-            ))}
+                {loadingPerformance || loadingLive ? "Recargando..." : "Recargar estado"}
+              </ActionButton>
+
+              <ActionButton
+                onClick={ejecutarRevisionDiaria}
+                disabled={loading}
+                variant="primary"
+              >
+                {loading ? "Procesando..." : "Ejecutar revisión diaria"}
+              </ActionButton>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-2.5 xl:grid-cols-5">
+            <StatCard label="Packs" value={resumen.packsVisibles} tone="blue" />
+            <StatCard label="Cuentas activas" value={resumen.cuentasActivas} tone="green" />
+            <StatCard label="Alertas" value={resumen.cuentasConAlertas} tone="amber" />
+            <StatCard label="Fondeadas" value={summary.fondeadasHistoricas} tone="violet" />
+            <StatCard label="Perdidas" value={summary.perdidasHistoricas} tone="red" />
+          </div>
+        </section>
+
+        <SectionCard
+          title="Filtros y estado"
+          compact
+          right={
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-xl border border-amber-300/20 bg-amber-300/[0.08] px-3 py-1.5 text-xs font-medium text-amber-100">
+                Pendientes: {pendingSlotOptions.length}
+              </span>
+              <ActionButton
+                onClick={() => setSoloIncidencias((prev) => !prev)}
+                variant={soloIncidencias ? "warning" : "secondary"}
+              >
+                {soloIncidencias ? "Solo alertas" : "Ver todas"}
+              </ActionButton>
+            </div>
+          }
+        >
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">
+                Presets
+              </span>
+
+              <FilterPill
+                label="Todos los presets"
+                active={presetFilter === "todos"}
+                onClick={() => setPresetFilter("todos")}
+              />
+
+              {presetOptions.map((preset) => (
+                <FilterPill
+                  key={preset}
+                  label={preset}
+                  active={presetFilter === preset}
+                  onClick={() => setPresetFilter(preset)}
+                />
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] uppercase tracking-[0.12em] text-zinc-500">
+                Tipo
+              </span>
+
+              <FilterPill
+                label="Todos"
+                active={tipoFilter === "todos"}
+                onClick={() => setTipoFilter("todos")}
+              />
+              <FilterPill
+                label="Prueba"
+                active={tipoFilter === "prueba"}
+                onClick={() => setTipoFilter("prueba")}
+              />
+              <FilterPill
+                label="Fondeada"
+                active={tipoFilter === "fondeada"}
+                onClick={() => setTipoFilter("fondeada")}
+              />
+            </div>
           </div>
         </SectionCard>
-      )}
 
-      <SectionCard title="Actividad reciente">
-        <div className="space-y-2.5">
-          {eventosRecientes.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-zinc-500">
-              No hay actividad reciente.
-            </div>
-          )}
-
-          {eventosRecientes.map((event) => (
-            <div
-              key={event.id}
-              className="rounded-2xl border border-white/10 bg-black/20 p-3 shadow-[0_12px_28px_rgba(255,255,255,0.03)] transition-all duration-300 hover:shadow-[0_16px_34px_rgba(255,255,255,0.04)]"
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.6fr)_380px]">
+          <div className="space-y-4">
+            <SectionCard
+              title="Packs activos"
+              right={
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-zinc-400">
+                  {packsFiltrados.length} visibles
+                </span>
+              }
             >
-              <div className="flex flex-col gap-1.5 md:flex-row md:items-start md:justify-between">
-                <div className="space-y-1">
-                  <p className={`text-sm font-medium ${getEventTone(event.tipo_evento)}`}>
-                    {event.tipo_evento}
-                  </p>
-                  <p className="text-sm text-zinc-400">
-                    {event.accounts?.alias ?? "-"} · {event.accounts?.numero_cuenta ?? "-"}
-                  </p>
-                </div>
-                <p className="text-xs text-zinc-500">{formatEventDate(event.fecha)}</p>
-              </div>
+              <div className="space-y-3">
+                {packsFiltrados.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-5 text-center text-sm text-zinc-500">
+                    No hay packs que coincidan con los filtros actuales.
+                  </div>
+                )}
 
-              {event.descripcion ? (
-                <p className="mt-2 text-sm leading-6 text-zinc-400">{event.descripcion}</p>
-              ) : null}
-            </div>
-          ))}
+                {packsFiltrados.map((pack) => (
+                  <PackCard
+                    key={pack.id}
+                    pack={pack}
+                    persistedPerformance={persistedPerformance}
+                    liveStatus={liveStatus}
+                    loading={loading}
+                    onRotar={rotarPack}
+                    onEvaluar={evaluarPack}
+                    onPerder={marcarPerdida}
+                    onFondear={marcarFondeada}
+                    onSelectReplace={seleccionarSlotPendiente}
+                    getLivePnlClass={getLivePnlClass}
+                  />
+                ))}
+              </div>
+            </SectionCard>
+          </div>
+
+          <aside className="space-y-4 xl:sticky xl:top-4 xl:self-start">
+            {pendingSlotOptions.length > 0 && (
+              <SectionCard title="Incidencias y reemplazos" compact>
+                <div ref={reemplazoRef} className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="rounded-2xl border border-amber-300/20 bg-amber-300/[0.08] p-3 shadow-[0_12px_28px_rgba(251,191,36,0.06)]">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
+                        Pendientes
+                      </p>
+                      <p className="mt-1.5 text-2xl font-semibold text-white">
+                        {pendingSlotOptions.length}
+                      </p>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-black/20 p-3 shadow-[0_12px_28px_rgba(255,255,255,0.03)]">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
+                        Estado
+                      </p>
+                      <p className="mt-1.5 text-sm font-medium text-zinc-200">
+                        Acción rápida
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-black/20 p-3 shadow-[0_12px_28px_rgba(255,255,255,0.03)]">
+                    <div className="space-y-2.5">
+                      <div>
+                        <FieldLabel>Slot pendiente</FieldLabel>
+                        <Select
+                          value={selectedPendingSlotValue}
+                          onChange={(e) => setSelectedPendingSlotValue(e.target.value)}
+                        >
+                          <option value="">Selecciona un slot pendiente</option>
+                          {pendingSlotOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                        <div>
+                          <FieldLabel>Número de cuenta</FieldLabel>
+                          <Input
+                            value={numeroCuenta}
+                            onChange={(e) => setNumeroCuenta(e.target.value)}
+                            placeholder="Ej. 128999"
+                          />
+                        </div>
+
+                        <div>
+                          <FieldLabel>Alias</FieldLabel>
+                          <Input
+                            value={alias}
+                            onChange={(e) => setAlias(e.target.value)}
+                            placeholder="Ej. Fernet B2"
+                          />
+                        </div>
+                      </div>
+
+                      <ActionButton
+                        onClick={reemplazarCuenta}
+                        disabled={loading || !selectedPendingSlotValue || !numeroCuenta || !alias}
+                        variant="primary"
+                        className="w-full justify-center py-2"
+                      >
+                        Reemplazar cuenta
+                      </ActionButton>
+                    </div>
+                  </div>
+                </div>
+              </SectionCard>
+            )}
+
+            {resultadosRevision.length > 0 && (
+              <SectionCard title="Resultado de la revisión" compact>
+                <div className="space-y-2">
+                  {resultadosRevision.map((resultado) => (
+                    <div
+                      key={`${resultado.packId}-${resultado.packNombre}`}
+                      className="rounded-2xl border border-white/10 bg-black/20 p-3 shadow-[0_12px_28px_rgba(255,255,255,0.03)]"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="line-clamp-1 text-sm font-medium text-white">
+                          {resultado.packNombre}
+                        </p>
+                        <span
+                          className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] ${
+                            resultado.ok
+                              ? "border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-200"
+                              : "border-amber-300/20 bg-amber-300/[0.08] text-amber-200"
+                          }`}
+                        >
+                          {resultado.ok ? "Correcto" : "Revisar"}
+                        </span>
+                      </div>
+                      <p className="mt-1.5 line-clamp-3 text-xs leading-5 text-zinc-400">
+                        {resultado.mensaje}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </SectionCard>
+            )}
+
+            <SectionCard title="Actividad reciente" compact>
+              <div className="space-y-2">
+                {eventosRecientes.length === 0 && (
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-zinc-500">
+                    No hay actividad reciente.
+                  </div>
+                )}
+
+                {eventosRecientes.map((event) => (
+                  <div
+                    key={event.id}
+                    className="rounded-2xl border border-white/10 bg-black/20 p-3 shadow-[0_12px_28px_rgba(255,255,255,0.03)]"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className={`text-sm font-medium ${getEventTone(event.tipo_evento)}`}>
+                          {event.tipo_evento}
+                        </p>
+                        <p className="mt-1 truncate text-xs text-zinc-400">
+                          {event.accounts?.alias ?? "-"} · {event.accounts?.numero_cuenta ?? "-"}
+                        </p>
+                      </div>
+                      <p className="shrink-0 text-[11px] text-zinc-500">
+                        {formatEventDate(event.fecha)}
+                      </p>
+                    </div>
+
+                    {event.descripcion ? (
+                      <p className="mt-2 line-clamp-3 text-xs leading-5 text-zinc-400">
+                        {event.descripcion}
+                      </p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
+          </aside>
         </div>
-      </SectionCard>
-    </div>
+      </div>
+
+      <ModalNotice
+        state={notice}
+        onClose={() => closeNotice(false)}
+        onConfirm={() => closeNotice(true)}
+      />
+    </>
   );
 }
 
@@ -1102,12 +1380,12 @@ function PackCard({
   const displaySlots = buildDisplaySlots(pack);
 
   return (
-    <div className="overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(255,255,255,0.01))] shadow-[0_14px_30px_rgba(0,0,0,0.18)] transition-all duration-300 hover:shadow-[0_18px_38px_rgba(0,0,0,0.20)]">
+    <div className="overflow-hidden rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(255,255,255,0.01))] shadow-[0_14px_30px_rgba(0,0,0,0.18)] transition-all duration-300 hover:shadow-[0_18px_38px_rgba(0,0,0,0.20)]">
       <div className="border-b border-white/8 px-4 py-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div>
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-lg font-medium text-white">{pack.nombre}</h3>
+              <h3 className="text-base font-medium text-white">{pack.nombre}</h3>
 
               {flags.hasPendingReplacement && (
                 <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.10] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-amber-100 shadow-[0_10px_20px_rgba(251,191,36,0.08)]">
@@ -1128,7 +1406,7 @@ function PackCard({
               )}
             </div>
 
-            <div className="mt-2 flex flex-wrap gap-2 text-xs text-zinc-400">
+            <div className="mt-1.5 flex flex-wrap gap-2 text-[11px] text-zinc-400">
               <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 shadow-[0_10px_20px_rgba(255,255,255,0.03)]">
                 Preset: {pack.presets?.nombre ?? "-"}
               </span>
@@ -1158,7 +1436,7 @@ function PackCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2.5 p-3 md:grid-cols-3">
         {displaySlots.map((slot) => {
           const estadoCuenta = slot.accounts?.estado ?? "";
           const puedePerder =
@@ -1195,12 +1473,12 @@ function PackCard({
                   : "border-white/10 bg-black/20 shadow-[0_12px_26px_rgba(255,255,255,0.02)]"
               }`}
             >
-              <div className="mb-3 flex items-start justify-between gap-2">
+              <div className="mb-2.5 flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
                     Slot {slot.slot}
                   </p>
-                  <p className="mt-1 truncate text-base font-medium text-white">
+                  <p className="mt-1 truncate text-sm font-medium text-white">
                     {slot.accounts?.alias ?? "Vacío"}
                   </p>
                 </div>
@@ -1230,55 +1508,58 @@ function PackCard({
                 </div>
               </div>
 
-              <div className="space-y-1 text-[11px] text-zinc-400">
-                <p>Número: {slot.accounts?.numero_cuenta ?? "-"}</p>
-                <p>Estado: {slot.accounts?.estado ?? "-"}</p>
-                <p>Tipo: {slot.accounts?.tipo_cuenta ?? "-"}</p>
-
-                <div className="mt-3 grid grid-cols-[1fr_1fr_auto] items-center gap-2 rounded-xl border border-white/5 bg-black/20 p-2.5 shadow-[0_10px_22px_rgba(0,0,0,0.16)]">
-                  <div>
-                    <p className="text-[9px] uppercase tracking-[0.12em] text-zinc-500">
-                      Total %
-                    </p>
-                    <p
-                      className={`mt-1 text-sm font-medium ${getLivePnlClass(
-                        displayTotalPct
-                      )}`}
-                    >
-                      {formatPercent(displayTotalPct)}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-[9px] uppercase tracking-[0.12em] text-zinc-500">
-                      Hoy %
-                    </p>
-                    <p
-                      className={`mt-1 text-sm font-medium ${getLivePnlClass(
-                        displayHoyPct
-                      )}`}
-                    >
-                      {formatPercent(displayHoyPct)}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-end">
-                    {hasOpenTrade ? (
-                      <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-400/[0.08] px-2.5 py-1 shadow-[0_8px_18px_rgba(16,185,129,0.10)]">
-                        <span className="relative flex h-2.5 w-2.5">
-                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.8)]" />
-                        </span>
-                        <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-emerald-200">
-                          En curso
-                        </span>
-                      </div>
-                    ) : null}
-                  </div>
+              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-zinc-400">
+                <p className="truncate">Número: {slot.accounts?.numero_cuenta ?? "-"}</p>
+                <p className="truncate">Estado: {slot.accounts?.estado ?? "-"}</p>
+                <p className="truncate">Tipo: {slot.accounts?.tipo_cuenta ?? "-"}</p>
+                <div className="flex items-center justify-start">
+                  {hasOpenTrade ? (
+                    <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-400/[0.08] px-2 py-1 shadow-[0_8px_18px_rgba(16,185,129,0.10)]">
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-300 shadow-[0_0_10px_rgba(52,211,153,0.8)]" />
+                      </span>
+                      <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-emerald-200">
+                        En curso
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] uppercase tracking-[0.12em] text-zinc-500">
+                      Sin trade
+                    </span>
+                  )}
                 </div>
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-1.5">
+              <div className="mt-2.5 grid grid-cols-2 gap-2 rounded-xl border border-white/5 bg-black/20 p-2.5 shadow-[0_10px_22px_rgba(0,0,0,0.16)]">
+                <div>
+                  <p className="text-[9px] uppercase tracking-[0.12em] text-zinc-500">
+                    Total %
+                  </p>
+                  <p
+                    className={`mt-1 text-sm font-medium ${getLivePnlClass(
+                      displayTotalPct
+                    )}`}
+                  >
+                    {formatPercent(displayTotalPct)}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-[9px] uppercase tracking-[0.12em] text-zinc-500">
+                    Hoy %
+                  </p>
+                  <p
+                    className={`mt-1 text-sm font-medium ${getLivePnlClass(
+                      displayHoyPct
+                    )}`}
+                  >
+                    {formatPercent(displayHoyPct)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
                 <ActionButton
                   onClick={() => slot.accounts?.id && onPerder(slot.accounts.id)}
                   disabled={loading || !puedePerder}
