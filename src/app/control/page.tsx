@@ -12,10 +12,21 @@ type PropFirmOption = {
   nombre: string;
 };
 
+type AvailableAccountOption = {
+  id: number;
+  alias: string | null;
+  numero_cuenta: string | null;
+  preset_id: number | null;
+  tipo_cuenta: string | null;
+  estado: string | null;
+};
+
 type TypeOption = "prueba" | "fondeada";
 type AccountSizeOption = "5K" | "10K" | "25K" | "50K" | "100K";
+type SlotKey = "A" | "B" | "C";
 
 const ACCOUNT_SIZES: AccountSizeOption[] = ["5K", "10K", "25K", "50K", "100K"];
+const SLOT_KEYS: SlotKey[] = ["A", "B", "C"];
 
 function HeroCard() {
   return (
