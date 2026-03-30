@@ -763,8 +763,8 @@ export default function ControlPage() {
                 />
               </div>
 
-              <div>
-                <MiniLabel>Preset</MiniLabel>
+              
+              
                 <InlinePicker
   label="Preset"
   triggerLabel="Preset"
@@ -774,7 +774,7 @@ export default function ControlPage() {
   onToggle={() => toggleControl("packPreset")}
   onSelect={setPackPresetId}
 />
-              </div>
+              
             </div>
 
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
