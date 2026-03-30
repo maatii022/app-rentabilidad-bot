@@ -169,12 +169,14 @@ function ActionButton({
   disabled,
   variant = "primary",
   className = "",
+  title,
 }: {
   children: React.ReactNode;
   onClick?: () => void;
   disabled?: boolean;
   variant?: "primary" | "secondary" | "danger" | "ghost" | "warning";
   className?: string;
+  title?: string;
 }) {
   const styles = {
     primary:
@@ -193,6 +195,7 @@ function ActionButton({
     <button
       onClick={onClick}
       disabled={disabled}
+      title={title}
       className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${styles[variant]} ${className}`}
     >
       {children}
@@ -277,6 +280,11 @@ function getEventTone(tipo: string) {
 function formatPercent(value?: number | null) {
   if (typeof value !== "number" || Number.isNaN(value)) return "-";
   return `${value.toFixed(2)}%`;
+}
+
+function formatAccountSize(value?: number | null) {
+  if (typeof value !== "number" || Number.isNaN(value)) return null;
+  return `${Math.round(value).toLocaleString("es-ES")}$`;
 }
 
 function normalizeSlotName(slot: string | undefined) {
@@ -488,6 +496,24 @@ function ModalNotice({
   );
 }
 
+function RefreshIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-4 w-4"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+      <path d="M21 3v6h-6" />
+    </svg>
+  );
+}
+
 export default function DashboardPage() {
   const [packs, setPacks] = useState<Pack[]>([]);
   const [events, setEvents] = useState<AccountEvent[]>([]);
@@ -596,7 +622,7 @@ export default function DashboardPage() {
     });
   }
 
-  async function cargarPerformancePersistida() {
+  async function cargarPerformancePersistida(silent = false) {
     setLoadingPerformance(true);
 
     try {
@@ -608,28 +634,32 @@ export default function DashboardPage() {
       const json = await res.json();
 
       if (!res.ok || !json?.ok) {
-        showAlert(
-          "No se pudo cargar la performance",
-          json?.error || "Error desconocido",
-          "danger"
-        );
+        if (!silent) {
+          showAlert(
+            "No se pudo cargar la performance",
+            json?.error || "Error desconocido",
+            "danger"
+          );
+        }
         return;
       }
 
       setPersistedPerformance(json.data || {});
     } catch (error) {
       console.error("Error cargando performance persistida:", error);
-      showAlert(
-        "No se pudo cargar la performance",
-        "Se produjo un error al cargar la performance persistida.",
-        "danger"
-      );
+      if (!silent) {
+        showAlert(
+          "No se pudo cargar la performance",
+          "Se produjo un error al cargar la performance persistida.",
+          "danger"
+        );
+      }
     } finally {
       setLoadingPerformance(false);
     }
   }
 
-  async function cargarLiveStatus() {
+  async function cargarLiveStatus(silent = false) {
     setLoadingLive(true);
 
     try {
@@ -649,18 +679,27 @@ export default function DashboardPage() {
     } catch (error) {
       console.error("Error cargando live status:", error);
       setLiveStatus({});
+      if (!silent) {
+        showAlert(
+          "No se pudo cargar el estado live",
+          "Se produjo un error al actualizar el estado live.",
+          "danger"
+        );
+      }
     } finally {
       setLoadingLive(false);
     }
   }
 
-  async function recargarEstado() {
-    await Promise.all([cargarPerformancePersistida(), cargarLiveStatus()]);
-    showAlert(
-      "Estado actualizado",
-      "La información de performance y live status se ha recargado correctamente.",
-      "success"
-    );
+  async function recargarEstado(showSuccess = true) {
+    await Promise.all([cargarPerformancePersistida(true), cargarLiveStatus(true)]);
+    if (showSuccess) {
+      showAlert(
+        "Estado actualizado",
+        "La información de performance y live status se ha recargado correctamente.",
+        "success"
+      );
+    }
   }
 
   async function ejecutarRevisionDiaria() {
@@ -689,7 +728,7 @@ export default function DashboardPage() {
       setResultadosRevision(data.resultados || []);
       await cargarDatos();
       await cargarResumenHistorico();
-      await recargarEstado();
+      await recargarEstado(false);
 
       showAlert(
         "Revisión diaria ejecutada",
@@ -726,51 +765,13 @@ export default function DashboardPage() {
 
       await cargarDatos();
       await cargarResumenHistorico();
-      await recargarEstado();
+      await recargarEstado(false);
 
       showAlert(
         "Rotación completada",
         `La rotación se ejecutó correctamente en ${packNombre}.`,
         "success"
       );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function evaluarPack(packId: number, packNombre: string) {
-    setLoading(true);
-
-    try {
-      const res = await fetch("/api/sord/evaluar", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ packId }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        showAlert(
-          `Error al evaluar ${packNombre}`,
-          data?.error?.message || JSON.stringify(data?.error) || "Error desconocido",
-          "danger"
-        );
-        return;
-      }
-
-      await cargarDatos();
-      await cargarResumenHistorico();
-      await recargarEstado();
-
-      const mensaje =
-        data?.resultado?.mensaje ||
-        data?.resultado?.detalle?.mensaje ||
-        `Evaluación ejecutada en ${packNombre}`;
-
-      showAlert("Evaluación completada", String(mensaje), "success");
     } finally {
       setLoading(false);
     }
@@ -811,7 +812,7 @@ export default function DashboardPage() {
 
       await cargarDatos();
       await cargarResumenHistorico();
-      await recargarEstado();
+      await recargarEstado(false);
       showAlert(
         "Cuenta actualizada",
         "La cuenta se ha marcado como perdida correctamente.",
@@ -857,7 +858,7 @@ export default function DashboardPage() {
 
       await cargarDatos();
       await cargarResumenHistorico();
-      await recargarEstado();
+      await recargarEstado(false);
       showAlert(
         "Cuenta actualizada",
         "La cuenta se ha marcado como fondeada correctamente.",
@@ -914,7 +915,7 @@ export default function DashboardPage() {
 
       await cargarDatos();
       await cargarResumenHistorico();
-      await recargarEstado();
+      await recargarEstado(false);
       showAlert(
         "Reemplazo completado",
         "La cuenta se ha reemplazado correctamente.",
@@ -1037,8 +1038,8 @@ export default function DashboardPage() {
       await Promise.all([
         cargarDatos(),
         cargarResumenHistorico(),
-        cargarPerformancePersistida(),
-        cargarLiveStatus(),
+        cargarPerformancePersistida(true),
+        cargarLiveStatus(true),
       ]);
     }
 
@@ -1073,7 +1074,7 @@ export default function DashboardPage() {
 
             <div className="flex flex-wrap gap-2">
               <ActionButton
-                onClick={recargarEstado}
+                onClick={() => recargarEstado(true)}
                 disabled={loadingPerformance || loadingLive}
                 variant="secondary"
               >
@@ -1185,12 +1186,12 @@ export default function DashboardPage() {
                     pack={pack}
                     persistedPerformance={persistedPerformance}
                     liveStatus={liveStatus}
-                    loading={loading}
+                    loading={loading || loadingPerformance || loadingLive}
                     onRotar={rotarPack}
-                    onEvaluar={evaluarPack}
                     onPerder={marcarPerdida}
                     onFondear={marcarFondeada}
                     onSelectReplace={seleccionarSlotPendiente}
+                    onRefresh={() => recargarEstado(true)}
                     getLivePnlClass={getLivePnlClass}
                   />
                 ))}
@@ -1359,10 +1360,10 @@ function PackCard({
   liveStatus,
   loading,
   onRotar,
-  onEvaluar,
   onPerder,
   onFondear,
   onSelectReplace,
+  onRefresh,
   getLivePnlClass,
 }: {
   pack: Pack;
@@ -1370,10 +1371,10 @@ function PackCard({
   liveStatus: LiveStatusMap;
   loading: boolean;
   onRotar: (packId: number, packNombre: string) => void;
-  onEvaluar: (packId: number, packNombre: string) => void;
   onPerder: (accountId: number) => void;
   onFondear: (accountId: number) => void;
   onSelectReplace: (target: ReplaceTarget) => void;
+  onRefresh: () => void;
   getLivePnlClass: (value?: number | null) => string;
 }) {
   const flags = getPackFlags(pack);
@@ -1426,11 +1427,13 @@ function PackCard({
             </ActionButton>
 
             <ActionButton
-              onClick={() => onEvaluar(pack.id, pack.nombre)}
+              onClick={onRefresh}
               disabled={loading}
-              variant="danger"
+              variant="ghost"
+              className="flex h-[34px] w-[34px] items-center justify-center px-0"
+              title="Recargar estado"
             >
-              Evaluar SORD
+              <RefreshIcon />
             </ActionButton>
           </div>
         </div>
@@ -1453,6 +1456,7 @@ function PackCard({
           const missingAccount = !slot.accounts?.id;
           const live = numeroCuenta ? liveStatus[numeroCuenta] : undefined;
           const hasOpenTrade = (live?.trades_abiertos ?? 0) > 0;
+          const accountSizeLabel = formatAccountSize(live?.account_size_inferred);
 
           const displayHoyPct = numeroCuenta
             ? resolveDisplayDayPct(numeroCuenta, persistedPerformance, liveStatus)
@@ -1478,9 +1482,18 @@ function PackCard({
                   <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
                     Slot {slot.slot}
                   </p>
-                  <p className="mt-1 truncate text-sm font-medium text-white">
-                    {slot.accounts?.alias ?? "Vacío"}
-                  </p>
+
+                  <div className="mt-1 flex items-center gap-2">
+                    <p className="truncate text-sm font-medium text-white">
+                      {slot.accounts?.alias ?? "Vacío"}
+                    </p>
+
+                    {accountSizeLabel ? (
+                      <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium text-zinc-300">
+                        {accountSizeLabel}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="flex flex-col items-end gap-1">
