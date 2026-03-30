@@ -61,6 +61,7 @@ type CalendarDayData = {
   totalPct: number;
   resultCount: number;
   redDayCount: number;
+  totalTrades: number;
   events: CalendarEventItem[];
   resultDetails: {
     id: number;
@@ -128,7 +129,25 @@ type CalendarApiResponse = {
   days?: CalendarApiDay[];
 };
 
-const DAY_LABELS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+type KpiItem = {
+  label: string;
+  value: string;
+  tone?: "green" | "red" | "neutral";
+  icon?: "target" | "bars" | "trend" | "ratio";
+};
+
+type GrowthPoint = {
+  label: string;
+  date: string;
+  value: number;
+};
+
+type RadarMetric = {
+  label: string;
+  value: number;
+};
+
+const DAY_LABELS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const SLOT_ORDER = ["A", "B", "C"];
 
 function getSinglePack(
@@ -151,13 +170,35 @@ function getSinglePack(
   return Array.isArray(pack) ? pack[0] : pack;
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
 function formatUsd(value: number) {
   const sign = value < 0 ? "-" : "";
   return `${sign}$${Math.abs(value).toFixed(2)}`;
 }
 
+function formatCompactUsd(value: number) {
+  const abs = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
+  if (abs >= 1000) {
+    return `${sign}$${(abs / 1000).toFixed(abs >= 10000 ? 0 : 1)}K`;
+  }
+  return `${sign}$${abs.toFixed(0)}`;
+}
+
 function formatPct(value: number) {
-  return `${value.toFixed(2)}%`;
+  return `${value.toFixed(1)}%`;
+}
+
+function formatShortDateLabel(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("es-ES", {
+    month: "2-digit",
+    day: "2-digit",
+  });
 }
 
 function getMonthLabel(date: Date) {
@@ -174,6 +215,11 @@ function toDateKey(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function getMondayBasedWeekday(date: Date) {
+  const day = date.getDay();
+  return day === 0 ? 6 : day - 1;
 }
 
 function mapEventKind(tipo: string): CalendarEventItem["kind"] {
@@ -209,7 +255,7 @@ function buildCalendarMatrix(currentMonth: Date) {
   const month = currentMonth.getMonth();
 
   const firstDay = new Date(year, month, 1);
-  const firstWeekday = firstDay.getDay();
+  const firstWeekday = getMondayBasedWeekday(firstDay);
   const startDate = new Date(year, month, 1 - firstWeekday);
 
   const cells: Date[] = [];
@@ -223,47 +269,472 @@ function buildCalendarMatrix(currentMonth: Date) {
   return cells;
 }
 
-function SectionCard({
-  title,
+function getEventPillClasses(kind: CalendarEventItem["kind"]) {
+  if (kind === "perdida") {
+    return "border-amber-300/20 bg-amber-300/[0.10] text-amber-200";
+  }
+  if (kind === "fondeada") {
+    return "border-violet-300/20 bg-violet-300/[0.10] text-violet-200";
+  }
+  if (kind === "reemplazo") {
+    return "border-emerald-300/20 bg-emerald-300/[0.10] text-emerald-200";
+  }
+  return "border-white/10 bg-white/[0.05] text-zinc-300";
+}
+
+function getToneByValue(value: number) {
+  if (value > 0) {
+    return "border-emerald-400/25 bg-emerald-400/[0.08] shadow-[0_14px_30px_rgba(16,185,129,0.08)]";
+  }
+
+  if (value < 0) {
+    return "border-rose-400/25 bg-rose-400/[0.08] shadow-[0_14px_30px_rgba(244,63,94,0.08)]";
+  }
+
+  return "border-white/10 bg-white/[0.03] shadow-[0_10px_24px_rgba(255,255,255,0.03)]";
+}
+
+function hasVisibleResult(result: CalendarApiResultItem) {
+  return (
+    Number(result.numero_trades || 0) > 0 ||
+    Number(result.pnl_usd || 0) !== 0 ||
+    Number(result.pnl_pct || 0) !== 0
+  );
+}
+
+function average(values: number[]) {
+  if (!values.length) return 0;
+  return values.reduce((acc, item) => acc + item, 0) / values.length;
+}
+
+function calcStdDev(values: number[]) {
+  if (values.length <= 1) return 0;
+  const avg = average(values);
+  const variance =
+    values.reduce((acc, item) => acc + (item - avg) ** 2, 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+function calcMaxDrawdown(series: number[]) {
+  let peak = 0;
+  let maxDrawdown = 0;
+
+  for (const value of series) {
+    peak = Math.max(peak, value);
+    maxDrawdown = Math.min(maxDrawdown, value - peak);
+  }
+
+  return Math.abs(maxDrawdown);
+}
+
+function buildLinePath(points: { x: number; y: number }[]) {
+  if (!points.length) return "";
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+  return points
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+    .join(" ");
+}
+
+function buildAreaPath(points: { x: number; y: number }[], baseY: number) {
+  if (!points.length) return "";
+  const line = buildLinePath(points);
+  const last = points[points.length - 1];
+  const first = points[0];
+  return `${line} L ${last.x} ${baseY} L ${first.x} ${baseY} Z`;
+}
+
+function ChartTransition({
+  chartKey,
   children,
-  right,
+  className = "",
 }: {
-  title: string;
+  chartKey: string;
   children: React.ReactNode;
-  right?: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
-      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <h1 className="text-3xl font-semibold tracking-tight text-white">{title}</h1>
-        {right ? <div className="flex flex-wrap gap-2">{right}</div> : null}
+    <div
+      key={chartKey}
+      className={`animate-[fadeChart_420ms_ease] ${className}`}
+      style={{
+        animationName: "fadeChart",
+        animationDuration: "420ms",
+        animationTimingFunction: "ease",
+      }}
+    >
+      {children}
+      <style jsx>{`
+        @keyframes fadeChart {
+          0% {
+            opacity: 0;
+            transform: translateY(6px) scale(0.995);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function KpiCard({ item }: { item: KpiItem }) {
+  const toneClass =
+    item.tone === "red"
+      ? "text-rose-300"
+      : item.tone === "neutral"
+      ? "text-white"
+      : "text-emerald-300";
+
+  return (
+    <div className="rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.025),rgba(255,255,255,0.012))] p-4 shadow-[0_18px_34px_rgba(0,0,0,0.16)]">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
+            {item.label}
+          </p>
+          <p className={`mt-2 text-[2rem] font-semibold leading-none ${toneClass}`}>
+            {item.value}
+          </p>
+        </div>
+        <div className="text-emerald-400/80">
+          {item.icon === "target" ? <TargetIcon /> : null}
+          {item.icon === "bars" ? <BarsIcon /> : null}
+          {item.icon === "trend" ? <TrendIcon /> : null}
+          {item.icon === "ratio" ? <RatioIcon /> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TargetIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-5 w-5"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="7.5" />
+      <circle cx="12" cy="12" r="4.2" />
+      <circle cx="12" cy="12" r="1.7" />
+    </svg>
+  );
+}
+
+function BarsIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-5 w-5"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 19.5V11" />
+      <path d="M10 19.5V7" />
+      <path d="M16 19.5V13" />
+      <path d="M22 19.5V4.5" />
+      <path d="M2.5 19.5h19" />
+    </svg>
+  );
+}
+
+function TrendIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-5 w-5"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 16l5-5 4 3 7-8" />
+      <path d="M16 6h4v4" />
+    </svg>
+  );
+}
+
+function RatioIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-5 w-5"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M7 7h.01" />
+      <path d="M17 17h.01" />
+      <path d="M8.5 15.5 15.5 8.5" />
+      <rect x="3.5" y="3.5" width="17" height="17" rx="4" />
+    </svg>
+  );
+}
+
+function ChartCard({
+  title,
+  right,
+  children,
+}: {
+  title: string;
+  right?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.026),rgba(255,255,255,0.012))] p-4 shadow-[0_18px_36px_rgba(0,0,0,0.18)]">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold text-white">{title}</h2>
+        {right}
       </div>
       {children}
     </section>
   );
 }
 
-function SegmentedButton({
-  label,
-  active,
-  onClick,
+function RadarProfileChart({
+  metrics,
+  chartKey,
 }: {
-  label: string;
-  active?: boolean;
-  onClick?: () => void;
+  metrics: RadarMetric[];
+  chartKey: string;
 }) {
+  const size = 320;
+  const center = size / 2;
+  const radius = 102;
+  const levels = 4;
+
+  const points = metrics.map((metric, index) => {
+    const angle = (Math.PI * 2 * index) / metrics.length - Math.PI / 2;
+    const valueRadius = (clamp(metric.value, 0, 100) / 100) * radius;
+    return {
+      x: center + Math.cos(angle) * valueRadius,
+      y: center + Math.sin(angle) * valueRadius,
+      labelX: center + Math.cos(angle) * (radius + 20),
+      labelY: center + Math.sin(angle) * (radius + 20),
+      label: metric.label,
+      value: metric.value,
+    };
+  });
+
+  const polygon = points.map((point) => `${point.x},${point.y}`).join(" ");
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-xl border px-4 py-2 text-sm font-medium transition-all duration-200 ${
-        active
-          ? "border-emerald-300/20 bg-emerald-400 text-black shadow-[0_12px_30px_rgba(16,185,129,0.18)]"
-          : "border-white/10 bg-white/[0.03] text-zinc-200 hover:bg-white/[0.06] hover:shadow-[0_10px_24px_rgba(255,255,255,0.04)]"
-      }`}
-    >
-      {label}
-    </button>
+    <ChartTransition chartKey={chartKey} className="h-[290px] w-full">
+      <div className="flex h-full items-center justify-center">
+        <svg viewBox={`0 0 ${size} ${size}`} className="h-full w-full max-w-[420px]">
+          {[...Array(levels)].map((_, levelIndex) => {
+            const levelRadius = (radius * (levelIndex + 1)) / levels;
+            const ringPoints = metrics
+              .map((_, index) => {
+                const angle = (Math.PI * 2 * index) / metrics.length - Math.PI / 2;
+                return `${center + Math.cos(angle) * levelRadius},${
+                  center + Math.sin(angle) * levelRadius
+                }`;
+              })
+              .join(" ");
+
+            return (
+              <polygon
+                key={levelIndex}
+                points={ringPoints}
+                fill="none"
+                stroke="rgba(56,189,248,0.12)"
+                strokeWidth="1"
+              />
+            );
+          })}
+
+          {metrics.map((_, index) => {
+            const angle = (Math.PI * 2 * index) / metrics.length - Math.PI / 2;
+            return (
+              <line
+                key={index}
+                x1={center}
+                y1={center}
+                x2={center + Math.cos(angle) * radius}
+                y2={center + Math.sin(angle) * radius}
+                stroke="rgba(56,189,248,0.10)"
+                strokeWidth="1"
+              />
+            );
+          })}
+
+          <polygon
+            points={polygon}
+            fill="rgba(16,185,129,0.18)"
+            stroke="rgba(52,211,153,0.95)"
+            strokeWidth="2"
+            style={{
+              transition: "all 420ms ease",
+            }}
+          />
+
+          {points.map((point) => (
+            <circle
+              key={point.label}
+              cx={point.x}
+              cy={point.y}
+              r="3"
+              fill="rgba(52,211,153,1)"
+              style={{
+                transition: "all 420ms ease",
+              }}
+            />
+          ))}
+
+          {points.map((point) => (
+            <text
+              key={`${point.label}-text`}
+              x={point.labelX}
+              y={point.labelY}
+              textAnchor={point.labelX >= center ? "start" : "end"}
+              dominantBaseline="middle"
+              fill="#8dc3ff"
+              fontSize="11"
+            >
+              {point.label}
+            </text>
+          ))}
+        </svg>
+      </div>
+    </ChartTransition>
+  );
+}
+
+function GrowthLineChart({
+  points,
+  chartKey,
+  totalLabel,
+}: {
+  points: GrowthPoint[];
+  chartKey: string;
+  totalLabel: string;
+}) {
+  const width = 720;
+  const height = 280;
+  const paddingX = 28;
+  const paddingY = 24;
+  const innerWidth = width - paddingX * 2;
+  const innerHeight = height - paddingY * 2;
+
+  const values = points.map((point) => point.value);
+  const minValue = Math.min(0, ...values);
+  const maxValue = Math.max(...values, 1);
+  const range = maxValue - minValue || 1;
+
+  const svgPoints = points.map((point, index) => {
+    const x =
+      paddingX +
+      (points.length === 1 ? innerWidth / 2 : (index / (points.length - 1)) * innerWidth);
+    const y =
+      paddingY + innerHeight - ((point.value - minValue) / range) * innerHeight;
+
+    return { x, y, label: point.label, value: point.value };
+  });
+
+  const linePath = buildLinePath(svgPoints);
+  const areaPath = buildAreaPath(svgPoints, height - paddingY);
+
+  return (
+    <ChartTransition chartKey={chartKey} className="h-[290px] w-full">
+      <div className="h-full w-full">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="inline-flex rounded-xl border border-white/10 bg-white/[0.03] p-1 text-xs">
+            <span className="rounded-lg bg-emerald-400 px-3 py-1 font-medium text-black">
+              Equity
+            </span>
+            <span className="px-3 py-1 text-zinc-500">Daily P&L</span>
+          </div>
+          <p className="text-lg font-semibold text-emerald-300">{totalLabel}</p>
+        </div>
+
+        <svg viewBox={`0 0 ${width} ${height}`} className="h-[240px] w-full">
+          {[0, 1, 2, 3].map((index) => {
+            const y = paddingY + (innerHeight / 3) * index;
+            return (
+              <line
+                key={`h-${index}`}
+                x1={paddingX}
+                y1={y}
+                x2={width - paddingX}
+                y2={y}
+                stroke="rgba(56,189,248,0.10)"
+                strokeDasharray="3 5"
+              />
+            );
+          })}
+
+          {svgPoints.map((point) => (
+            <line
+              key={`v-${point.label}`}
+              x1={point.x}
+              y1={paddingY}
+              x2={point.x}
+              y2={height - paddingY}
+              stroke="rgba(56,189,248,0.08)"
+              strokeDasharray="3 5"
+            />
+          ))}
+
+          <path
+            d={areaPath}
+            fill="rgba(16,185,129,0.12)"
+            style={{ transition: "all 420ms ease" }}
+          />
+          <path
+            d={linePath}
+            fill="none"
+            stroke="rgba(22,223,110,0.95)"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ transition: "all 420ms ease" }}
+          />
+
+          {svgPoints.map((point) => (
+            <circle
+              key={`c-${point.label}`}
+              cx={point.x}
+              cy={point.y}
+              r="4"
+              fill="#071018"
+              stroke="rgba(22,223,110,0.95)"
+              strokeWidth="2"
+              style={{ transition: "all 420ms ease" }}
+            />
+          ))}
+
+          {svgPoints.map((point, index) => (
+            <text
+              key={`label-${index}`}
+              x={point.x}
+              y={height - 6}
+              textAnchor="middle"
+              fill="#7eb9ff"
+              fontSize="10"
+            >
+              {point.label}
+            </text>
+          ))}
+        </svg>
+      </div>
+    </ChartTransition>
   );
 }
 
@@ -295,6 +766,30 @@ function FilterButton({
   );
 }
 
+function SegmentedButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl border px-4 py-2 text-sm font-medium transition-all duration-200 ${
+        active
+          ? "border-emerald-300/20 bg-emerald-400 text-black shadow-[0_12px_30px_rgba(16,185,129,0.18)]"
+          : "border-white/10 bg-white/[0.03] text-zinc-200 hover:bg-white/[0.06] hover:shadow-[0_10px_24px_rgba(255,255,255,0.04)]"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
 function SlotButton({
   label,
   active,
@@ -319,60 +814,342 @@ function SlotButton({
   );
 }
 
-function ActionButton({
-  children,
-  onClick,
-  disabled,
-  variant = "secondary",
+function MonthStatsPanel({
+  monthSummary,
+  monthAnalytics,
 }: {
-  children: React.ReactNode;
-  onClick?: () => void;
-  disabled?: boolean;
-  variant?: "primary" | "secondary";
-}) {
-  const styles = {
-    primary:
-      "border border-white/10 bg-white text-black shadow-[0_12px_26px_rgba(255,255,255,0.08)] hover:bg-zinc-200",
-    secondary:
-      "border border-white/10 bg-white/[0.04] text-white shadow-[0_10px_24px_rgba(255,255,255,0.03)] hover:bg-white/[0.08]",
+  monthSummary: { totalUsd: number; totalPct: number };
+  monthAnalytics: {
+    winRate: number;
+    profitFactor: number | null;
+    bestDayUsd: number;
+    worstDayUsd: number;
+    avgDayUsd: number;
+    totalTrades: number;
+    riskReward: number | null;
   };
+}) {
+  return (
+    <section className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.024),rgba(255,255,255,0.012))] p-4 shadow-[0_18px_36px_rgba(0,0,0,0.18)]">
+      <h3 className="text-[1.15rem] font-semibold text-white">Monthly Stats Summary</h3>
+
+      <div className="mt-5 space-y-5">
+        <StatRow
+          label="Win rate"
+          value={formatPct(monthAnalytics.winRate)}
+          tone="green"
+        />
+        <StatRow
+          label="Risk/Reward"
+          value={
+            monthAnalytics.riskReward === null
+              ? "0.00"
+              : monthAnalytics.riskReward.toFixed(2)
+          }
+          tone={monthAnalytics.riskReward && monthAnalytics.riskReward > 0 ? "green" : "red"}
+        />
+        <StatRow
+          label="Profit factor"
+          value={
+            monthAnalytics.profitFactor === null
+              ? "∞"
+              : monthAnalytics.profitFactor.toFixed(2)
+          }
+          tone="green"
+        />
+        <StatRow
+          label="Best day P/L"
+          value={formatCompactUsd(monthAnalytics.bestDayUsd)}
+          tone="green"
+        />
+        <StatRow
+          label="Worst day P/L"
+          value={formatCompactUsd(monthAnalytics.worstDayUsd)}
+          tone={monthAnalytics.worstDayUsd < 0 ? "red" : "green"}
+        />
+        <StatRow
+          label="Avg daily P/L"
+          value={formatCompactUsd(monthAnalytics.avgDayUsd)}
+          tone={monthAnalytics.avgDayUsd < 0 ? "red" : "green"}
+        />
+        <StatRow label="Month P/L" value={formatCompactUsd(monthSummary.totalUsd)} tone={monthSummary.totalUsd < 0 ? "red" : "green"} />
+        <StatRow label="Trades" value={String(monthAnalytics.totalTrades)} tone="neutral" />
+      </div>
+    </section>
+  );
+}
+
+function StatRow({
+  label,
+  value,
+  tone = "green",
+}: {
+  label: string;
+  value: string;
+  tone?: "green" | "red" | "neutral";
+}) {
+  const toneClass =
+    tone === "red" ? "text-rose-400" : tone === "neutral" ? "text-white" : "text-emerald-300";
+
+  return (
+    <div>
+      <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">{label}</p>
+      <p className={`mt-1.5 text-[1.05rem] font-semibold ${toneClass}`}>{value}</p>
+    </div>
+  );
+}
+
+function DayDetailPanel({
+  selectedDayKey,
+  selectedDay,
+  onClose,
+}: {
+  selectedDayKey: string | null;
+  selectedDay: CalendarDayData | undefined;
+  onClose: () => void;
+}) {
+  return (
+    <section className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.024),rgba(255,255,255,0.012))] p-4 shadow-[0_18px_36px_rgba(0,0,0,0.18)]">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">Fecha</p>
+          <p className="mt-1 text-xl font-semibold text-white">{selectedDayKey ?? "-"}</p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-zinc-300 transition hover:bg-white/[0.06]"
+        >
+          ✕
+        </button>
+      </div>
+
+      {!selectedDay ? (
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-zinc-500">
+          No hay datos para este día.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-2">
+            <div className={`rounded-2xl border p-3 ${getToneByValue(selectedDay.totalUsd)}`}>
+              <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">USD</p>
+              <p
+                className={`mt-2 text-xl font-semibold ${
+                  selectedDay.totalUsd > 0
+                    ? "text-emerald-300"
+                    : selectedDay.totalUsd < 0
+                    ? "text-rose-300"
+                    : "text-white"
+                }`}
+              >
+                {formatUsd(selectedDay.totalUsd)}
+              </p>
+            </div>
+
+            <div className={`rounded-2xl border p-3 ${getToneByValue(selectedDay.totalPct)}`}>
+              <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">%</p>
+              <p
+                className={`mt-2 text-xl font-semibold ${
+                  selectedDay.totalPct > 0
+                    ? "text-emerald-300"
+                    : selectedDay.totalPct < 0
+                    ? "text-rose-300"
+                    : "text-white"
+                }`}
+              >
+                {formatPct(selectedDay.totalPct)}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-white">Resultados</p>
+
+            {selectedDay.resultDetails.length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-zinc-500">
+                Sin resultados.
+              </div>
+            ) : (
+              selectedDay.resultDetails.map((result) => (
+                <div key={result.id} className={`rounded-2xl border p-3 ${getToneByValue(result.pnlUsd)}`}>
+                  <p className="text-sm font-medium text-white">
+                    {result.alias} · {result.numeroCuenta}
+                  </p>
+                  <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+                    <span
+                      className={
+                        result.pnlUsd > 0
+                          ? "text-emerald-300"
+                          : result.pnlUsd < 0
+                          ? "text-rose-300"
+                          : "text-zinc-300"
+                      }
+                    >
+                      {formatUsd(result.pnlUsd)}
+                    </span>
+                    <span
+                      className={
+                        result.pnlPct > 0
+                          ? "text-emerald-300"
+                          : result.pnlPct < 0
+                          ? "text-rose-300"
+                          : "text-zinc-300"
+                      }
+                    >
+                      {formatPct(result.pnlPct)}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-white">Eventos</p>
+
+            {selectedDay.eventDetails.length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-zinc-500">
+                Sin eventos.
+              </div>
+            ) : (
+              selectedDay.eventDetails.map((event) => (
+                <div
+                  key={event.id}
+                  className="rounded-2xl border border-white/10 bg-white/[0.03] p-3"
+                >
+                  <p className="text-sm font-medium text-white">{event.tipo}</p>
+                  <p className="mt-1 text-sm text-zinc-400">
+                    {event.alias} · {event.numeroCuenta}
+                  </p>
+                  {event.descripcion ? (
+                    <p className="mt-2 text-sm text-zinc-500">{event.descripcion}</p>
+                  ) : null}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CalendarDayCell({
+  date,
+  currentMonth,
+  dayData,
+  viewMode,
+  compact,
+  isSelected,
+  onClick,
+}: {
+  date: Date;
+  currentMonth: Date;
+  dayData: CalendarDayData | undefined;
+  viewMode: TradingMode;
+  compact: boolean;
+  isSelected: boolean;
+  onClick: () => void;
+}) {
+  const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
+  const hasVisibleContent =
+    (viewMode === "pnl" && !!dayData?.resultCount) ||
+    (viewMode === "events" && !!dayData?.events.length);
 
   return (
     <button
+      type="button"
       onClick={onClick}
-      disabled={disabled}
-      className={`rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${styles[variant]}`}
+      className={`rounded-[18px] border p-2.5 text-left transition-all duration-200 ${getDayTone(
+        dayData,
+        viewMode
+      )} ${!isCurrentMonth ? "opacity-35" : "opacity-100"} ${
+        isSelected
+          ? "shadow-[0_0_0_1px_rgba(255,255,255,0.18),0_16px_28px_rgba(255,255,255,0.04)]"
+          : "hover:shadow-[0_10px_22px_rgba(255,255,255,0.03)]"
+      } ${compact ? "min-h-[76px]" : "min-h-[122px]"}`}
     >
-      {children}
+      <div className="flex h-full flex-col">
+        <div className="flex items-start justify-between gap-2">
+          <p className={`text-sm font-semibold ${isCurrentMonth ? "text-white" : "text-zinc-500"}`}>
+            {date.getDate()}
+          </p>
+
+          {dayData && dayData.totalTrades > 0 ? (
+            <span className="text-[10px] text-zinc-500">{dayData.totalTrades}t</span>
+          ) : null}
+        </div>
+
+        <div className="mt-1.5 flex flex-1 flex-col justify-end">
+          {hasVisibleContent ? (
+            viewMode === "pnl" ? (
+              <>
+                <p
+                  className={`text-sm font-semibold leading-none ${
+                    dayData && dayData.totalUsd > 0
+                      ? "text-emerald-300"
+                      : dayData && dayData.totalUsd < 0
+                      ? "text-rose-300"
+                      : "text-white"
+                  }`}
+                >
+                  {dayData ? formatCompactUsd(dayData.totalUsd) : "-"}
+                </p>
+                {!compact ? (
+                  <>
+                    <p
+                      className={`mt-1 text-[11px] ${
+                        dayData && dayData.totalPct > 0
+                          ? "text-emerald-300"
+                          : dayData && dayData.totalPct < 0
+                          ? "text-rose-300"
+                          : "text-zinc-300"
+                      }`}
+                    >
+                      {dayData ? formatPct(dayData.totalPct) : "-"}
+                    </p>
+                    <p className="mt-1 text-[10px] text-zinc-500">
+                      {dayData?.resultCount ?? 0} cuenta{dayData?.resultCount === 1 ? "" : "s"}
+                    </p>
+                  </>
+                ) : null}
+              </>
+            ) : (
+              <div className="flex flex-wrap gap-1">
+                {dayData?.events.slice(0, compact ? 1 : 2).map((event) => (
+                  <span
+                    key={event.id}
+                    className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] ${getEventPillClasses(
+                      event.kind
+                    )}`}
+                  >
+                    {compact ? event.count || 1 : event.label}
+                  </span>
+                ))}
+              </div>
+            )
+          ) : null}
+        </div>
+      </div>
     </button>
   );
 }
 
-function getEventPillClasses(kind: CalendarEventItem["kind"]) {
-  if (kind === "perdida") return "border-amber-300/20 bg-amber-300/[0.10] text-amber-200 shadow-[0_8px_18px_rgba(251,191,36,0.08)]";
-  if (kind === "fondeada") return "border-violet-300/20 bg-violet-300/[0.10] text-violet-200 shadow-[0_8px_18px_rgba(167,139,250,0.08)]";
-  if (kind === "reemplazo") return "border-emerald-300/20 bg-emerald-300/[0.10] text-emerald-200 shadow-[0_8px_18px_rgba(16,185,129,0.08)]";
-  return "border-white/10 bg-white/[0.05] text-zinc-300";
-}
-
-function getToneByValue(value: number) {
-  if (value > 0) {
-    return "border-emerald-400/25 bg-emerald-400/[0.08] shadow-[0_14px_30px_rgba(16,185,129,0.08)]";
+function getDayTone(day: CalendarDayData | undefined, viewMode: TradingMode) {
+  if (!day) return "border-white/5 bg-white/[0.02]";
+  if (viewMode === "events") {
+    return day.events.length > 0
+      ? "border-white/10 bg-white/[0.03]"
+      : "border-white/5 bg-white/[0.02]";
   }
-
-  if (value < 0) {
-    return "border-rose-400/25 bg-rose-400/[0.08] shadow-[0_14px_30px_rgba(244,63,94,0.08)]";
+  if (day.totalUsd > 0) {
+    return "border-emerald-400/25 bg-emerald-400/[0.10]";
   }
-
-  return "border-white/10 bg-white/[0.03] shadow-[0_10px_24px_rgba(255,255,255,0.03)]";
-}
-
-function hasVisibleResult(result: CalendarApiResultItem) {
-  return (
-    Number(result.numero_trades || 0) > 0 ||
-    Number(result.pnl_usd || 0) !== 0 ||
-    Number(result.pnl_pct || 0) !== 0
-  );
+  if (day.totalUsd < 0) {
+    return "border-rose-400/25 bg-rose-400/[0.08]";
+  }
+  return "border-white/10 bg-white/[0.03]";
 }
 
 export default function CalendarioPage() {
@@ -382,7 +1159,6 @@ export default function CalendarioPage() {
   const [presets, setPresets] = useState<PresetOption[]>([]);
   const [accounts, setAccounts] = useState<AccountOption[]>([]);
   const [packs, setPacks] = useState<PackFilterItem[]>([]);
-  const [reloading, setReloading] = useState(false);
 
   const [viewMode, setViewMode] = useState<TradingMode>("pnl");
   const [selectedCuentaTipo, setSelectedCuentaTipo] =
@@ -400,13 +1176,8 @@ export default function CalendarioPage() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
 
-  async function cargarDatos(showReloadState = false) {
-    if (showReloadState) {
-      setReloading(true);
-    } else {
-      setLoading(true);
-    }
-
+  async function cargarDatos() {
+    setLoading(true);
     setError("");
 
     const year = currentMonth.getFullYear();
@@ -444,55 +1215,38 @@ export default function CalendarioPage() {
       `)
       .order("pack_id", { ascending: true });
 
-    const calendarQuery = fetch(
-      `/api/calendar-data?year=${year}&month=${month}`,
-      {
-        cache: "no-store",
-      }
-    ).then((res) => res.json() as Promise<CalendarApiResponse>);
+    const calendarQuery = fetch(`/api/calendar-data?year=${year}&month=${month}`, {
+      cache: "no-store",
+    }).then((res) => res.json() as Promise<CalendarApiResponse>);
 
-    const [
-      presetsResponse,
-      accountsResponse,
-      packSlotsResponse,
-      calendarResponse,
-    ] = await Promise.all([
-      presetsQuery,
-      accountsQuery,
-      packSlotsQuery,
-      calendarQuery,
-    ]);
+    const [presetsResponse, accountsResponse, packSlotsResponse, calendarResponse] =
+      await Promise.all([presetsQuery, accountsQuery, packSlotsQuery, calendarQuery]);
 
     if (presetsResponse.error) {
       setError(presetsResponse.error.message);
       setLoading(false);
-      setReloading(false);
       return;
     }
 
     if (accountsResponse.error) {
       setError(accountsResponse.error.message);
       setLoading(false);
-      setReloading(false);
       return;
     }
 
     if (packSlotsResponse.error) {
       setError(packSlotsResponse.error.message);
       setLoading(false);
-      setReloading(false);
       return;
     }
 
     if (!calendarResponse.ok) {
       setError(calendarResponse.error || "Error cargando calendar-data");
       setLoading(false);
-      setReloading(false);
       return;
     }
 
     const mappedAccounts = (accountsResponse.data || []) as AccountOption[];
-
     const rawPackSlots = (packSlotsResponse.data || []) as PackSlotRow[];
     const packMap = new Map<number, PackFilterItem>();
 
@@ -525,7 +1279,6 @@ export default function CalendarioPage() {
     setAccounts(mappedAccounts);
     setPacks(mappedPacks);
     setLoading(false);
-    setReloading(false);
   }
 
   useEffect(() => {
@@ -589,10 +1342,7 @@ export default function CalendarioPage() {
   }, [packs, selectedSinglePresetId, selectedCuentaTipo]);
 
   useEffect(() => {
-    if (
-      selectedPackId !== null &&
-      !filteredPacks.some((pack) => pack.id === selectedPackId)
-    ) {
+    if (selectedPackId !== null && !filteredPacks.some((pack) => pack.id === selectedPackId)) {
       setSelectedPackId(null);
       setSelectedSlots([]);
     }
@@ -610,7 +1360,6 @@ export default function CalendarioPage() {
         .map((slot) => slot.slot)
         .filter((slot) => SLOT_ORDER.includes(slot))
     );
-
     return SLOT_ORDER.filter((slot) => set.has(slot));
   }, [selectedPack]);
 
@@ -680,24 +1429,17 @@ export default function CalendarioPage() {
           .map((slot) => slot.account_id as number)
       );
 
-      allowedIds = new Set(
-        Array.from(allowedIds).filter((id) => packAccountIds.has(id))
-      );
+      allowedIds = new Set(Array.from(allowedIds).filter((id) => packAccountIds.has(id)));
     }
 
     if (selectedPack && selectedSlots.length > 0) {
       const slotAccountIds = new Set(
         selectedPack.slots
-          .filter(
-            (slot) =>
-              selectedSlots.includes(slot.slot) && slot.account_id !== null
-          )
+          .filter((slot) => selectedSlots.includes(slot.slot) && slot.account_id !== null)
           .map((slot) => slot.account_id as number)
       );
 
-      allowedIds = new Set(
-        Array.from(allowedIds).filter((id) => slotAccountIds.has(id))
-      );
+      allowedIds = new Set(Array.from(allowedIds).filter((id) => slotAccountIds.has(id)));
     }
 
     return allowedIds;
@@ -718,6 +1460,10 @@ export default function CalendarioPage() {
       const totalUsd = filteredResults.reduce((acc, item) => acc + Number(item.pnl_usd || 0), 0);
       const totalPct = filteredResults.reduce((acc, item) => acc + Number(item.pnl_pct || 0), 0);
       const redDayCount = filteredResults.filter((item) => item.red_day).length;
+      const totalTrades = filteredResults.reduce(
+        (acc, item) => acc + Number(item.numero_trades || 0),
+        0
+      );
 
       const resultDetails = filteredResults
         .map((result) => ({
@@ -765,10 +1511,7 @@ export default function CalendarioPage() {
       const events = Array.from(grouped.values())
         .map((event) => ({
           ...event,
-          label:
-            event.count && event.count > 1
-              ? `${event.label} ×${event.count}`
-              : event.label,
+          label: event.count && event.count > 1 ? `${event.label} ×${event.count}` : event.label,
         }))
         .slice(0, 4);
 
@@ -778,6 +1521,7 @@ export default function CalendarioPage() {
         totalPct,
         resultCount: resultDetails.length,
         redDayCount,
+        totalTrades,
         events,
         resultDetails,
         eventDetails,
@@ -791,11 +1535,9 @@ export default function CalendarioPage() {
 
   const calendarWeeks = useMemo(() => {
     const weeks: Date[][] = [];
-
     for (let i = 0; i < calendarCells.length; i += 7) {
       weeks.push(calendarCells.slice(i, i + 7));
     }
-
     return weeks;
   }, [calendarCells]);
 
@@ -804,22 +1546,24 @@ export default function CalendarioPage() {
       return !week.some((date) => {
         const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
         if (!isCurrentMonth) return false;
-
         const dayData = dailyMap.get(toDateKey(date));
-
         if (!dayData) return false;
         if (dayData.resultCount > 0) return true;
         if (dayData.events.length > 0) return true;
-
         return false;
       });
     });
   }, [calendarWeeks, currentMonth, dailyMap]);
 
-  const monthSummary = useMemo(() => {
-    const values = Array.from(dailyMap.values());
+  const currentMonthDays = useMemo(() => {
+    return calendarCells
+      .filter((date) => date.getMonth() === currentMonth.getMonth())
+      .map((date) => dailyMap.get(toDateKey(date)))
+      .filter((item): item is CalendarDayData => Boolean(item));
+  }, [calendarCells, currentMonth, dailyMap]);
 
-    return values.reduce(
+  const monthSummary = useMemo(() => {
+    return currentMonthDays.reduce(
       (acc, day) => {
         acc.totalUsd += day.totalUsd;
         acc.totalPct += day.totalPct;
@@ -830,63 +1574,191 @@ export default function CalendarioPage() {
         totalPct: 0,
       }
     );
-  }, [dailyMap]);
+  }, [currentMonthDays]);
+
+  const monthAnalytics = useMemo(() => {
+    const resultItems = currentMonthDays.flatMap((day) => day.resultDetails);
+    const positiveResults = resultItems.filter((item) => item.pnlUsd > 0).length;
+    const totalResults = resultItems.length;
+    const totalTrades = resultItems.reduce((acc, item) => acc + item.numeroTrades, 0);
+
+    const grossProfit = resultItems
+      .filter((item) => item.pnlUsd > 0)
+      .reduce((acc, item) => acc + item.pnlUsd, 0);
+
+    const grossLossAbs = Math.abs(
+      resultItems
+        .filter((item) => item.pnlUsd < 0)
+        .reduce((acc, item) => acc + item.pnlUsd, 0)
+    );
+
+    const dayPnlValues = currentMonthDays.map((day) => day.totalUsd).filter((value) => value !== 0);
+    const growthSeriesRaw = currentMonthDays.reduce<number[]>((acc, day) => {
+      const previous = acc[acc.length - 1] ?? 0;
+      acc.push(previous + day.totalUsd);
+      return acc;
+    }, []);
+
+    const maxDrawdown = calcMaxDrawdown(growthSeriesRaw);
+    const netProfit = monthSummary.totalUsd;
+    const profitFactor = grossLossAbs === 0 ? (grossProfit > 0 ? null : null) : grossProfit / grossLossAbs;
+    const winRate = totalResults === 0 ? 0 : (positiveResults / totalResults) * 100;
+
+    const avgWin = average(resultItems.filter((item) => item.pnlUsd > 0).map((item) => item.pnlUsd));
+    const avgLossAbs = Math.abs(
+      average(resultItems.filter((item) => item.pnlUsd < 0).map((item) => item.pnlUsd))
+    );
+    const riskReward =
+      avgWin > 0 && avgLossAbs > 0 ? avgWin / avgLossAbs : null;
+
+    return {
+      winRate,
+      totalResults,
+      totalTrades,
+      profitFactor,
+      bestDayUsd: dayPnlValues.length ? Math.max(...dayPnlValues) : 0,
+      worstDayUsd: dayPnlValues.length ? Math.min(...dayPnlValues) : 0,
+      avgDayUsd: dayPnlValues.length ? average(dayPnlValues) : 0,
+      grossProfit,
+      grossLossAbs,
+      maxDrawdown,
+      netProfit,
+      riskReward,
+      growthSeriesRaw,
+    };
+  }, [currentMonthDays, monthSummary.totalUsd]);
+
+  const kpis = useMemo<KpiItem[]>(() => {
+    const returnsTone =
+      monthSummary.totalPct > 0 ? "green" : monthSummary.totalPct < 0 ? "red" : "neutral";
+
+    return [
+      {
+        label: "Win rate",
+        value: formatPct(monthAnalytics.winRate),
+        tone: monthAnalytics.winRate >= 50 ? "green" : "red",
+        icon: "target",
+      },
+      {
+        label: "Total P&L",
+        value: formatCompactUsd(monthSummary.totalUsd),
+        tone: monthSummary.totalUsd >= 0 ? "green" : "red",
+        icon: "bars",
+      },
+      {
+        label: "Returns",
+        value: formatPct(monthSummary.totalPct),
+        tone: returnsTone,
+        icon: "trend",
+      },
+      {
+        label: "Profit factor",
+        value:
+          monthAnalytics.profitFactor === null
+            ? monthAnalytics.grossProfit > 0
+              ? "∞"
+              : "0.00"
+            : monthAnalytics.profitFactor.toFixed(2),
+        tone:
+          monthAnalytics.profitFactor === null
+            ? "green"
+            : monthAnalytics.profitFactor >= 1
+            ? "green"
+            : "red",
+        icon: "ratio",
+      },
+    ];
+  }, [monthAnalytics, monthSummary]);
+
+  const growthPoints = useMemo<GrowthPoint[]>(() => {
+    let cumulative = 0;
+
+    return currentMonthDays.map((day) => {
+      cumulative += day.totalUsd;
+      return {
+        label: formatShortDateLabel(day.fecha),
+        date: day.fecha,
+        value: cumulative,
+      };
+    });
+  }, [currentMonthDays]);
+
+  const radarMetrics = useMemo<RadarMetric[]>(() => {
+    const values = currentMonthDays.map((day) => day.totalUsd);
+    const positiveDays = values.filter((value) => value > 0).length;
+    const activeDays = values.filter((value) => value !== 0).length || 1;
+    const dayWinRate = (positiveDays / activeDays) * 100;
+
+    const drawdownSafe = monthAnalytics.maxDrawdown || 1;
+    const recoveryFactor = clamp((monthAnalytics.netProfit / drawdownSafe) * 45, 0, 100);
+
+    const pfNormalized =
+      monthAnalytics.profitFactor === null
+        ? 100
+        : clamp((monthAnalytics.profitFactor / 2.5) * 100, 0, 100);
+
+    const volatility = calcStdDev(values);
+    const consistencyScore = clamp(100 - volatility * 12, 20, 100);
+
+    const redRatio =
+      monthAnalytics.totalResults === 0
+        ? 0
+        : currentMonthDays.reduce((acc, day) => acc + day.redDayCount, 0) /
+          monthAnalytics.totalResults;
+
+    const adherenceScore = clamp(100 - redRatio * 100, 20, 100);
+
+    return [
+      { label: "Win Rate", value: dayWinRate },
+      { label: "Recovery Factor", value: recoveryFactor },
+      { label: "Profit Factor", value: pfNormalized },
+      { label: "Consistency Score", value: consistencyScore },
+      { label: "Plan Adherence", value: adherenceScore },
+    ];
+  }, [currentMonthDays, monthAnalytics]);
 
   const selectedDay = selectedDayKey ? dailyMap.get(selectedDayKey) : undefined;
 
-  const monthUsdColor =
-    monthSummary.totalUsd > 0
-      ? "text-emerald-300"
-      : monthSummary.totalUsd < 0
-      ? "text-rose-300"
-      : "text-white";
-
-  const monthPctColor =
-    monthSummary.totalPct > 0
-      ? "text-emerald-300"
-      : monthSummary.totalPct < 0
-      ? "text-rose-300"
-      : "text-white";
+  const transitionKey = useMemo(() => {
+    return JSON.stringify({
+      month: currentMonth.toISOString(),
+      mode: viewMode,
+      tipo: selectedCuentaTipo,
+      presets: selectedPresetIds,
+      packId: selectedPackId,
+      slots: selectedSlots,
+    });
+  }, [currentMonth, viewMode, selectedCuentaTipo, selectedPresetIds, selectedPackId, selectedSlots]);
 
   function previousMonth() {
-    setCurrentMonth(
-      (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)
-    );
+    setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
     setSelectedDayKey(null);
     setIsDetailOpen(false);
   }
 
   function nextMonth() {
-    setCurrentMonth(
-      (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)
-    );
+    setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
     setSelectedDayKey(null);
     setIsDetailOpen(false);
   }
 
-  function getDayTone(day: CalendarDayData | undefined) {
-    if (!day) return "border-white/5 bg-white/[0.02]";
-    if (viewMode === "events") {
-      return day.events.length > 0
-        ? "border-white/10 bg-white/[0.03] shadow-[0_10px_24px_rgba(255,255,255,0.03)]"
-        : "border-white/5 bg-white/[0.02]";
-    }
-    if (day.totalUsd > 0) {
-      return "border-emerald-400/25 bg-emerald-400/[0.08] shadow-[0_14px_30px_rgba(16,185,129,0.08)]";
-    }
-    if (day.totalUsd < 0) {
-      return "border-rose-400/25 bg-rose-400/[0.08] shadow-[0_14px_30px_rgba(244,63,94,0.08)]";
-    }
-    return "border-white/10 bg-white/[0.03] shadow-[0_10px_24px_rgba(255,255,255,0.03)]";
-  }
-
   return (
-    <div className="space-y-5 text-white">
-      <SectionCard
-        title="Trading Calendar"
-        right={
-          <div className="flex flex-wrap items-center gap-2">
+    <div className="space-y-4 text-white">
+      <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.22)] md:p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+              Trading calendar
+            </p>
+            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-white">
+              Calendario
+            </h1>
+            <p className="mt-1.5 text-sm text-zinc-400">
+              Rendimiento mensual, evolución, eventos y detalle operativo por día.
+            </p>
+          </div>
 
+          <div className="flex flex-wrap items-center gap-2">
             <div className="rounded-xl border border-white/10 bg-white/[0.03] p-1 shadow-[0_12px_30px_rgba(255,255,255,0.03)]">
               <div className="flex gap-1">
                 <SegmentedButton
@@ -917,29 +1789,11 @@ export default function CalendarioPage() {
               </div>
             </div>
           </div>
-        }
-      >
-        <div className="mb-5 grid grid-cols-1 gap-3 xl:grid-cols-[1fr_1fr_2fr]">
-          <div className={`rounded-2xl border p-3 ${getToneByValue(monthSummary.totalUsd)}`}>
-            <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-400">
-              PnL mes USD
-            </p>
-            <p className={`mt-2 text-2xl font-semibold ${monthUsdColor}`}>
-              {formatUsd(monthSummary.totalUsd)}
-            </p>
-          </div>
+        </div>
 
-          <div className={`rounded-2xl border p-3 ${getToneByValue(monthSummary.totalPct)}`}>
-            <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-400">
-              PnL mes %
-            </p>
-            <p className={`mt-2 text-2xl font-semibold ${monthPctColor}`}>
-              {formatPct(monthSummary.totalPct)}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 shadow-[0_12px_30px_rgba(255,255,255,0.03)]">
-            <div className="flex h-full flex-wrap items-center gap-2">
+        <div className="mt-4 space-y-3">
+          <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-3 shadow-[0_12px_30px_rgba(255,255,255,0.03)]">
+            <div className="flex flex-wrap gap-2">
               <FilterButton
                 label="All"
                 active={isAllSelected}
@@ -956,10 +1810,8 @@ export default function CalendarioPage() {
               ))}
             </div>
           </div>
-        </div>
 
-        <div className="mb-5 grid grid-cols-1 gap-3 xl:grid-cols-[1fr_auto]">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 shadow-[0_12px_30px_rgba(255,255,255,0.03)]">
+          <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-3 shadow-[0_12px_30px_rgba(255,255,255,0.03)]">
             {selectedSinglePresetId === null ? (
               <div className="text-sm text-zinc-500">
                 Selecciona un solo preset para ver sus packs.
@@ -1022,319 +1874,149 @@ export default function CalendarioPage() {
               </div>
             )}
           </div>
-
-          <div className="flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={previousMonth}
-              className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-zinc-300 shadow-[0_10px_24px_rgba(255,255,255,0.03)] transition hover:bg-white/[0.06]"
-            >
-              ←
-            </button>
-
-            <p className="text-xl font-semibold text-white">
-              {getMonthLabel(currentMonth)}
-            </p>
-
-            <button
-              type="button"
-              onClick={nextMonth}
-              className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2 text-zinc-300 shadow-[0_10px_24px_rgba(255,255,255,0.03)] transition hover:bg-white/[0.06]"
-            >
-              →
-            </button>
-          </div>
         </div>
+      </section>
 
-        {loading ? (
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-sm text-zinc-400">
-            Cargando calendario...
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
+        {kpis.map((item) => (
+          <KpiCard key={item.label} item={item} />
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-6 text-sm text-zinc-400">
+          Cargando calendario...
+        </div>
+      ) : error ? (
+        <div className="rounded-[24px] border border-rose-400/20 bg-rose-400/[0.08] p-6 text-sm text-rose-200">
+          Error: {error}
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1fr]">
+            <ChartCard title="Performance Profile">
+              <RadarProfileChart metrics={radarMetrics} chartKey={`radar-${transitionKey}`} />
+            </ChartCard>
+
+            <ChartCard
+              title="Account Growth"
+              right={<p className="text-lg font-semibold text-emerald-300">{formatUsd(monthSummary.totalUsd)}</p>}
+            >
+              <GrowthLineChart
+                points={growthPoints}
+                chartKey={`growth-${transitionKey}`}
+                totalLabel={formatUsd(monthSummary.totalUsd)}
+              />
+            </ChartCard>
           </div>
-        ) : error ? (
-          <div className="rounded-2xl border border-rose-400/20 bg-rose-400/[0.08] p-6 text-sm text-rose-200">
-            Error: {error}
-          </div>
-        ) : (
-          <div
-            className={`grid grid-cols-1 gap-4 ${
-              isDetailOpen ? "xl:grid-cols-[1fr_340px]" : ""
-            }`}
-          >
-            <div className="space-y-2">
-              <div className="grid grid-cols-7 gap-2">
+
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+            <section className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.026),rgba(255,255,255,0.012))] p-4 shadow-[0_18px_36px_rgba(0,0,0,0.18)]">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={previousMonth}
+                    className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-zinc-300 transition hover:bg-white/[0.06]"
+                  >
+                    ‹
+                  </button>
+
+                  <p className="min-w-[148px] text-center text-xl font-semibold text-white">
+                    {getMonthLabel(currentMonth)}
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={nextMonth}
+                    className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-zinc-300 transition hover:bg-white/[0.06]"
+                  >
+                    ›
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => void cargarDatos()}
+                    className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-zinc-400 transition hover:bg-white/[0.06] hover:text-white"
+                  >
+                    ↻
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-4 text-sm">
+                  <p className="font-medium text-emerald-300">
+                    P/L: {formatCompactUsd(monthSummary.totalUsd)}
+                  </p>
+                  <p className="text-zinc-400">Trades: {monthAnalytics.totalTrades}</p>
+                </div>
+              </div>
+
+              <div className="mb-2 grid grid-cols-7 gap-2">
                 {DAY_LABELS.map((label) => (
                   <div
                     key={label}
-                    className="rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-4 text-center text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500 shadow-[0_8px_18px_rgba(255,255,255,0.02)]"
+                    className="px-2 py-1 text-center text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500"
                   >
                     {label}
                   </div>
                 ))}
               </div>
 
-              {calendarWeeks.map((week, weekIndex) => {
-                const compactWeek = compactWeekFlags[weekIndex];
+              <div className="space-y-2">
+                {calendarWeeks.map((week, weekIndex) => {
+                  const compactWeek = compactWeekFlags[weekIndex];
 
-                return (
-                  <div key={`week_${weekIndex}`} className="grid grid-cols-7 gap-2">
-                    {week.map((date) => {
-                      const dateKey = toDateKey(date);
-                      const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
-                      const dayData = dailyMap.get(dateKey);
-                      const hasVisibleContent =
-                        (viewMode === "pnl" && !!dayData?.resultCount) ||
-                        (viewMode === "events" && !!dayData?.events.length);
+                  return (
+                    <div key={`week_${weekIndex}`} className="grid grid-cols-7 gap-2">
+                      {week.map((date) => {
+                        const dateKey = toDateKey(date);
 
-                      return (
-                        <button
-                          key={dateKey}
-                          type="button"
-                          onClick={() => {
-                            if (!isCurrentMonth) return;
+                        return (
+                          <CalendarDayCell
+                            key={dateKey}
+                            date={date}
+                            currentMonth={currentMonth}
+                            dayData={dailyMap.get(dateKey)}
+                            viewMode={viewMode}
+                            compact={compactWeek}
+                            isSelected={selectedDayKey === dateKey && isDetailOpen}
+                            onClick={() => {
+                              if (date.getMonth() !== currentMonth.getMonth()) return;
 
-                            if (selectedDayKey === dateKey && isDetailOpen) {
-                              setIsDetailOpen(false);
-                              return;
-                            }
+                              if (selectedDayKey === dateKey && isDetailOpen) {
+                                setIsDetailOpen(false);
+                                return;
+                              }
 
-                            setSelectedDayKey(dateKey);
-                            setIsDetailOpen(true);
-                          }}
-                          className={`rounded-2xl border p-3 text-left transition-all duration-200 ${getDayTone(
-                            dayData
-                          )} ${
-                            !isCurrentMonth ? "opacity-35" : "opacity-100"
-                          } ${
-                            selectedDayKey === dateKey && isDetailOpen
-                              ? "shadow-[0_0_0_1px_rgba(255,255,255,0.18),0_18px_36px_rgba(255,255,255,0.04)]"
-                              : "hover:shadow-[0_12px_28px_rgba(255,255,255,0.03)]"
-                          } ${
-                            compactWeek ? "min-h-[74px]" : "min-h-[138px]"
-                          }`}
-                        >
-                          <div className="flex h-full flex-col">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className="text-lg font-semibold text-white">
-                                {date.getDate()}
-                              </p>
-
-                              {dayData && dayData.resultCount > 0 && (
-                                <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[10px] text-zinc-400 shadow-[0_6px_14px_rgba(255,255,255,0.03)]">
-                                  {dayData.resultCount}
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="flex flex-1 items-center justify-center">
-                              {hasVisibleContent ? (
-                                viewMode === "pnl" ? (
-                                  <div className="w-full text-center">
-                                    <p
-                                      className={`text-2xl font-semibold leading-none ${
-                                        dayData && dayData.totalUsd > 0
-                                          ? "text-emerald-300"
-                                          : dayData && dayData.totalUsd < 0
-                                          ? "text-rose-300"
-                                          : "text-white"
-                                      }`}
-                                    >
-                                      {dayData ? formatUsd(dayData.totalUsd) : "-"}
-                                    </p>
-
-                                    <p
-                                      className={`mt-2 text-sm font-medium ${
-                                        dayData && dayData.totalPct > 0
-                                          ? "text-emerald-300"
-                                          : dayData && dayData.totalPct < 0
-                                          ? "text-rose-300"
-                                          : "text-zinc-300"
-                                      }`}
-                                    >
-                                      {dayData ? formatPct(dayData.totalPct) : "-"}
-                                    </p>
-
-                                    <p className="mt-2 text-[11px] text-zinc-500">
-                                      {dayData?.redDayCount
-                                        ? `${dayData.redDayCount} red day`
-                                        : `${dayData?.resultCount ?? 0} cuenta${
-                                            dayData?.resultCount === 1 ? "" : "s"
-                                          }`}
-                                    </p>
-                                  </div>
-                                ) : (
-                                  <div className="flex w-full flex-col items-center gap-1.5">
-                                    {dayData?.events.map((event) => (
-                                      <span
-                                        key={event.id}
-                                        className={`inline-flex w-fit rounded-full border px-2.5 py-1 text-[11px] font-medium ${getEventPillClasses(
-                                          event.kind
-                                        )}`}
-                                      >
-                                        {event.label}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )
-                              ) : null}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-
-            {isDetailOpen && (
-              <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.18)]">
-                <div className="mb-4 flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
-                      Fecha
-                    </p>
-                    <p className="mt-1 text-2xl font-semibold text-white">
-                      {selectedDayKey ?? "-"}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsDetailOpen(false)}
-                    className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-zinc-300 shadow-[0_10px_24px_rgba(255,255,255,0.03)] transition hover:bg-white/[0.06]"
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                {!selectedDay ? (
-                  <div className="flex min-h-[240px] items-center justify-center text-center text-sm text-zinc-500">
-                    No hay datos para este día.
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div
-                        className={`rounded-2xl border p-3 ${getToneByValue(
-                          selectedDay.totalUsd
-                        )}`}
-                      >
-                        <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
-                          USD
-                        </p>
-                        <p
-                          className={`mt-2 text-xl font-semibold ${
-                            selectedDay.totalUsd > 0
-                              ? "text-emerald-300"
-                              : selectedDay.totalUsd < 0
-                              ? "text-rose-300"
-                              : "text-white"
-                          }`}
-                        >
-                          {formatUsd(selectedDay.totalUsd)}
-                        </p>
-                      </div>
-
-                      <div
-                        className={`rounded-2xl border p-3 ${getToneByValue(
-                          selectedDay.totalPct
-                        )}`}
-                      >
-                        <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
-                          %
-                        </p>
-                        <p
-                          className={`mt-2 text-xl font-semibold ${
-                            selectedDay.totalPct > 0
-                              ? "text-emerald-300"
-                              : selectedDay.totalPct < 0
-                              ? "text-rose-300"
-                              : "text-white"
-                          }`}
-                        >
-                          {formatPct(selectedDay.totalPct)}
-                        </p>
-                      </div>
+                              setSelectedDayKey(dateKey);
+                              setIsDetailOpen(true);
+                            }}
+                          />
+                        );
+                      })}
                     </div>
-
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-white">Resultados</p>
-
-                      {selectedDay.resultDetails.length === 0 ? (
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-zinc-500">
-                          Sin resultados.
-                        </div>
-                      ) : (
-                        selectedDay.resultDetails.map((result) => (
-                          <div
-                            key={result.id}
-                            className={`rounded-2xl border p-3 ${getToneByValue(
-                              result.pnlUsd
-                            )}`}
-                          >
-                            <p className="text-sm font-medium text-white">
-                              {result.alias} · {result.numeroCuenta}
-                            </p>
-                            <div className="mt-2 flex items-center justify-between gap-3 text-sm">
-                              <span
-                                className={
-                                  result.pnlUsd > 0
-                                    ? "text-emerald-300"
-                                    : result.pnlUsd < 0
-                                    ? "text-rose-300"
-                                    : "text-zinc-300"
-                                }
-                              >
-                                {formatUsd(result.pnlUsd)}
-                              </span>
-                              <span
-                                className={
-                                  result.pnlPct > 0
-                                    ? "text-emerald-300"
-                                    : result.pnlPct < 0
-                                    ? "text-rose-300"
-                                    : "text-zinc-300"
-                                }
-                              >
-                                {formatPct(result.pnlPct)}
-                              </span>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-white">Eventos</p>
-
-                      {selectedDay.eventDetails.length === 0 ? (
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm text-zinc-500">
-                          Sin eventos.
-                        </div>
-                      ) : (
-                        selectedDay.eventDetails.map((event) => (
-                          <div
-                            key={event.id}
-                            className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 shadow-[0_10px_24px_rgba(255,255,255,0.03)]"
-                          >
-                            <p className="text-sm font-medium text-white">{event.tipo}</p>
-                            <p className="mt-1 text-sm text-zinc-400">
-                              {event.alias} · {event.numeroCuenta}
-                            </p>
-                            {event.descripcion ? (
-                              <p className="mt-2 text-sm text-zinc-500">{event.descripcion}</p>
-                            ) : null}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
+                  );
+                })}
               </div>
-            )}
+            </section>
+
+            <div className="space-y-4">
+              <MonthStatsPanel
+                monthSummary={monthSummary}
+                monthAnalytics={monthAnalytics}
+              />
+
+              {isDetailOpen ? (
+                <DayDetailPanel
+                  selectedDayKey={selectedDayKey}
+                  selectedDay={selectedDay}
+                  onClose={() => setIsDetailOpen(false)}
+                />
+              ) : null}
+            </div>
           </div>
-        )}
-      </SectionCard>
+        </>
+      )}
     </div>
   );
 }
