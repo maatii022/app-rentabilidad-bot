@@ -753,7 +753,7 @@ export default function ControlPage() {
       <SectionCard title="Crear pack">
         <div className="grid items-start grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_760px]">
           <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[2fr_1fr]">
               <div>
                 <MiniLabel>Nombre del pack</MiniLabel>
                 <CompactInput
@@ -766,14 +766,14 @@ export default function ControlPage() {
               <div>
                 <MiniLabel>Preset</MiniLabel>
                 <InlinePicker
-                  label=""
-                  triggerLabel="Preset pack"
-                  options={presetItems}
-                  selectedValue={packPresetId}
-                  open={openControls.packPreset}
-                  onToggle={() => toggleControl("packPreset")}
-                  onSelect={setPackPresetId}
-                />
+  label="Preset"
+  triggerLabel="Preset"
+  options={presetItems}
+  selectedValue={packPresetId}
+  open={openControls.packPreset}
+  onToggle={() => toggleControl("packPreset")}
+  onSelect={setPackPresetId}
+/>
               </div>
             </div>
 
