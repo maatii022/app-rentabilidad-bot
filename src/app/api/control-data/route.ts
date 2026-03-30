@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function GET() {
   try {
-    const [presetsRes, propFirmsRes, assignedSlotsRes] = await Promise.all([
+    const [presetsRes, propFirmsRes, assignedSlotsRes, editableAccountsRes] = await Promise.all([
       supabaseAdmin
         .from("presets")
         .select("id, nombre")
@@ -19,6 +19,24 @@ export async function GET() {
         .from("pack_slots")
         .select("account_id")
         .not("account_id", "is", null),
+
+      supabaseAdmin
+        .from("accounts")
+        .select(`
+          id,
+          alias,
+          numero_cuenta,
+          preset_id,
+          tipo_cuenta,
+          estado,
+          account_size,
+          prop_firm_id,
+          activa_en_filtros,
+          fecha_inicio,
+          fecha_perdida,
+          fecha_fondeo
+        `)
+        .order("alias", { ascending: true }),
     ]);
 
     if (presetsRes.error) {
@@ -31,6 +49,10 @@ export async function GET() {
 
     if (assignedSlotsRes.error) {
       return NextResponse.json({ error: assignedSlotsRes.error.message }, { status: 500 });
+    }
+
+    if (editableAccountsRes.error) {
+      return NextResponse.json({ error: editableAccountsRes.error.message }, { status: 500 });
     }
 
     const assignedAccountIds = Array.from(
@@ -64,6 +86,7 @@ export async function GET() {
       presets: presetsRes.data || [],
       propFirms: propFirmsRes.data || [],
       availableAccounts: availableAccountsRes.data || [],
+      editableAccounts: editableAccountsRes.data || [],
     });
   } catch (error) {
     const message =
