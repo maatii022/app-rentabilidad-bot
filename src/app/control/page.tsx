@@ -142,14 +142,14 @@ function TypeSwitch({
 function GlowOptionButton({
   label,
   active,
-  visible,
-  delayMs,
+  visible = true,
+  delayMs = 0,
   onClick,
 }: {
   label: string;
   active?: boolean;
-  visible: boolean;
-  delayMs: number;
+  visible?: boolean;
+  delayMs?: number;
   onClick?: () => void;
 }) {
   const [glow, setGlow] = useState({ x: 50, y: 50 });
@@ -207,7 +207,7 @@ function InlinePicker<T extends string | number>({
 
   return (
     <div>
-      <MiniLabel>{label}</MiniLabel>
+      {label ? <MiniLabel>{label}</MiniLabel> : null}
 
       <div className="space-y-2">
         <div className="flex items-center gap-3">
@@ -236,7 +236,7 @@ function InlinePicker<T extends string | number>({
 
           <div
             className={`overflow-hidden transition-all duration-300 ${
-              open ? "max-w-[1400px] max-h-20 opacity-100" : "max-w-0 max-h-0 opacity-0"
+              open ? "max-w-[1400px] max-h-24 opacity-100" : "max-w-0 max-h-0 opacity-0"
             }`}
             style={{
               transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
@@ -250,6 +250,94 @@ function InlinePicker<T extends string | number>({
                   active={selectedValue === option.value}
                   delayMs={index * 45}
                   visible={open}
+                  onClick={() => onSelect(option.value)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SlotAssignmentPicker({
+  label,
+  triggerLabel,
+  options,
+  selectedValue,
+  open,
+  onToggle,
+  onSelect,
+}: {
+  label: string;
+  triggerLabel: string;
+  options: { value: number; label: string }[];
+  selectedValue: number;
+  open: boolean;
+  onToggle: () => void;
+  onSelect: (value: number) => void;
+}) {
+  const selectedLabel =
+    options.find((option) => option.value === selectedValue)?.label || "Vacío";
+
+  return (
+    <div>
+      {label ? <MiniLabel>{label}</MiniLabel> : null}
+
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onToggle}
+            className={`relative shrink-0 overflow-hidden rounded-full border transition-all duration-300 ${
+              open
+                ? "h-11 w-11 border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.07))] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(56,189,248,0.12)]"
+                : "h-11 min-w-[100px] border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
+            }`}
+          >
+            {open ? (
+              <div className="flex h-full items-center justify-center">
+                <span className="h-2.5 w-2.5 rounded-full bg-sky-300 shadow-[0_0_14px_rgba(125,211,252,0.8)]" />
+              </div>
+            ) : (
+              <div className="flex h-full items-center justify-between">
+                <span className="text-sm font-medium text-zinc-200">
+                  {triggerLabel}
+                </span>
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-white/25" />
+              </div>
+            )}
+          </button>
+
+          {!open ? (
+            <GlowOptionButton
+              label={selectedLabel}
+              active={selectedValue !== 0}
+              visible={true}
+              delayMs={0}
+              onClick={() => onSelect(selectedValue)}
+            />
+          ) : null}
+        </div>
+
+        <div
+          className={`overflow-hidden transition-all duration-300 ${
+            open ? "max-h-[220px] opacity-100" : "max-h-0 opacity-0"
+          }`}
+          style={{
+            transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
+          }}
+        >
+          <div className="rounded-[18px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.015))] p-2 shadow-[0_14px_34px_rgba(0,0,0,0.18)]">
+            <div className="max-h-[180px] space-y-2 overflow-y-auto pr-1">
+              {options.map((option, index) => (
+                <GlowOptionButton
+                  key={option.value}
+                  label={option.label}
+                  active={selectedValue === option.value}
+                  visible={open}
+                  delayMs={index * 35}
                   onClick={() => onSelect(option.value)}
                 />
               ))}
@@ -448,10 +536,41 @@ export default function ControlPage() {
         label: buildAccountLabel(account),
       }));
 
-    return [
-      { value: 0, label: "Vacío" },
-      ...accountOptions,
-    ];
+    return [{ value: 0, label: "Vacío" }, ...accountOptions];
+  }
+
+  function applyPackAutofillFromAccount(account: AvailableAccountOption | null) {
+    if (!account) return;
+
+    const accountPresetId =
+      typeof account.preset_id === "number" ? account.preset_id : null;
+    const accountTipo = normalizeTipoCuenta(account.tipo_cuenta);
+
+    if (accountPresetId && !packPresetId) {
+      setPackPresetId(accountPresetId);
+    }
+
+    if (accountTipo && !packTipo) {
+      setPackTipo(accountTipo);
+    }
+
+    if (accountTipo && packTipo !== accountTipo && !SLOT_KEYS.some((slot) => slotAssignments[slot] !== null)) {
+      setPackTipo(accountTipo);
+    }
+  }
+
+  function setSlotAccount(slot: SlotKey, value: number) {
+    const nextValue = value === 0 ? null : value;
+
+    setSlotAssignments((prev) => ({
+      ...prev,
+      [slot]: nextValue,
+    }));
+
+    if (nextValue !== null) {
+      const account = getAccountById(nextValue);
+      applyPackAutofillFromAccount(account);
+    }
   }
 
   async function crearCuenta() {
@@ -512,8 +631,16 @@ export default function ControlPage() {
         });
 
         if (preassignSlot) {
-          setPackPresetId(Number(createdAccount.preset_id) || Number(presetId));
-          setPackTipo(normalizeTipoCuenta(createdAccount.tipo_cuenta) || tipoCuenta);
+          const accountPreset =
+            typeof createdAccount.preset_id === "number"
+              ? createdAccount.preset_id
+              : Number(presetId);
+
+          const accountTipo =
+            normalizeTipoCuenta(createdAccount.tipo_cuenta) || tipoCuenta;
+
+          setPackPresetId(accountPreset);
+          setPackTipo(accountTipo);
           setSlotAssignments((prev) => ({
             ...prev,
             [preassignSlot]: createdAccount.id,
@@ -642,7 +769,7 @@ export default function ControlPage() {
       <HeroCard />
 
       <SectionCard title="Crear cuenta">
-        <div className="grid items-start grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_760px]">
+        <div className="grid items-start grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_740px]">
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               <div>
@@ -714,8 +841,6 @@ export default function ControlPage() {
                     key={slot}
                     label={`Slot ${slot}`}
                     active={preassignSlot === slot}
-                    visible={true}
-                    delayMs={0}
                     onClick={() =>
                       setPreassignSlot((prev) => (prev === slot ? null : slot))
                     }
@@ -751,9 +876,9 @@ export default function ControlPage() {
       </SectionCard>
 
       <SectionCard title="Crear pack">
-        <div className="grid items-start grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_760px]">
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[2fr_1fr]">
+        <div className="grid items-start grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_720px]">
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.4fr_1fr]">
               <div>
                 <MiniLabel>Nombre del pack</MiniLabel>
                 <CompactInput
@@ -763,18 +888,15 @@ export default function ControlPage() {
                 />
               </div>
 
-              
-              
-                <InlinePicker
-  label="Preset"
-  triggerLabel="Preset"
-  options={presetItems}
-  selectedValue={packPresetId}
-  open={openControls.packPreset}
-  onToggle={() => toggleControl("packPreset")}
-  onSelect={setPackPresetId}
-/>
-              
+              <InlinePicker
+                label="Preset"
+                triggerLabel="Preset"
+                options={presetItems}
+                selectedValue={packPresetId}
+                open={openControls.packPreset}
+                onToggle={() => toggleControl("packPreset")}
+                onSelect={setPackPresetId}
+              />
             </div>
 
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
@@ -792,19 +914,14 @@ export default function ControlPage() {
                     ) : null}
                   </div>
 
-                  <InlinePicker
+                  <SlotAssignmentPicker
                     label=""
                     triggerLabel={`Elegir ${slot}`}
                     options={getSlotOptions(slot)}
                     selectedValue={slotAssignments[slot] ?? 0}
                     open={openControls[`slot${slot}`]}
                     onToggle={() => toggleControl(`slot${slot}`)}
-                    onSelect={(value) =>
-                      setSlotAssignments((prev) => ({
-                        ...prev,
-                        [slot]: Number(value) === 0 ? null : Number(value),
-                      }))
-                    }
+                    onSelect={(value) => setSlotAccount(slot, Number(value))}
                   />
 
                   <div className="mt-3 rounded-[16px] border border-white/8 bg-black/20 px-3 py-3">
