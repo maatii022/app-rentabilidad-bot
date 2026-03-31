@@ -288,50 +288,52 @@ function InlinePicker<T extends string | number>(props: {
   const { label, triggerLabel, options, selectedValue, open, onToggle, onSelect } = props;
   const hasOptions = options.length > 0;
 
+  const selectedLabel =
+    options.find((option) => option.value === selectedValue)?.label || "";
+
   return (
     <div>
       {label ? <MiniLabel>{label}</MiniLabel> : null}
 
       <div className="space-y-2">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => hasOptions && onToggle()}
-            className={`relative shrink-0 overflow-hidden rounded-full border transition-all duration-300 ${
-              open
-                ? "h-10 w-10 border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.07))] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(56,189,248,0.12)]"
-                : "h-10 min-w-[112px] border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
-            } ${!hasOptions ? "cursor-not-allowed opacity-70" : ""}`}
-          >
-            {open ? (
-              <div className="flex h-full items-center justify-center">
-                <span className="h-2.5 w-2.5 rounded-full bg-sky-300 shadow-[0_0_14px_rgba(125,211,252,0.8)]" />
-              </div>
-            ) : (
-              <div className="flex h-full items-center justify-between">
-                <span className="text-sm font-medium text-zinc-200">
-                  {triggerLabel}
-                </span>
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-white/25" />
-              </div>
-            )}
-          </button>
+        <button
+          type="button"
+          onClick={() => hasOptions && onToggle()}
+          className={`flex h-11 w-full items-center justify-between rounded-[16px] border px-4 text-sm font-medium transition-all duration-300 ${
+            open
+              ? "border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.14),rgba(56,189,248,0.05))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_12px_28px_rgba(56,189,248,0.10)]"
+              : "border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] text-zinc-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
+          } ${!hasOptions ? "cursor-not-allowed opacity-70" : ""}`}
+        >
+          <span className="truncate">
+            {selectedLabel || triggerLabel}
+          </span>
 
-          <div
-            className={`overflow-hidden transition-all duration-300 ${
-              open ? "max-w-[1400px] max-h-24 opacity-100" : "max-w-0 max-h-0 opacity-0"
+          <span
+            className={`ml-3 shrink-0 text-xs text-zinc-400 transition-transform duration-300 ${
+              open ? "rotate-180" : ""
             }`}
-            style={{
-              transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
-            }}
           >
-            <div className="flex flex-wrap gap-2">
+            ▼
+          </span>
+        </button>
+
+        <div
+          className={`overflow-hidden transition-all duration-300 ${
+            open ? "max-h-[240px] opacity-100" : "max-h-0 opacity-0"
+          }`}
+          style={{
+            transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
+          }}
+        >
+          <div className="rounded-[18px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.015))] p-2 shadow-[0_14px_34px_rgba(0,0,0,0.18)]">
+            <div className="flex max-h-[180px] flex-wrap gap-2 overflow-y-auto pr-1">
               {options.map((option, index) => (
                 <GlowOptionButton
                   key={String(option.value)}
                   label={option.label}
                   active={selectedValue === option.value}
-                  delayMs={index * 45}
+                  delayMs={index * 30}
                   visible={open}
                   onClick={() => onSelect(option.value)}
                 />
@@ -369,44 +371,31 @@ function SlotAssignmentPicker({
       {label ? <MiniLabel>{label}</MiniLabel> : null}
 
       <div className="space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={onToggle}
-            className={`relative shrink-0 overflow-hidden rounded-full border transition-all duration-300 ${
-              open
-                ? "h-10 w-10 border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.07))] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(56,189,248,0.12)]"
-                : "h-10 min-w-[100px] border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
+        <button
+          type="button"
+          onClick={onToggle}
+          className={`flex h-11 w-full items-center justify-between rounded-[16px] border px-4 text-sm font-medium transition-all duration-300 ${
+            open
+              ? "border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.14),rgba(56,189,248,0.05))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_12px_28px_rgba(56,189,248,0.10)]"
+              : "border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] text-zinc-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
+          }`}
+        >
+          <span className="truncate">
+            {selectedLabel || triggerLabel}
+          </span>
+
+          <span
+            className={`ml-3 shrink-0 text-xs text-zinc-400 transition-transform duration-300 ${
+              open ? "rotate-180" : ""
             }`}
           >
-            {open ? (
-              <div className="flex h-full items-center justify-center">
-                <span className="h-2.5 w-2.5 rounded-full bg-sky-300 shadow-[0_0_14px_rgba(125,211,252,0.8)]" />
-              </div>
-            ) : (
-              <div className="flex h-full items-center justify-between">
-                <span className="text-sm font-medium text-zinc-200">
-                  {triggerLabel}
-                </span>
-                <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-white/25" />
-              </div>
-            )}
-          </button>
-
-          {!open ? (
-            <GlowOptionButton
-              label={selectedLabel}
-              active={selectedValue !== 0}
-              visible={true}
-              delayMs={0}
-              onClick={() => onSelect(selectedValue)}
-            />
-          ) : null}
-        </div>
+            ▼
+          </span>
+        </button>
 
         <div
           className={`overflow-hidden transition-all duration-300 ${
-            open ? "max-h-[220px] opacity-100" : "max-h-0 opacity-0"
+            open ? "max-h-[240px] opacity-100" : "max-h-0 opacity-0"
           }`}
           style={{
             transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)",
@@ -420,7 +409,7 @@ function SlotAssignmentPicker({
                   label={option.label}
                   active={selectedValue === option.value}
                   visible={open}
-                  delayMs={index * 35}
+                  delayMs={index * 30}
                   onClick={() => onSelect(option.value)}
                 />
               ))}
@@ -431,6 +420,7 @@ function SlotAssignmentPicker({
     </div>
   );
 }
+
 
 function SummaryCard({
   items,
