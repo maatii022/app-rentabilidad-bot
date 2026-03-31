@@ -28,8 +28,6 @@ type PresetMetric = {
   perdidas: number;
   fundedWinrate: number | null;
   tradeWinrate: number | null;
-  winningTrades: number;
-  losingTrades: number;
 };
 
 type AccountItem = {
@@ -179,8 +177,8 @@ function buildPresetMetrics(
   const tradeStatsByPreset = new Map<
     number,
     {
-      winningTrades: number;
-      losingTrades: number;
+      wins: number;
+      losses: number;
     }
   >();
 
@@ -189,12 +187,12 @@ function buildPresetMetrics(
     if (typeof presetId !== "number") continue;
 
     const current = tradeStatsByPreset.get(presetId) ?? {
-      winningTrades: 0,
-      losingTrades: 0,
+      wins: 0,
+      losses: 0,
     };
 
-    current.winningTrades += Number(row.winning_trades || 0);
-    current.losingTrades += Number(row.losing_trades || 0);
+    current.wins += Number(row.winning_trades || 0);
+    current.losses += Number(row.losing_trades || 0);
 
     tradeStatsByPreset.set(presetId, current);
   }
@@ -219,13 +217,13 @@ function buildPresetMetrics(
       fundedBase > 0 ? (fondeadas / fundedBase) * 100 : null;
 
     const tradeStats = tradeStatsByPreset.get(preset.id) ?? {
-      winningTrades: 0,
-      losingTrades: 0,
+      wins: 0,
+      losses: 0,
     };
 
-    const tradeBase = tradeStats.winningTrades + tradeStats.losingTrades;
+    const tradeBase = tradeStats.wins + tradeStats.losses;
     const tradeWinrate =
-      tradeBase > 0 ? (tradeStats.winningTrades / tradeBase) * 100 : null;
+      tradeBase > 0 ? (tradeStats.wins / tradeBase) * 100 : null;
 
     return {
       id: preset.id,
@@ -238,8 +236,6 @@ function buildPresetMetrics(
       perdidas,
       fundedWinrate,
       tradeWinrate,
-      winningTrades: tradeStats.winningTrades,
-      losingTrades: tradeStats.losingTrades,
     };
   });
 }
@@ -346,57 +342,28 @@ function MetricSurface({
   );
 }
 
-function WinratePanel({
+function CompactWinratePanel({
   label,
   value,
+  tone = "violet",
 }: {
   label: string;
   value: number | null;
+  tone?: "violet" | "emerald";
 }) {
+  const toneClasses =
+    tone === "emerald"
+      ? "border-emerald-400/16 bg-[linear-gradient(180deg,rgba(16,185,129,0.10),rgba(16,185,129,0.03))]"
+      : "border-violet-400/16 bg-[linear-gradient(180deg,rgba(167,139,250,0.10),rgba(167,139,250,0.03))]";
+
   return (
-    <div className="rounded-2xl border border-violet-400/16 bg-[linear-gradient(180deg,rgba(167,139,250,0.10),rgba(167,139,250,0.03))] px-4 py-5 shadow-[0_14px_30px_rgba(167,139,250,0.06)]">
+    <div className={`rounded-2xl border px-4 py-4 shadow-[0_14px_30px_rgba(0,0,0,0.18)] ${toneClasses}`}>
       <p className="text-center text-[10px] uppercase tracking-[0.16em] text-zinc-500">
         {label}
       </p>
-      <p className="mt-3 text-center text-4xl font-semibold leading-none text-white">
+      <p className="mt-2 text-center text-3xl font-semibold leading-none text-white">
         {formatPercent(value)}
       </p>
-    </div>
-  );
-}
-
-function TradeSplitPanel({
-  wins,
-  losses,
-}: {
-  wins: number;
-  losses: number;
-}) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] px-4 py-5 shadow-[0_14px_30px_rgba(0,0,0,0.18)]">
-      <p className="text-center text-[10px] uppercase tracking-[0.16em] text-zinc-500">
-        Trades cerrados
-      </p>
-
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <div className="rounded-xl border border-emerald-400/16 bg-emerald-400/[0.06] px-3 py-3">
-          <p className="text-center text-[10px] uppercase tracking-[0.14em] text-zinc-500">
-            Wins
-          </p>
-          <p className="mt-2 text-center text-2xl font-semibold text-emerald-300">
-            {wins}
-          </p>
-        </div>
-
-        <div className="rounded-xl border border-rose-400/16 bg-rose-400/[0.06] px-3 py-3">
-          <p className="text-center text-[10px] uppercase tracking-[0.14em] text-zinc-500">
-            Losses
-          </p>
-          <p className="mt-2 text-center text-2xl font-semibold text-rose-300">
-            {losses}
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
@@ -551,10 +518,9 @@ function PresetCard({
           />
         </div>
 
-        <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
-          <WinratePanel label="Funded Rate" value={preset.fundedWinrate} />
-          <WinratePanel label="Winrate por trade" value={preset.tradeWinrate} />
-          <TradeSplitPanel wins={preset.winningTrades} losses={preset.losingTrades} />
+        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <CompactWinratePanel label="Funded winrate" value={preset.fundedWinrate} tone="violet" />
+          <CompactWinratePanel label="Winrate por trade" value={preset.tradeWinrate} tone="emerald" />
         </div>
       </div>
     </article>

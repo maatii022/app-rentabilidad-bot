@@ -286,7 +286,7 @@ function calcProfitFactor(values: number[]) {
   const grossProfit = values.filter((v) => v > 0).reduce((acc, v) => acc + v, 0);
   const grossLoss = Math.abs(values.filter((v) => v < 0).reduce((acc, v) => acc + v, 0));
 
-  if (grossProfit === 0 && grossLoss === 0) return null;
+  if (grossProfit === 0 and grossLoss === 0) return null;
   if (grossLoss === 0) return null;
   return grossProfit / grossLoss;
 }
