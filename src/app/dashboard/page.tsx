@@ -137,10 +137,12 @@ function StatCard({
   label,
   value,
   tone = "neutral",
+  extra,
 }: {
   label: string;
   value: number | string;
   tone?: "neutral" | "blue" | "amber" | "green" | "violet" | "red";
+  extra?: string;
 }) {
   const toneClasses = {
     neutral:
@@ -160,7 +162,14 @@ function StatCard({
   return (
     <div className={`rounded-2xl border p-3 ${toneClasses[tone]}`}>
       <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-400">{label}</p>
-      <p className="mt-1.5 text-xl font-semibold leading-none text-white md:text-2xl">{value}</p>
+      <div className="mt-1.5 flex items-end justify-between gap-3">
+        <p className="text-xl font-semibold leading-none text-white md:text-2xl">{value}</p>
+        {extra ? (
+          <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-300">
+            {extra}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -293,6 +302,13 @@ function formatAccountSize(value?: number | null) {
   }
 
   return `${Math.round(value)}`;
+}
+
+function formatTotalNominalK(value?: number | null) {
+  if (typeof value !== "number" || Number.isNaN(value) || value <= 0) return "0K";
+
+  const k = value / 1000;
+  return `${Number.isInteger(k) ? k.toFixed(0) : k.toFixed(1)}K`;
 }
 
 function normalizeSlotName(slot: string | undefined) {
@@ -1125,6 +1141,33 @@ export default function DashboardPage() {
     };
   }, [packsFiltrados]);
 
+  const fondeadoNominalTotal = useMemo(() => {
+    const cuentasFondeadas = new Set<string>();
+    let total = 0;
+
+    packsFiltrados.forEach((pack) => {
+      const displaySlots = buildDisplaySlots(pack);
+
+      displaySlots.forEach((slot) => {
+        const numeroCuenta = slot.accounts?.numero_cuenta ?? "";
+        const estado = slot.accounts?.estado ?? "";
+
+        if (!numeroCuenta || estado !== "fondeada" || cuentasFondeadas.has(numeroCuenta)) {
+          return;
+        }
+
+        cuentasFondeadas.add(numeroCuenta);
+        const inferredSize = liveStatus[numeroCuenta]?.account_size_inferred;
+
+        if (typeof inferredSize === "number" && !Number.isNaN(inferredSize) && inferredSize > 0) {
+          total += inferredSize;
+        }
+      });
+    });
+
+    return total;
+  }, [packsFiltrados, liveStatus]);
+
   const eventosRecientes = useMemo(() => {
     return [...events].slice(0, 4);
   }, [events]);
@@ -1216,7 +1259,12 @@ export default function DashboardPage() {
             <StatCard label="Packs" value={resumen.packsVisibles} tone="blue" />
             <StatCard label="Cuentas activas" value={resumen.cuentasActivas} tone="green" />
             <StatCard label="Alertas" value={resumen.cuentasConAlertas} tone="amber" />
-            <StatCard label="Fondeadas" value={summary.fondeadasHistoricas} tone="violet" />
+            <StatCard
+              label="Fondeadas"
+              value={summary.fondeadasHistoricas}
+              extra={formatTotalNominalK(fondeadoNominalTotal)}
+              tone="violet"
+            />
             <StatCard label="Perdidas" value={summary.perdidasHistoricas} tone="red" />
           </div>
         </section>
@@ -1589,9 +1637,9 @@ function PackCard({
             ? resolveDisplayTotalPct(numeroCuenta, persistedPerformance, liveStatus)
             : null;
 
-          const accountSizeClass = slot.es_activa
-            ? "text-sky-100"
-            : "text-zinc-500";
+          const sizeBadgeClass = slot.es_activa
+            ? "border-sky-300/20 bg-sky-300/[0.12] text-sky-100"
+            : "border-white/10 bg-white/[0.05] text-zinc-300";
 
           return (
             <div
@@ -1610,13 +1658,17 @@ function PackCard({
                     Slot {slot.slot}
                   </p>
 
-                  <div className="mt-1 flex items-baseline gap-2">
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
                     <p className="truncate text-sm font-medium text-white">
                       {slot.accounts?.alias ?? "Vacío"}
                     </p>
-                    <span className={`text-xs font-medium ${accountSizeClass}`}>
-                      {accountSizeLabel}
-                    </span>
+                    {!missingAccount ? (
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] shadow-[0_8px_18px_rgba(255,255,255,0.03)] ${sizeBadgeClass}`}
+                      >
+                        {accountSizeLabel}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
 
