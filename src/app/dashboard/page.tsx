@@ -14,6 +14,7 @@ type PackSlot = {
     numero_cuenta: string;
     estado: string;
     tipo_cuenta: string;
+    account_size?: string | null;
   };
 };
 
@@ -293,20 +294,44 @@ function formatPercent(value?: number | null) {
   return `${value.toFixed(2)}%`;
 }
 
-function formatAccountSize(value?: number | null) {
-  if (typeof value !== "number" || Number.isNaN(value) || value <= 0) return "-";
+function normalizeAccountSizeLabel(value?: string | null) {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (!normalized) return null;
+  return normalized;
+}
 
-  if (value >= 1000) {
-    const k = value / 1000;
+function parseAccountSizeToNumber(value?: string | null) {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (!normalized) return null;
+
+  if (normalized.endsWith("K")) {
+    const numeric = Number(normalized.replace("K", "").trim());
+    if (!Number.isFinite(numeric) || numeric <= 0) return null;
+    return numeric * 1000;
+  }
+
+  const numeric = Number(normalized.replace(/[^\d.]/g, ""));
+  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+
+  return numeric;
+}
+
+function formatAccountSizeFromSources(accountSize?: string | null, inferred?: number | null) {
+  const persisted = normalizeAccountSizeLabel(accountSize);
+  if (persisted) return persisted;
+
+  if (typeof inferred !== "number" || Number.isNaN(inferred) || inferred <= 0) return "-";
+
+  if (inferred >= 1000) {
+    const k = inferred / 1000;
     return `${Number.isInteger(k) ? k.toFixed(0) : k.toFixed(1)}K`;
   }
 
-  return `${Math.round(value)}`;
+  return `${Math.round(inferred)}`;
 }
 
 function formatTotalNominalK(value?: number | null) {
   if (typeof value !== "number" || Number.isNaN(value) || value <= 0) return "0K";
-
   const k = value / 1000;
   return `${Number.isInteger(k) ? k.toFixed(0) : k.toFixed(1)}K`;
 }
@@ -1151,14 +1176,21 @@ export default function DashboardPage() {
       displaySlots.forEach((slot) => {
         const numeroCuenta = slot.accounts?.numero_cuenta ?? "";
         const estado = slot.accounts?.estado ?? "";
+        const accountSize = slot.accounts?.account_size ?? null;
 
         if (!numeroCuenta || estado !== "fondeada" || cuentasFondeadas.has(numeroCuenta)) {
           return;
         }
 
         cuentasFondeadas.add(numeroCuenta);
-        const inferredSize = liveStatus[numeroCuenta]?.account_size_inferred;
 
+        const parsed = parseAccountSizeToNumber(accountSize);
+        if (parsed) {
+          total += parsed;
+          return;
+        }
+
+        const inferredSize = liveStatus[numeroCuenta]?.account_size_inferred;
         if (typeof inferredSize === "number" && !Number.isNaN(inferredSize) && inferredSize > 0) {
           total += inferredSize;
         }
@@ -1627,7 +1659,10 @@ function PackCard({
           const missingAccount = !slot.accounts?.id;
           const live = numeroCuenta ? liveStatus[numeroCuenta] : undefined;
           const hasOpenTrade = (live?.trades_abiertos ?? 0) > 0;
-          const accountSizeLabel = formatAccountSize(live?.account_size_inferred);
+          const accountSizeLabel = formatAccountSizeFromSources(
+            slot.accounts?.account_size,
+            live?.account_size_inferred
+          );
 
           const displayHoyPct = numeroCuenta
             ? resolveDisplayDayPct(numeroCuenta, persistedPerformance, liveStatus)

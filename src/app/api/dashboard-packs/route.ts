@@ -22,7 +22,8 @@ export async function GET() {
           alias,
           numero_cuenta,
           estado,
-          tipo_cuenta
+          tipo_cuenta,
+          account_size
         )
       )
     `)
