@@ -44,19 +44,69 @@ type AccountEstado = "activa" | "fondeada" | "perdida";
 const ACCOUNT_SIZES: AccountSizeOption[] = ["5K", "10K", "25K", "50K", "100K"];
 const SLOT_KEYS: SlotKey[] = ["A", "B", "C"];
 
-function HeroCard() {
+function StatCard({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: number | string;
+  tone?: "neutral" | "blue" | "green" | "violet" | "amber";
+}) {
+  const toneClasses = {
+    neutral:
+      "border-white/10 bg-white/[0.03] shadow-[0_12px_28px_rgba(255,255,255,0.03)]",
+    blue:
+      "border-sky-400/20 bg-sky-400/[0.08] shadow-[0_14px_30px_rgba(56,189,248,0.08)]",
+    green:
+      "border-emerald-400/20 bg-emerald-400/[0.08] shadow-[0_14px_30px_rgba(16,185,129,0.08)]",
+    violet:
+      "border-violet-400/20 bg-violet-400/[0.08] shadow-[0_14px_30px_rgba(167,139,250,0.08)]",
+    amber:
+      "border-amber-300/20 bg-amber-300/[0.08] shadow-[0_14px_30px_rgba(251,191,36,0.08)]",
+  };
+
+  return (
+    <div className={`rounded-2xl border p-3 ${toneClasses[tone]}`}>
+      <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-400">{label}</p>
+      <p className="mt-2 text-2xl font-semibold leading-none text-white">{value}</p>
+    </div>
+  );
+}
+
+function HeroCard({
+  summary,
+}: {
+  summary: {
+    presets: number;
+    propFirms: number;
+    cuentasDisponibles: number;
+    cuentasEditables: number;
+    cuentasActivas: number;
+  };
+}) {
   return (
     <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.08),transparent_30%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
-      <div className="max-w-3xl">
-        <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">
-          App rentabilidad bot
-        </p>
-        <h1 className="mt-2 text-4xl font-semibold tracking-tight text-white">
-          Control
-        </h1>
-        <p className="mt-2 text-sm text-zinc-400">
-          Gestión operativa de cuentas, packs y empresas de fondeo.
-        </p>
+      <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div className="max-w-3xl">
+          <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-500">
+            App rentabilidad bot
+          </p>
+          <h1 className="mt-2 text-4xl font-semibold tracking-tight text-white">
+            Control
+          </h1>
+          <p className="mt-2 text-sm text-zinc-400">
+            Gestión operativa de cuentas, packs y empresas de fondeo.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2.5 xl:grid-cols-5">
+          <StatCard label="Presets" value={summary.presets} tone="blue" />
+          <StatCard label="Prop firms" value={summary.propFirms} tone="violet" />
+          <StatCard label="Disponibles" value={summary.cuentasDisponibles} tone="green" />
+          <StatCard label="Editables" value={summary.cuentasEditables} tone="neutral" />
+          <StatCard label="Activas" value={summary.cuentasActivas} tone="amber" />
+        </div>
       </div>
     </section>
   );
@@ -64,17 +114,18 @@ function HeroCard() {
 
 function SectionCard({
   title,
+  subtitle,
   children,
 }: {
   title: string;
+  subtitle?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.06),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-5 shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
-      <div className="mb-5">
-        <h2 className="text-2xl font-semibold tracking-tight text-white">
-          {title}
-        </h2>
+    <section className="rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.06),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.028),rgba(255,255,255,0.014))] p-4 shadow-[0_18px_40px_rgba(0,0,0,0.22)] md:p-5">
+      <div className="mb-4 flex flex-col gap-1">
+        <h2 className="text-2xl font-semibold tracking-tight text-white">{title}</h2>
+        {subtitle ? <p className="text-sm text-zinc-500">{subtitle}</p> : null}
       </div>
       {children}
     </section>
@@ -103,7 +154,7 @@ function CompactInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="h-12 w-full rounded-[18px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] px-4 text-sm text-white outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_10px_24px_rgba(0,0,0,0.14)] transition-all duration-200 placeholder:text-zinc-500 focus:border-sky-300/20 focus:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
+      className="h-11 w-full rounded-[16px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] px-4 text-sm text-white outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_10px_24px_rgba(0,0,0,0.14)] transition-all duration-200 placeholder:text-zinc-500 focus:border-sky-300/20 focus:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
     />
   );
 }
@@ -121,7 +172,7 @@ function TinySegment({
     <button
       type="button"
       onClick={onClick}
-      className={`h-12 rounded-[16px] border px-4 text-sm font-medium transition-all duration-200 ${
+      className={`h-11 rounded-[14px] border px-4 text-sm font-medium transition-all duration-200 ${
         active
           ? "border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.07))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(56,189,248,0.12)]"
           : "border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] text-zinc-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.028))] hover:text-white"
@@ -140,7 +191,7 @@ function TypeSwitch({
   onChange: (value: TypeOption) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-2 rounded-[18px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-1 shadow-[0_12px_28px_rgba(0,0,0,0.16)]">
+    <div className="grid grid-cols-2 gap-2 rounded-[16px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-1 shadow-[0_12px_28px_rgba(0,0,0,0.16)]">
       <TinySegment
         label="Prueba"
         active={value === "prueba"}
@@ -165,7 +216,7 @@ function EstadoSwitch({
   const options: AccountEstado[] = ["activa", "fondeada", "perdida"];
 
   return (
-    <div className="grid grid-cols-3 gap-2 rounded-[18px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-1 shadow-[0_12px_28px_rgba(0,0,0,0.16)]">
+    <div className="grid grid-cols-3 gap-2 rounded-[16px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-1 shadow-[0_12px_28px_rgba(0,0,0,0.16)]">
       {options.map((option) => (
         <TinySegment
           key={option}
@@ -203,7 +254,7 @@ function GlowOptionButton({
         const y = ((e.clientY - rect.top) / rect.height) * 100;
         setGlow({ x, y });
       }}
-      className={`relative overflow-hidden rounded-full border px-4 py-2.5 text-sm font-medium transition-all duration-300 ${
+      className={`relative overflow-hidden rounded-full border px-4 py-2 text-sm font-medium transition-all duration-300 ${
         active
           ? "border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.07))] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(56,189,248,0.12)]"
           : "border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] text-zinc-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] hover:border-white/14 hover:text-white"
@@ -225,15 +276,7 @@ function GlowOptionButton({
   );
 }
 
-function InlinePicker<T extends string | number>({
-  label,
-  triggerLabel,
-  options,
-  selectedValue,
-  open,
-  onToggle,
-  onSelect,
-}: {
+function InlinePicker<T extends string | number>(props: {
   label: string;
   triggerLabel: string;
   options: { value: T; label: string }[];
@@ -242,6 +285,7 @@ function InlinePicker<T extends string | number>({
   onToggle: () => void;
   onSelect: (value: T) => void;
 }) {
+  const { label, triggerLabel, options, selectedValue, open, onToggle, onSelect } = props;
   const hasOptions = options.length > 0;
 
   return (
@@ -255,8 +299,8 @@ function InlinePicker<T extends string | number>({
             onClick={() => hasOptions && onToggle()}
             className={`relative shrink-0 overflow-hidden rounded-full border transition-all duration-300 ${
               open
-                ? "h-11 w-11 border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.07))] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(56,189,248,0.12)]"
-                : "h-11 min-w-[116px] border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
+                ? "h-10 w-10 border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.07))] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(56,189,248,0.12)]"
+                : "h-10 min-w-[112px] border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
             } ${!hasOptions ? "cursor-not-allowed opacity-70" : ""}`}
           >
             {open ? (
@@ -331,8 +375,8 @@ function SlotAssignmentPicker({
             onClick={onToggle}
             className={`relative shrink-0 overflow-hidden rounded-full border transition-all duration-300 ${
               open
-                ? "h-11 w-11 border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.07))] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(56,189,248,0.12)]"
-                : "h-11 min-w-[100px] border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
+                ? "h-10 w-10 border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.18),rgba(56,189,248,0.07))] shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_28px_rgba(56,189,248,0.12)]"
+                : "h-10 min-w-[100px] border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] hover:border-white/14 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
             }`}
           >
             {open ? (
@@ -394,12 +438,12 @@ function SummaryCard({
   items: { label: string; value: string }[];
 }) {
   return (
-    <div className="rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_14px_34px_rgba(0,0,0,0.18)]">
+    <div className="rounded-[18px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_14px_34px_rgba(0,0,0,0.18)]">
       <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
         {items.map((item) => (
           <div
             key={item.label}
-            className="rounded-[16px] border border-white/8 bg-black/20 px-3 py-3"
+            className="rounded-[14px] border border-white/8 bg-black/20 px-3 py-3"
           >
             <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
               {item.label}
@@ -411,6 +455,47 @@ function SummaryCard({
         ))}
       </div>
     </div>
+  );
+}
+
+function FeedbackBox({
+  feedback,
+}: {
+  feedback: { type: "ok" | "error"; message: string } | null;
+}) {
+  if (!feedback) return null;
+
+  return (
+    <div
+      className={`rounded-[18px] border px-4 py-3 text-sm ${
+        feedback.type === "ok"
+          ? "border-emerald-300/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.12),rgba(16,185,129,0.04))] text-emerald-100"
+          : "border-rose-300/20 bg-[linear-gradient(180deg,rgba(244,63,94,0.12),rgba(244,63,94,0.04))] text-rose-100"
+      }`}
+    >
+      {feedback.message}
+    </div>
+  );
+}
+
+function PrimaryButton({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="h-11 rounded-[16px] border border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.20),rgba(56,189,248,0.08))] px-5 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_30px_rgba(56,189,248,0.12)] transition-all duration-200 hover:-translate-y-[1px] hover:border-sky-300/30 hover:bg-[linear-gradient(180deg,rgba(56,189,248,0.24),rgba(56,189,248,0.10))] disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {children}
+    </button>
   );
 }
 
@@ -616,6 +701,18 @@ export default function ControlPage() {
     setEditorActivaEnFiltros(Boolean(current.activa_en_filtros));
   }, [editorAccountId, editableAccounts]);
 
+  const summary = useMemo(() => {
+    return {
+      presets: presets.length,
+      propFirms: propFirms.length,
+      cuentasDisponibles: availableAccounts.length,
+      cuentasEditables: editableAccounts.length,
+      cuentasActivas: editableAccounts.filter(
+        (account) => normalizeEstado(account.estado) === "activa"
+      ).length,
+    };
+  }, [presets, propFirms, availableAccounts, editableAccounts]);
+
   function toggleControl(key: string) {
     setOpenControls((prev) => ({
       ...prev,
@@ -734,7 +831,7 @@ export default function ControlPage() {
         setAvailableAccounts((prev) => {
           const exists = prev.some((item) => item.id === createdAccount.id);
           if (exists) return prev;
-          return [...prev, createdAccount].sort((a, b) =>
+          return [...prev].concat(createdAccount).sort((a, b) =>
             String(a.alias || "").localeCompare(String(b.alias || ""))
           );
         });
@@ -979,10 +1076,13 @@ export default function ControlPage() {
 
   return (
     <div className="space-y-5 text-white">
-      <HeroCard />
+      <HeroCard summary={summary} />
 
-      <SectionCard title="Crear cuenta">
-        <div className="grid items-start grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_740px]">
+      <SectionCard
+        title="Crear cuenta"
+        subtitle="Alta rápida y preasignación opcional a un slot del próximo pack."
+      >
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
           <div className="space-y-4">
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
               <div>
@@ -1004,49 +1104,51 @@ export default function ControlPage() {
               </div>
             </div>
 
-            <InlinePicker
-              label="Preset"
-              triggerLabel="Preset"
-              options={presetItems}
-              selectedValue={presetId}
-              open={openControls.preset}
-              onToggle={() => toggleControl("preset")}
-              onSelect={setPresetId}
-            />
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+              <InlinePicker
+                label="Preset"
+                triggerLabel="Preset"
+                options={presetItems}
+                selectedValue={presetId}
+                open={openControls.preset}
+                onToggle={() => toggleControl("preset")}
+                onSelect={setPresetId}
+              />
 
-            <InlinePicker
-              label="Tamaño de cuenta"
-              triggerLabel="Tamaño"
-              options={ACCOUNT_SIZES.map((size) => ({
-                value: size,
-                label: size,
-              }))}
-              selectedValue={accountSize}
-              open={openControls.size}
-              onToggle={() => toggleControl("size")}
-              onSelect={setAccountSize}
-            />
+              <InlinePicker
+                label="Tamaño"
+                triggerLabel="Tamaño"
+                options={ACCOUNT_SIZES.map((size) => ({
+                  value: size,
+                  label: size,
+                }))}
+                selectedValue={accountSize}
+                open={openControls.size}
+                onToggle={() => toggleControl("size")}
+                onSelect={setAccountSize}
+              />
 
-            <InlinePicker
-              label="Prop firm"
-              triggerLabel="Prop firm"
-              options={propFirmItems}
-              selectedValue={propFirmId}
-              open={openControls.propfirm}
-              onToggle={() => toggleControl("propfirm")}
-              onSelect={setPropFirmId}
-            />
-          </div>
+              <InlinePicker
+                label="Prop firm"
+                triggerLabel="Prop firm"
+                options={propFirmItems}
+                selectedValue={propFirmId}
+                open={openControls.propfirm}
+                onToggle={() => toggleControl("propfirm")}
+                onSelect={setPropFirmId}
+              />
+            </div>
 
-          <div className="space-y-4">
             <div>
               <MiniLabel>Tipo de cuenta</MiniLabel>
               <TypeSwitch value={tipoCuenta} onChange={setTipoCuenta} />
             </div>
+          </div>
 
+          <div className="space-y-4">
             <SummaryCard items={accountSummaryItems} />
 
-            <div className="rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_14px_34px_rgba(0,0,0,0.18)]">
+            <div className="rounded-[18px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_14px_34px_rgba(0,0,0,0.18)]">
               <MiniLabel>Preasignar a nuevo pack</MiniLabel>
               <div className="mt-2 flex flex-wrap gap-2">
                 {SLOT_KEYS.map((slot) => (
@@ -1062,35 +1164,23 @@ export default function ControlPage() {
               </div>
             </div>
 
-            {feedback ? (
-              <div
-                className={`rounded-[20px] border px-4 py-3 text-sm ${
-                  feedback.type === "ok"
-                    ? "border-emerald-300/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.12),rgba(16,185,129,0.04))] text-emerald-100"
-                    : "border-rose-300/20 bg-[linear-gradient(180deg,rgba(244,63,94,0.12),rgba(244,63,94,0.04))] text-rose-100"
-                }`}
-              >
-                {feedback.message}
-              </div>
-            ) : null}
+            <FeedbackBox feedback={feedback} />
 
             <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={crearCuenta}
-                disabled={saving}
-                className="h-12 rounded-[18px] border border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.20),rgba(56,189,248,0.08))] px-5 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_30px_rgba(56,189,248,0.12)] transition-all duration-200 hover:-translate-y-[1px] hover:border-sky-300/30 hover:bg-[linear-gradient(180deg,rgba(56,189,248,0.24),rgba(56,189,248,0.10))] disabled:cursor-not-allowed disabled:opacity-50"
-              >
+              <PrimaryButton onClick={crearCuenta} disabled={saving}>
                 {saving ? "Creando..." : "Crear cuenta"}
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>
       </SectionCard>
 
-      <SectionCard title="Crear pack">
-        <div className="grid items-start grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_720px]">
-          <div className="space-y-5">
+      <SectionCard
+        title="Crear pack"
+        subtitle="Asignación compacta de slots, con foco en preset, tipo y cuenta activa."
+      >
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+          <div className="space-y-4">
             <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1.4fr_1fr]">
               <div>
                 <MiniLabel>Nombre del pack</MiniLabel>
@@ -1112,11 +1202,16 @@ export default function ControlPage() {
               />
             </div>
 
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <div>
+              <MiniLabel>Tipo del pack</MiniLabel>
+              <TypeSwitch value={packTipo} onChange={setPackTipo} />
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
               {SLOT_KEYS.map((slot) => (
                 <div
                   key={slot}
-                  className="rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_14px_34px_rgba(0,0,0,0.18)]"
+                  className="rounded-[18px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_14px_34px_rgba(0,0,0,0.18)]"
                 >
                   <div className="mb-3 flex items-center justify-between">
                     <p className="text-sm font-medium text-white">Slot {slot}</p>
@@ -1137,7 +1232,7 @@ export default function ControlPage() {
                     onSelect={(value) => setSlotAccount(slot, Number(value))}
                   />
 
-                  <div className="mt-3 rounded-[16px] border border-white/8 bg-black/20 px-3 py-3">
+                  <div className="mt-3 rounded-[14px] border border-white/8 bg-black/20 px-3 py-3">
                     <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
                       Cuenta
                     </p>
@@ -1154,41 +1249,23 @@ export default function ControlPage() {
           </div>
 
           <div className="space-y-4">
-            <div>
-              <MiniLabel>Tipo del pack</MiniLabel>
-              <TypeSwitch value={packTipo} onChange={setPackTipo} />
-            </div>
-
             <SummaryCard items={packSummaryItems} />
-
-            {packFeedback ? (
-              <div
-                className={`rounded-[20px] border px-4 py-3 text-sm ${
-                  packFeedback.type === "ok"
-                    ? "border-emerald-300/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.12),rgba(16,185,129,0.04))] text-emerald-100"
-                    : "border-rose-300/20 bg-[linear-gradient(180deg,rgba(244,63,94,0.12),rgba(244,63,94,0.04))] text-rose-100"
-                }`}
-              >
-                {packFeedback.message}
-              </div>
-            ) : null}
+            <FeedbackBox feedback={packFeedback} />
 
             <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={crearPack}
-                disabled={savingPack}
-                className="h-12 rounded-[18px] border border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.20),rgba(56,189,248,0.08))] px-5 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_30px_rgba(56,189,248,0.12)] transition-all duration-200 hover:-translate-y-[1px] hover:border-sky-300/30 hover:bg-[linear-gradient(180deg,rgba(56,189,248,0.24),rgba(56,189,248,0.10))] disabled:cursor-not-allowed disabled:opacity-50"
-              >
+              <PrimaryButton onClick={crearPack} disabled={savingPack}>
                 {savingPack ? "Creando..." : "Crear pack"}
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>
       </SectionCard>
 
-      <SectionCard title="Editor de cuentas">
-        <div className="grid items-start grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_720px]">
+      <SectionCard
+        title="Editor de cuentas"
+        subtitle="Edición rápida de cuenta, estado operativo y visibilidad en filtros."
+      >
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
           <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-[320px] flex-1">
@@ -1266,6 +1343,11 @@ export default function ControlPage() {
             </div>
 
             <div>
+              <MiniLabel>Tipo de cuenta</MiniLabel>
+              <TypeSwitch value={editorTipoCuenta} onChange={setEditorTipoCuenta} />
+            </div>
+
+            <div>
               <MiniLabel>Activa en filtros</MiniLabel>
               <div className="flex flex-wrap gap-2">
                 <GlowOptionButton
@@ -1284,11 +1366,6 @@ export default function ControlPage() {
 
           <div className="space-y-4">
             <div>
-              <MiniLabel>Tipo de cuenta</MiniLabel>
-              <TypeSwitch value={editorTipoCuenta} onChange={setEditorTipoCuenta} />
-            </div>
-
-            <div>
               <MiniLabel>Estado</MiniLabel>
               <EstadoSwitch value={editorEstado} onChange={setEditorEstado} />
             </div>
@@ -1296,9 +1373,20 @@ export default function ControlPage() {
             <SummaryCard items={editorSummaryItems} />
 
             {selectedEditableAccount ? (
-              <div className="rounded-[20px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_14px_34px_rgba(0,0,0,0.18)]">
+              <div className="rounded-[18px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.035),rgba(255,255,255,0.018))] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_14px_34px_rgba(0,0,0,0.18)]">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-white">
+                      {selectedEditorAccountLabel || "Cuenta seleccionada"}
+                    </p>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Fechas relevantes de la cuenta.
+                    </p>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                  <div className="rounded-[16px] border border-white/8 bg-black/20 px-3 py-3">
+                  <div className="rounded-[14px] border border-white/8 bg-black/20 px-3 py-3">
                     <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
                       Inicio
                     </p>
@@ -1307,7 +1395,7 @@ export default function ControlPage() {
                     </p>
                   </div>
 
-                  <div className="rounded-[16px] border border-white/8 bg-black/20 px-3 py-3">
+                  <div className="rounded-[14px] border border-white/8 bg-black/20 px-3 py-3">
                     <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
                       Fondeo
                     </p>
@@ -1316,7 +1404,7 @@ export default function ControlPage() {
                     </p>
                   </div>
 
-                  <div className="rounded-[16px] border border-white/8 bg-black/20 px-3 py-3">
+                  <div className="rounded-[14px] border border-white/8 bg-black/20 px-3 py-3">
                     <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
                       Pérdida
                     </p>
@@ -1328,27 +1416,15 @@ export default function ControlPage() {
               </div>
             ) : null}
 
-            {editorFeedback ? (
-              <div
-                className={`rounded-[20px] border px-4 py-3 text-sm ${
-                  editorFeedback.type === "ok"
-                    ? "border-emerald-300/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.12),rgba(16,185,129,0.04))] text-emerald-100"
-                    : "border-rose-300/20 bg-[linear-gradient(180deg,rgba(244,63,94,0.12),rgba(244,63,94,0.04))] text-rose-100"
-                }`}
-              >
-                {editorFeedback.message}
-              </div>
-            ) : null}
+            <FeedbackBox feedback={editorFeedback} />
 
             <div className="flex justify-end">
-              <button
-                type="button"
+              <PrimaryButton
                 onClick={guardarEdicionCuenta}
                 disabled={savingEditor || !editorAccountId}
-                className="h-12 rounded-[18px] border border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.20),rgba(56,189,248,0.08))] px-5 text-sm font-medium text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_30px_rgba(56,189,248,0.12)] transition-all duration-200 hover:-translate-y-[1px] hover:border-sky-300/30 hover:bg-[linear-gradient(180deg,rgba(56,189,248,0.24),rgba(56,189,248,0.10))] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {savingEditor ? "Guardando..." : "Guardar cambios"}
-              </button>
+              </PrimaryButton>
             </div>
           </div>
         </div>
