@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { AccountRow, Pack, Preset } from "./page";
+import type { AccountRow, DailyResultRow, Pack, Preset } from "./page";
 
 type LiveStatusItem = {
   profit_total_pct?: number | null;
@@ -27,6 +27,9 @@ type PresetMetric = {
   fondeadas: number;
   perdidas: number;
   fundedWinrate: number | null;
+  tradeWinrate: number | null;
+  winningTrades: number;
+  losingTrades: number;
 };
 
 type AccountItem = {
@@ -154,10 +157,12 @@ function getPctTone(value: number | null) {
 function buildPresetMetrics(
   presets: Preset[],
   packs: Pack[],
-  accounts: AccountItem[]
+  accounts: AccountItem[],
+  dailyResults: DailyResultRow[]
 ): PresetMetric[] {
   const packsByPreset = new Map<number, number>();
   const accountsByPreset = new Map<number, AccountItem[]>();
+  const accountToPreset = new Map<number, number>();
 
   for (const pack of packs) {
     if (typeof pack.preset_id !== "number") continue;
@@ -168,6 +173,30 @@ function buildPresetMetrics(
     const current = accountsByPreset.get(account.presetId) ?? [];
     current.push(account);
     accountsByPreset.set(account.presetId, current);
+    accountToPreset.set(account.id, account.presetId);
+  }
+
+  const tradeStatsByPreset = new Map<
+    number,
+    {
+      winningTrades: number;
+      losingTrades: number;
+    }
+  >();
+
+  for (const row of dailyResults) {
+    const presetId = accountToPreset.get(row.account_id);
+    if (typeof presetId !== "number") continue;
+
+    const current = tradeStatsByPreset.get(presetId) ?? {
+      winningTrades: 0,
+      losingTrades: 0,
+    };
+
+    current.winningTrades += Number(row.winning_trades || 0);
+    current.losingTrades += Number(row.losing_trades || 0);
+
+    tradeStatsByPreset.set(presetId, current);
   }
 
   return presets.map((preset) => {
@@ -189,6 +218,15 @@ function buildPresetMetrics(
     const fundedWinrate =
       fundedBase > 0 ? (fondeadas / fundedBase) * 100 : null;
 
+    const tradeStats = tradeStatsByPreset.get(preset.id) ?? {
+      winningTrades: 0,
+      losingTrades: 0,
+    };
+
+    const tradeBase = tradeStats.winningTrades + tradeStats.losingTrades;
+    const tradeWinrate =
+      tradeBase > 0 ? (tradeStats.winningTrades / tradeBase) * 100 : null;
+
     return {
       id: preset.id,
       nombre: preset.nombre,
@@ -199,6 +237,9 @@ function buildPresetMetrics(
       fondeadas,
       perdidas,
       fundedWinrate,
+      tradeWinrate,
+      winningTrades: tradeStats.winningTrades,
+      losingTrades: tradeStats.losingTrades,
     };
   });
 }
@@ -320,6 +361,42 @@ function WinratePanel({
       <p className="mt-3 text-center text-4xl font-semibold leading-none text-white">
         {formatPercent(value)}
       </p>
+    </div>
+  );
+}
+
+function TradeSplitPanel({
+  wins,
+  losses,
+}: {
+  wins: number;
+  losses: number;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] px-4 py-5 shadow-[0_14px_30px_rgba(0,0,0,0.18)]">
+      <p className="text-center text-[10px] uppercase tracking-[0.16em] text-zinc-500">
+        Trades cerrados
+      </p>
+
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div className="rounded-xl border border-emerald-400/16 bg-emerald-400/[0.06] px-3 py-3">
+          <p className="text-center text-[10px] uppercase tracking-[0.14em] text-zinc-500">
+            Wins
+          </p>
+          <p className="mt-2 text-center text-2xl font-semibold text-emerald-300">
+            {wins}
+          </p>
+        </div>
+
+        <div className="rounded-xl border border-rose-400/16 bg-rose-400/[0.06] px-3 py-3">
+          <p className="text-center text-[10px] uppercase tracking-[0.14em] text-zinc-500">
+            Losses
+          </p>
+          <p className="mt-2 text-center text-2xl font-semibold text-rose-300">
+            {losses}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -474,10 +551,10 @@ function PresetCard({
           />
         </div>
 
-        <div className="mt-3 flex justify-center">
-          <div className="w-full max-w-[420px]">
-            <WinratePanel label="Funded winrate" value={preset.fundedWinrate} />
-          </div>
+        <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
+          <WinratePanel label="Funded Rate" value={preset.fundedWinrate} />
+          <WinratePanel label="Winrate por trade" value={preset.tradeWinrate} />
+          <TradeSplitPanel wins={preset.winningTrades} losses={preset.losingTrades} />
         </div>
       </div>
     </article>
@@ -488,10 +565,12 @@ export default function PresetsClient({
   presets,
   packs,
   accounts,
+  dailyResults,
 }: {
   presets: Preset[];
   packs: Pack[];
   accounts: AccountRow[];
+  dailyResults: DailyResultRow[];
 }) {
   const [selectedPresetId, setSelectedPresetId] = useState<number | null>(null);
   const [persistedPerformance, setPersistedPerformance] =
@@ -573,8 +652,8 @@ export default function PresetsClient({
   }, [accounts, presets]);
 
   const metrics = useMemo(() => {
-    return buildPresetMetrics(presets, packs, accountItems);
-  }, [presets, packs, accountItems]);
+    return buildPresetMetrics(presets, packs, accountItems, dailyResults);
+  }, [presets, packs, accountItems, dailyResults]);
 
   const selectedPreset = useMemo(() => {
     return selectedPresetId === null
@@ -871,7 +950,7 @@ export default function PresetsClient({
                 : "translate-y-4 scale-[0.985] opacity-0"
             }`}
           >
-            <div className="mx-auto flex w-full max-w-[760px] flex-col gap-3">
+            <div className="mx-auto flex w-full max-w-[980px] flex-col gap-3">
               <PresetCard
                 preset={selectedPreset}
                 interactive

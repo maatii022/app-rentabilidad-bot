@@ -38,44 +38,57 @@ export type AccountRow = {
     | null;
 };
 
+export type DailyResultRow = {
+  id: number;
+  account_id: number;
+  winning_trades: number | null;
+  losing_trades: number | null;
+};
+
 export default async function EstadisticasPage() {
-  const [presetsResponse, packsResponse, accountsResponse] = await Promise.all([
-    supabase
-      .from("presets")
-      .select("id, nombre, activo")
-      .eq("activo", true)
-      .order("nombre", { ascending: true }),
+  const [presetsResponse, packsResponse, accountsResponse, dailyResultsResponse] =
+    await Promise.all([
+      supabase
+        .from("presets")
+        .select("id, nombre, activo")
+        .eq("activo", true)
+        .order("nombre", { ascending: true }),
 
-    supabase
-      .from("packs")
-      .select("id, preset_id, nombre")
-      .order("nombre", { ascending: true }),
+      supabase
+        .from("packs")
+        .select("id, preset_id, nombre")
+        .order("nombre", { ascending: true }),
 
-    supabase
-      .from("accounts")
-      .select(`
-        id,
-        preset_id,
-        numero_cuenta,
-        alias,
-        tipo_cuenta,
-        estado,
-        activa_en_filtros,
-        pack_slots (
-          pack_id,
-          packs (
-            id,
-            nombre
+      supabase
+        .from("accounts")
+        .select(`
+          id,
+          preset_id,
+          numero_cuenta,
+          alias,
+          tipo_cuenta,
+          estado,
+          activa_en_filtros,
+          pack_slots (
+            pack_id,
+            packs (
+              id,
+              nombre
+            )
           )
-        )
-      `)
-      .order("id", { ascending: true }),
-  ]);
+        `)
+        .order("id", { ascending: true }),
+
+      supabase
+        .from("daily_results")
+        .select("id, account_id, winning_trades, losing_trades"),
+    ]);
 
   const error =
     presetsResponse.error ||
     packsResponse.error ||
-    accountsResponse.error;
+    accountsResponse.error ||
+    dailyResultsResponse.error;
 
   if (error) {
     return (
@@ -98,12 +111,14 @@ export default async function EstadisticasPage() {
   const presets = (presetsResponse.data || []) as Preset[];
   const packs = (packsResponse.data || []) as Pack[];
   const accounts = (accountsResponse.data || []) as AccountRow[];
+  const dailyResults = (dailyResultsResponse.data || []) as DailyResultRow[];
 
   return (
     <PresetsClient
       presets={presets}
       packs={packs}
       accounts={accounts}
+      dailyResults={dailyResults}
     />
   );
 }
