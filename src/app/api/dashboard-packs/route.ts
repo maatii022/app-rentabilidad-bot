@@ -18,16 +18,17 @@ export async function GET() {
         pendiente_reemplazo,
         orden,
         accounts (
-  id,
-  alias,
-  numero_cuenta,
-  estado,
-  tipo_cuenta,
-  account_size,
-  prop_firms (
-    nombre
-  )
-)
+          id,
+          alias,
+          numero_cuenta,
+          estado,
+          tipo_cuenta,
+          account_size,
+          prop_firms (
+            nombre
+          )
+        )
+      )
     `)
     .order("id", { ascending: true });
 

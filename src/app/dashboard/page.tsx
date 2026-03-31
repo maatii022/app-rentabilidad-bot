@@ -9,16 +9,16 @@ type PackSlot = {
   pendiente_reemplazo: boolean;
   orden: number;
   accounts?: {
-  id: number;
-  alias: string;
-  numero_cuenta: string;
-  estado: string;
-  tipo_cuenta: string;
-  account_size?: string | null;
-  prop_firms?: {
-    nombre: string;
+    id: number;
+    alias: string;
+    numero_cuenta: string;
+    estado: string;
+    tipo_cuenta: string;
+    account_size?: string | null;
+    prop_firms?: {
+      nombre: string;
+    } | null;
   };
-};
 };
 
 type Pack = {
@@ -1173,15 +1173,16 @@ export default function DashboardPage() {
     const cuentasFondeadas = new Set<string>();
     let total = 0;
 
-    packsFiltrados.forEach((pack) => {
+    packs.forEach((pack) => {
       const displaySlots = buildDisplaySlots(pack);
 
       displaySlots.forEach((slot) => {
         const numeroCuenta = slot.accounts?.numero_cuenta ?? "";
-        const estado = slot.accounts?.estado ?? "";
+        const estado = String(slot.accounts?.estado || "").trim().toLowerCase();
+        const tipoCuenta = String(slot.accounts?.tipo_cuenta || "").trim().toLowerCase();
         const accountSize = slot.accounts?.account_size ?? null;
 
-        if (!numeroCuenta || estado !== "activa" || cuentasFondeadas.has(numeroCuenta)) {
+        if (!numeroCuenta || tipoCuenta !== "fondeada" || estado === "perdida" || cuentasFondeadas.has(numeroCuenta)) {
           return;
         }
 
@@ -1201,7 +1202,7 @@ export default function DashboardPage() {
     });
 
     return total;
-  }, [packsFiltrados, liveStatus]);
+  }, [packs, liveStatus]);
 
   const eventosRecientes = useMemo(() => {
     return [...events].slice(0, 4);
@@ -1666,6 +1667,7 @@ function PackCard({
             slot.accounts?.account_size,
             live?.account_size_inferred
           );
+          const propFirmName = slot.accounts?.prop_firms?.nombre ?? "";
 
           const displayHoyPct = numeroCuenta
             ? resolveDisplayDayPct(numeroCuenta, persistedPerformance, liveStatus)
@@ -1678,6 +1680,10 @@ function PackCard({
           const sizeBadgeClass = slot.es_activa
             ? "border-sky-300/20 bg-sky-300/[0.12] text-sky-100"
             : "border-white/10 bg-white/[0.05] text-zinc-300";
+
+          const propFirmBadgeClass = slot.es_activa
+            ? "border-violet-300/20 bg-violet-400/[0.12] text-violet-100"
+            : "border-violet-300/12 bg-violet-400/[0.06] text-violet-200/80";
 
           return (
             <div
@@ -1700,17 +1706,23 @@ function PackCard({
                     <p className="truncate text-sm font-medium text-white">
                       {slot.accounts?.alias ?? "Vacío"}
                     </p>
+
                     {!missingAccount ? (
-                      <span
-                        className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] shadow-[0_8px_18px_rgba(255,255,255,0.03)] ${sizeBadgeClass}`}
-                      >
-                        {accountSizeLabel}
-                        {slot.accounts?.prop_firms?.nombre && (
-  <span className="rounded-full border border-violet-300/20 bg-violet-400/[0.12] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-violet-100 shadow-[0_8px_18px_rgba(167,139,250,0.15)]">
-    {slot.accounts.prop_firms.nombre}
-  </span>
-)}
-                      </span>
+                      <>
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] shadow-[0_8px_18px_rgba(255,255,255,0.03)] ${sizeBadgeClass}`}
+                        >
+                          {accountSizeLabel}
+                        </span>
+
+                        {propFirmName ? (
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] shadow-[0_8px_18px_rgba(167,139,250,0.14)] ${propFirmBadgeClass}`}
+                          >
+                            {propFirmName}
+                          </span>
+                        ) : null}
+                      </>
                     ) : null}
                   </div>
                 </div>
