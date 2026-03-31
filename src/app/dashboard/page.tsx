@@ -9,13 +9,16 @@ type PackSlot = {
   pendiente_reemplazo: boolean;
   orden: number;
   accounts?: {
-    id: number;
-    alias: string;
-    numero_cuenta: string;
-    estado: string;
-    tipo_cuenta: string;
-    account_size?: string | null;
+  id: number;
+  alias: string;
+  numero_cuenta: string;
+  estado: string;
+  tipo_cuenta: string;
+  account_size?: string | null;
+  prop_firms?: {
+    nombre: string;
   };
+};
 };
 
 type Pack = {
@@ -1178,7 +1181,7 @@ export default function DashboardPage() {
         const estado = slot.accounts?.estado ?? "";
         const accountSize = slot.accounts?.account_size ?? null;
 
-        if (!numeroCuenta || estado !== "fondeada" || cuentasFondeadas.has(numeroCuenta)) {
+        if (!numeroCuenta || estado !== "activa" || cuentasFondeadas.has(numeroCuenta)) {
           return;
         }
 
@@ -1702,6 +1705,11 @@ function PackCard({
                         className={`rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] shadow-[0_8px_18px_rgba(255,255,255,0.03)] ${sizeBadgeClass}`}
                       >
                         {accountSizeLabel}
+                        {slot.accounts?.prop_firms?.nombre && (
+  <span className="rounded-full border border-violet-300/20 bg-violet-400/[0.12] px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-violet-100 shadow-[0_8px_18px_rgba(167,139,250,0.15)]">
+    {slot.accounts.prop_firms.nombre}
+  </span>
+)}
                       </span>
                     ) : null}
                   </div>
