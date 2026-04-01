@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -73,7 +72,6 @@ type CalendarDayData = {
     pnlPct: number;
     redDay: boolean;
     numeroTrades: number;
-    presetNombre?: string;
   }[];
   eventDetails: {
     id: number;
@@ -138,7 +136,8 @@ type KpiItem = {
   icon?: "target" | "bars" | "trend" | "ratio";
 };
 
-const DAY_LABELS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom", "Semana"];
+const DAY_LABELS_MOBILE = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+const DAY_LABELS_DESKTOP = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom", "Semana"];
 const SLOT_ORDER = ["A", "B", "C"];
 
 function getSinglePack(
@@ -670,49 +669,37 @@ function DayDetailPanel({
                 Sin resultados.
               </div>
             ) : (
-              selectedDay.resultDetails.map((result) => {
-                const href = `/trade-log?from=${selectedDay.fecha}&to=${selectedDay.fecha}&accountId=${result.accountId}`;
-
-                return (
-                  <Link
-                    key={result.id}
-                    href={href}
-                    className={`block rounded-2xl border p-3 transition-all duration-200 hover:-translate-y-[1px] hover:brightness-105 ${getToneByValue(
-                      result.pnlUsd
-                    )}`}
-                  >
-                    <p className="text-sm font-medium text-white">
-                      {result.alias} · {result.numeroCuenta}
-                    </p>
-
-                    <div className="mt-2 flex items-center justify-between gap-3 text-sm">
-                      <span
-                        className={
-                          result.pnlUsd > 0
-                            ? "text-emerald-300"
-                            : result.pnlUsd < 0
-                            ? "text-rose-300"
-                            : "text-zinc-300"
-                        }
-                      >
-                        {formatUsd(result.pnlUsd)}
-                      </span>
-
-                      <span
-                        className={
-                          result.pnlPct > 0
-                            ? "text-emerald-300"
-                            : result.pnlPct < 0
-                            ? "text-rose-300"
-                            : "text-zinc-300"
-                        }
-                      >
-                        {formatPct(result.pnlPct)}
-                      </span>
-                    </div>
-                  </Link>
-                );
-              })
+              selectedDay.resultDetails.map((result) => (
+                <div key={result.id} className={`rounded-2xl border p-3 ${getToneByValue(result.pnlUsd)}`}>
+                  <p className="text-sm font-medium text-white">
+                    {result.alias} · {result.numeroCuenta}
+                  </p>
+                  <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+                    <span
+                      className={
+                        result.pnlUsd > 0
+                          ? "text-emerald-300"
+                          : result.pnlUsd < 0
+                          ? "text-rose-300"
+                          : "text-zinc-300"
+                      }
+                    >
+                      {formatUsd(result.pnlUsd)}
+                    </span>
+                    <span
+                      className={
+                        result.pnlPct > 0
+                          ? "text-emerald-300"
+                          : result.pnlPct < 0
+                          ? "text-rose-300"
+                          : "text-zinc-300"
+                      }
+                    >
+                      {formatPct(result.pnlPct)}
+                    </span>
+                  </div>
+                </div>
+              ))
             )}
           </div>
 
@@ -786,14 +773,18 @@ function CalendarDayCell({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-[18px] border p-2.5 text-left transition-all duration-200 ${getDayTone(
+      className={`rounded-[18px] border p-2 text-left transition-all duration-200 md:p-2.5 ${getDayTone(
         dayData,
         viewMode
       )} ${!isCurrentMonth ? "opacity-35" : "opacity-100"} ${
         isSelected
           ? "shadow-[0_0_0_1px_rgba(255,255,255,0.18),0_16px_28px_rgba(255,255,255,0.04)]"
           : "hover:shadow-[0_10px_22px_rgba(255,255,255,0.03)]"
-      } ${compact ? "min-h-[76px]" : "min-h-[118px]"}`}
+      } ${
+        compact
+          ? "min-h-[72px] md:min-h-[76px]"
+          : "min-h-[102px] md:min-h-[118px]"
+      }`}
     >
       <div className="flex h-full flex-col">
         <div className="flex items-start justify-between gap-2">
@@ -806,22 +797,22 @@ function CalendarDayCell({
           {hasVisibleContent ? (
             viewMode === "pnl" ? (
               <div className="w-full text-center">
-                <p className={`text-[1rem] font-semibold leading-none ${usdClass}`}>
+                <p className={`text-[0.95rem] font-semibold leading-none md:text-[1rem] ${usdClass}`}>
                   {dayData ? formatCompactUsd(dayData.totalUsd) : "-"}
                 </p>
-                <p className={`mt-1 text-[11px] font-medium ${pctClass}`}>
+                <p className={`mt-1 text-[10px] font-medium md:text-[11px] ${pctClass}`}>
                   {dayData ? formatPct(dayData.totalPct) : "-"}
                 </p>
-                <p className="mt-1 text-[10px] text-zinc-500">
+                <p className="mt-1 text-[9px] text-zinc-500 md:text-[10px]">
                   {dayData?.totalTrades ?? 0} trade{dayData?.totalTrades === 1 ? "" : "s"}
                 </p>
               </div>
             ) : (
-              <div className="flex w-full flex-col items-center gap-1.5">
+              <div className="flex w-full flex-col items-center gap-1">
                 {dayData?.events.slice(0, compact ? 1 : 2).map((event) => (
                   <span
                     key={event.id}
-                    className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-[10px] ${getEventPillClasses(
+                    className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-[9px] md:text-[10px] ${getEventPillClasses(
                       event.kind
                     )}`}
                   >
@@ -857,6 +848,34 @@ function WeekSummaryCell({
         <p className="mt-1 text-[10px] text-zinc-500">
           {trades} trade{trades === 1 ? "" : "s"}
         </p>
+      </div>
+    </div>
+  );
+}
+
+function MobileWeekSummaryRow({
+  usd,
+  pct,
+  trades,
+}: {
+  usd: number;
+  pct: number;
+  trades: number;
+}) {
+  const usdClass = usd > 0 ? "text-emerald-300" : usd < 0 ? "text-rose-300" : "text-zinc-300";
+  const pctClass = pct > 0 ? "text-emerald-300" : pct < 0 ? "text-rose-300" : "text-zinc-400";
+
+  return (
+    <div className={`mt-2 rounded-[16px] border px-3 py-2 ${getToneByValue(usd)} md:hidden`}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">Semana</p>
+        <div className="flex items-center gap-3">
+          <p className={`text-sm font-semibold ${usdClass}`}>{formatCompactUsd(usd)}</p>
+          <p className={`text-xs font-medium ${pctClass}`}>{formatPct(pct)}</p>
+          <p className="text-[11px] text-zinc-500">
+            {trades} trade{trades === 1 ? "" : "s"}
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -1527,7 +1546,7 @@ export default function CalendarioPage() {
         </div>
       </section>
 
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         {kpis.map((item) => (
           <KpiCard key={item.label} item={item} />
         ))}
@@ -1543,8 +1562,8 @@ export default function CalendarioPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <section className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.026),rgba(255,255,255,0.012))] p-4 shadow-[0_18px_36px_rgba(0,0,0,0.18)]">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <section className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.026),rgba(255,255,255,0.012))] p-3 shadow-[0_18px_36px_rgba(0,0,0,0.18)] md:p-4">
+            <div className="mb-3 flex flex-col gap-3 md:flex-row md:flex-wrap md:items-center md:justify-between">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
@@ -1554,7 +1573,7 @@ export default function CalendarioPage() {
                   ‹
                 </button>
 
-                <p className="min-w-[148px] text-center text-xl font-semibold text-white">
+                <p className="min-w-[148px] text-center text-2xl font-semibold text-white md:text-xl">
                   {getMonthLabel(currentMonth)}
                 </p>
 
@@ -1583,11 +1602,22 @@ export default function CalendarioPage() {
               </div>
             </div>
 
+            <div className="mb-2 grid grid-cols-7 gap-2 md:hidden">
+              {DAY_LABELS_MOBILE.map((label) => (
+                <div
+                  key={label}
+                  className="px-1 py-1 text-center text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500"
+                >
+                  {label}
+                </div>
+              ))}
+            </div>
+
             <div
-              className="mb-2 grid gap-2"
+              className="mb-2 hidden gap-2 md:grid"
               style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr 0.72fr 0.72fr 0.9fr" }}
             >
-              {DAY_LABELS.map((label) => (
+              {DAY_LABELS_DESKTOP.map((label) => (
                 <div
                   key={label}
                   className="px-2 py-1 text-center text-[11px] font-medium uppercase tracking-[0.12em] text-zinc-500"
@@ -1610,39 +1640,71 @@ export default function CalendarioPage() {
                 const weekTrades = weekDays.reduce((acc, day) => acc + day.totalTrades, 0);
 
                 return (
-                  <div
-                    key={`week_${weekIndex}`}
-                    className="grid gap-2"
-                    style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr 0.72fr 0.72fr 0.9fr" }}
-                  >
-                    {week.map((date) => {
-                      const dateKey = toDateKey(date);
+                  <div key={`week_${weekIndex}`}>
+                    <div className="grid grid-cols-7 gap-2 md:hidden">
+                      {week.map((date) => {
+                        const dateKey = toDateKey(date);
 
-                      return (
-                        <CalendarDayCell
-                          key={dateKey}
-                          date={date}
-                          currentMonth={currentMonth}
-                          dayData={dailyMap.get(dateKey)}
-                          viewMode={viewMode}
-                          compact={compactWeek}
-                          isSelected={selectedDayKey === dateKey && isDetailOpen}
-                          onClick={() => {
-                            if (date.getMonth() !== currentMonth.getMonth()) return;
+                        return (
+                          <CalendarDayCell
+                            key={dateKey}
+                            date={date}
+                            currentMonth={currentMonth}
+                            dayData={dailyMap.get(dateKey)}
+                            viewMode={viewMode}
+                            compact={compactWeek}
+                            isSelected={selectedDayKey === dateKey && isDetailOpen}
+                            onClick={() => {
+                              if (date.getMonth() !== currentMonth.getMonth()) return;
 
-                            if (selectedDayKey === dateKey && isDetailOpen) {
-                              setIsDetailOpen(false);
-                              return;
-                            }
+                              if (selectedDayKey === dateKey && isDetailOpen) {
+                                setIsDetailOpen(false);
+                                return;
+                              }
 
-                            setSelectedDayKey(dateKey);
-                            setIsDetailOpen(true);
-                          }}
-                        />
-                      );
-                    })}
+                              setSelectedDayKey(dateKey);
+                              setIsDetailOpen(true);
+                            }}
+                          />
+                        );
+                      })}
+                    </div>
 
-                    <WeekSummaryCell usd={weekUsd} pct={weekPct} trades={weekTrades} />
+                    <MobileWeekSummaryRow usd={weekUsd} pct={weekPct} trades={weekTrades} />
+
+                    <div
+                      className="hidden gap-2 md:grid"
+                      style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr 0.72fr 0.72fr 0.9fr" }}
+                    >
+                      {week.map((date) => {
+                        const dateKey = toDateKey(date);
+
+                        return (
+                          <CalendarDayCell
+                            key={dateKey}
+                            date={date}
+                            currentMonth={currentMonth}
+                            dayData={dailyMap.get(dateKey)}
+                            viewMode={viewMode}
+                            compact={compactWeek}
+                            isSelected={selectedDayKey === dateKey && isDetailOpen}
+                            onClick={() => {
+                              if (date.getMonth() !== currentMonth.getMonth()) return;
+
+                              if (selectedDayKey === dateKey && isDetailOpen) {
+                                setIsDetailOpen(false);
+                                return;
+                              }
+
+                              setSelectedDayKey(dateKey);
+                              setIsDetailOpen(true);
+                            }}
+                          />
+                        );
+                      })}
+
+                      <WeekSummaryCell usd={weekUsd} pct={weekPct} trades={weekTrades} />
+                    </div>
                   </div>
                 );
               })}
