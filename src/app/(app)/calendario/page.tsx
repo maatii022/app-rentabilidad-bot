@@ -602,10 +602,12 @@ function DayDetailPanel({
   selectedDayKey,
   selectedDay,
   onClose,
+  onResultClick,
 }: {
   selectedDayKey: string | null;
   selectedDay: CalendarDayData | undefined;
   onClose: () => void;
+  onResultClick: (date: string, accountId: number) => void;
 }) {
   return (
     <section className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.024),rgba(255,255,255,0.012))] p-4 shadow-[0_18px_36px_rgba(0,0,0,0.18)]">
@@ -674,7 +676,7 @@ function DayDetailPanel({
   <button
     key={result.id}
     type="button"
-    onClick={() => selectedDayKey && goToTradeLog(selectedDayKey, result.accountId)}
+    onClick={() => selectedDayKey && onResultClick(selectedDayKey, result.accountId)}
     className={`w-full rounded-2xl border p-3 text-left transition hover:scale-[0.995] ${getToneByValue(result.pnlUsd)}`}
   >
     <p className="text-sm font-medium text-white">
@@ -1410,20 +1412,13 @@ export default function CalendarioPage() {
 
   const selectedDay = selectedDayKey ? dailyMap.get(selectedDayKey) : undefined;
 
-  function goToTradeLog(date: string, pnlUsd: number) {
-  const params = new URLSearchParams();
-
-  params.set("from", date);
-  params.set("to", date);
-
-  if (pnlUsd > 0) {
-    params.set("closeReason", "tp");
-  } else if (pnlUsd < 0) {
-    params.set("closeReason", "sl");
+    function goToTradeLog(date: string, accountId: number) {
+    const params = new URLSearchParams();
+    params.set("from", date);
+    params.set("to", date);
+    params.set("accountId", String(accountId));
+    router.push(`/trade-log?${params.toString()}`);
   }
-
-  router.push(`/trade-log?${params.toString()}`);
-}
 
   function previousMonth() {
     setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -1742,10 +1737,11 @@ export default function CalendarioPage() {
 
             {isDetailOpen ? (
               <DayDetailPanel
-                selectedDayKey={selectedDayKey}
-                selectedDay={selectedDay}
-                onClose={() => setIsDetailOpen(false)}
-              />
+  selectedDayKey={selectedDayKey}
+  selectedDay={selectedDay}
+  onClose={() => setIsDetailOpen(false)}
+  onResultClick={goToTradeLog}
+/>
             ) : null}
           </div>
         </div>
