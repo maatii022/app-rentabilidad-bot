@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 type TradeItem = {
@@ -58,6 +58,11 @@ type TradeLogResponse = {
     accounts: { id: number; label: string }[];
     symbols: string[];
   };
+};
+
+type SelectOption = {
+  value: string;
+  label: string;
 };
 
 function formatDateTime(value: string) {
@@ -153,7 +158,11 @@ function StatCard({
 }
 
 function FilterLabel({ children }: { children: React.ReactNode }) {
-  return <label className="mb-1.5 block text-[10px] uppercase tracking-[0.14em] text-zinc-500">{children}</label>;
+  return (
+    <label className="mb-1.5 block text-[10px] uppercase tracking-[0.14em] text-zinc-500">
+      {children}
+    </label>
+  );
 }
 
 function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
@@ -161,15 +170,6 @@ function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
     <input
       {...props}
       className={`h-11 w-full rounded-xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] px-3 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-emerald-300/20 focus:bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] ${props.className || ""}`}
-    />
-  );
-}
-
-function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
-    <select
-      {...props}
-      className={`h-11 w-full rounded-xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] px-3 text-sm text-white outline-none transition focus:border-emerald-300/20 focus:bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] ${props.className || ""}`}
     />
   );
 }
@@ -182,6 +182,133 @@ function FilterShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className={`h-4 w-4 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+function CustomSelect({
+  label,
+  value,
+  options,
+  placeholder,
+  open,
+  onOpen,
+  onClose,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: SelectOption[];
+  placeholder: string;
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  onChange: (value: string) => void;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (!ref.current) return;
+      if (!ref.current.contains(event.target as Node)) {
+        onClose();
+      }
+    }
+
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [open, onClose]);
+
+  const selectedLabel =
+    options.find((option) => option.value === value)?.label || placeholder;
+
+  return (
+    <div ref={ref}>
+      <FilterLabel>{label}</FilterLabel>
+
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => (open ? onClose() : onOpen())}
+          className={`flex h-11 w-full items-center justify-between rounded-xl border px-3 text-sm transition-all duration-200 ${
+            open
+              ? "border-emerald-300/20 bg-[linear-gradient(180deg,rgba(16,185,129,0.10),rgba(16,185,129,0.04))] text-white shadow-[0_12px_24px_rgba(16,185,129,0.08)]"
+              : "border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] text-white hover:border-white/15 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))]"
+          }`}
+        >
+          <span className={value ? "text-white" : "text-zinc-400"}>{selectedLabel}</span>
+          <span className={open ? "text-emerald-300" : "text-zinc-500"}>
+            <ChevronIcon open={open} />
+          </span>
+        </button>
+
+        {open ? (
+          <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(10,14,22,0.98),rgba(8,11,18,0.98))] p-2 shadow-[0_24px_60px_rgba(0,0,0,0.38)] backdrop-blur-xl">
+            <div className="max-h-64 overflow-y-auto pr-1">
+              <button
+                type="button"
+                onClick={() => {
+                  onChange("");
+                  onClose();
+                }}
+                className={`flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition ${
+                  value === ""
+                    ? "bg-emerald-400/[0.12] text-emerald-200"
+                    : "text-zinc-300 hover:bg-white/[0.05] hover:text-white"
+                }`}
+              >
+                <span>{placeholder}</span>
+                {value === "" ? <span className="text-emerald-300">●</span> : null}
+              </button>
+
+              {options.map((option) => {
+                const active = option.value === value;
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      onChange(option.value);
+                      onClose();
+                    }}
+                    className={`mt-1 flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm transition ${
+                      active
+                        ? "bg-emerald-400/[0.12] text-emerald-200"
+                        : "text-zinc-300 hover:bg-white/[0.05] hover:text-white"
+                    }`}
+                  >
+                    <span className="truncate">{option.label}</span>
+                    {active ? <span className="ml-3 shrink-0 text-emerald-300">●</span> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export default function TradeLogClient() {
   const router = useRouter();
   const pathname = usePathname();
@@ -189,6 +316,7 @@ export default function TradeLogClient() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [openSelect, setOpenSelect] = useState<string | null>(null);
 
   const [trades, setTrades] = useState<TradeItem[]>([]);
   const [stats, setStats] = useState<NonNullable<TradeLogResponse["stats"]>>({
@@ -313,6 +441,46 @@ export default function TradeLogClient() {
   const profitFactorText =
     stats.profitFactor == null ? "-" : stats.profitFactor.toFixed(2);
 
+  const presetOptions: SelectOption[] = useMemo(
+    () =>
+      options.presets.map((preset) => ({
+        value: String(preset.id),
+        label: preset.nombre,
+      })),
+    [options.presets]
+  );
+
+  const accountOptions: SelectOption[] = useMemo(
+    () =>
+      options.accounts.map((account) => ({
+        value: String(account.id),
+        label: account.label,
+      })),
+    [options.accounts]
+  );
+
+  const symbolOptions: SelectOption[] = useMemo(
+    () =>
+      options.symbols.map((item) => ({
+        value: item,
+        label: item,
+      })),
+    [options.symbols]
+  );
+
+  const closeReasonOptions: SelectOption[] = [
+    { value: "tp", label: "TP" },
+    { value: "sl", label: "SL" },
+    { value: "fin_dia", label: "Fin de día" },
+    { value: "manual", label: "Manual" },
+    { value: "unknown", label: "Unknown" },
+  ];
+
+  const tipoCuentaOptions: SelectOption[] = [
+    { value: "prueba", label: "Prueba" },
+    { value: "fondeada", label: "Fondeada" },
+  ];
+
   function resetFilters() {
     setFrom("");
     setTo("");
@@ -322,6 +490,7 @@ export default function TradeLogClient() {
     setCloseReason("");
     setTipoCuenta("");
     setPage(1);
+    setOpenSelect(null);
   }
 
   return (
@@ -379,81 +548,73 @@ export default function TradeLogClient() {
 
           <div className="xl:col-span-2">
             <FilterShell>
-              <FilterLabel>Preset</FilterLabel>
-              <Select
+              <CustomSelect
+                label="Preset"
                 value={presetId}
-                onChange={(e) => {
-                  setPresetId(e.target.value);
+                options={presetOptions}
+                placeholder="Todos"
+                open={openSelect === "preset"}
+                onOpen={() => setOpenSelect("preset")}
+                onClose={() => setOpenSelect(null)}
+                onChange={(value) => {
+                  setPresetId(value);
                   setPage(1);
                 }}
-              >
-                <option value="">Todos</option>
-                {options.presets.map((preset) => (
-                  <option key={preset.id} value={preset.id}>
-                    {preset.nombre}
-                  </option>
-                ))}
-              </Select>
+              />
             </FilterShell>
           </div>
 
           <div className="xl:col-span-2">
             <FilterShell>
-              <FilterLabel>Cuenta</FilterLabel>
-              <Select
+              <CustomSelect
+                label="Cuenta"
                 value={accountId}
-                onChange={(e) => {
-                  setAccountId(e.target.value);
+                options={accountOptions}
+                placeholder="Todas"
+                open={openSelect === "account"}
+                onOpen={() => setOpenSelect("account")}
+                onClose={() => setOpenSelect(null)}
+                onChange={(value) => {
+                  setAccountId(value);
                   setPage(1);
                 }}
-              >
-                <option value="">Todas</option>
-                {options.accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.label}
-                  </option>
-                ))}
-              </Select>
+              />
             </FilterShell>
           </div>
 
           <div className="xl:col-span-2">
             <FilterShell>
-              <FilterLabel>Par</FilterLabel>
-              <Select
+              <CustomSelect
+                label="Par"
                 value={symbol}
-                onChange={(e) => {
-                  setSymbol(e.target.value);
+                options={symbolOptions}
+                placeholder="Todos"
+                open={openSelect === "symbol"}
+                onOpen={() => setOpenSelect("symbol")}
+                onClose={() => setOpenSelect(null)}
+                onChange={(value) => {
+                  setSymbol(value);
                   setPage(1);
                 }}
-              >
-                <option value="">Todos</option>
-                {options.symbols.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </Select>
+              />
             </FilterShell>
           </div>
 
           <div className="xl:col-span-2">
             <FilterShell>
-              <FilterLabel>Cierre</FilterLabel>
-              <Select
+              <CustomSelect
+                label="Cierre"
                 value={closeReason}
-                onChange={(e) => {
-                  setCloseReason(e.target.value);
+                options={closeReasonOptions}
+                placeholder="Todos"
+                open={openSelect === "closeReason"}
+                onOpen={() => setOpenSelect("closeReason")}
+                onClose={() => setOpenSelect(null)}
+                onChange={(value) => {
+                  setCloseReason(value);
                   setPage(1);
                 }}
-              >
-                <option value="">Todos</option>
-                <option value="tp">TP</option>
-                <option value="sl">SL</option>
-                <option value="fin_dia">Fin de día</option>
-                <option value="manual">Manual</option>
-                <option value="unknown">Unknown</option>
-              </Select>
+              />
             </FilterShell>
           </div>
         </div>
@@ -461,18 +622,19 @@ export default function TradeLogClient() {
         <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-12">
           <div className="xl:col-span-3">
             <FilterShell>
-              <FilterLabel>Tipo cuenta</FilterLabel>
-              <Select
+              <CustomSelect
+                label="Tipo cuenta"
                 value={tipoCuenta}
-                onChange={(e) => {
-                  setTipoCuenta(e.target.value);
+                options={tipoCuentaOptions}
+                placeholder="Todos"
+                open={openSelect === "tipoCuenta"}
+                onOpen={() => setOpenSelect("tipoCuenta")}
+                onClose={() => setOpenSelect(null)}
+                onChange={(value) => {
+                  setTipoCuenta(value);
                   setPage(1);
                 }}
-              >
-                <option value="">Todos</option>
-                <option value="prueba">Prueba</option>
-                <option value="fondeada">Fondeada</option>
-              </Select>
+              />
             </FilterShell>
           </div>
         </div>

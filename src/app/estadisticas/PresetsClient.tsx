@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { AccountRow, DailyResultRow, Pack, Preset } from "./page";
+import type { AccountRow, Pack, Preset, TradeLogMetricRow } from "./page";
 
 type LiveStatusItem = {
   profit_total_pct?: number | null;
@@ -156,7 +156,7 @@ function buildPresetMetrics(
   presets: Preset[],
   packs: Pack[],
   accounts: AccountItem[],
-  dailyResults: DailyResultRow[]
+  tradeLogRows: TradeLogMetricRow[]
 ): PresetMetric[] {
   const packsByPreset = new Map<number, number>();
   const accountsByPreset = new Map<number, AccountItem[]>();
@@ -182,17 +182,26 @@ function buildPresetMetrics(
     }
   >();
 
-  for (const row of dailyResults) {
-    const presetId = accountToPreset.get(row.account_id);
+  for (const row of tradeLogRows) {
+    const presetId =
+      typeof row.preset_id === "number"
+        ? row.preset_id
+        : accountToPreset.get(row.account_id);
+
     if (typeof presetId !== "number") continue;
+
+    const pnl = Number(row.pnl_usd || 0);
 
     const current = tradeStatsByPreset.get(presetId) ?? {
       wins: 0,
       losses: 0,
     };
 
-    current.wins += Number(row.winning_trades || 0);
-    current.losses += Number(row.losing_trades || 0);
+    if (pnl > 0) {
+      current.wins += 1;
+    } else if (pnl < 0) {
+      current.losses += 1;
+    }
 
     tradeStatsByPreset.set(presetId, current);
   }
@@ -531,12 +540,12 @@ export default function PresetsClient({
   presets,
   packs,
   accounts,
-  dailyResults,
+  tradeLogRows,
 }: {
   presets: Preset[];
   packs: Pack[];
   accounts: AccountRow[];
-  dailyResults: DailyResultRow[];
+  tradeLogRows: TradeLogMetricRow[];
 }) {
   const [selectedPresetId, setSelectedPresetId] = useState<number | null>(null);
   const [persistedPerformance, setPersistedPerformance] =
@@ -618,8 +627,8 @@ export default function PresetsClient({
   }, [accounts, presets]);
 
   const metrics = useMemo(() => {
-    return buildPresetMetrics(presets, packs, accountItems, dailyResults);
-  }, [presets, packs, accountItems, dailyResults]);
+    return buildPresetMetrics(presets, packs, accountItems, tradeLogRows);
+  }, [presets, packs, accountItems, tradeLogRows]);
 
   const selectedPreset = useMemo(() => {
     return selectedPresetId === null

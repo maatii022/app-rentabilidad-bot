@@ -38,15 +38,14 @@ export type AccountRow = {
     | null;
 };
 
-export type DailyResultRow = {
-  id: number;
+export type TradeLogMetricRow = {
   account_id: number;
-  winning_trades: number | null;
-  losing_trades: number | null;
+  preset_id: number | null;
+  pnl_usd: number | null;
 };
 
 export default async function EstadisticasPage() {
-  const [presetsResponse, packsResponse, accountsResponse, dailyResultsResponse] =
+  const [presetsResponse, packsResponse, accountsResponse, tradeLogResponse] =
     await Promise.all([
       supabase
         .from("presets")
@@ -80,15 +79,15 @@ export default async function EstadisticasPage() {
         .order("id", { ascending: true }),
 
       supabase
-        .from("daily_results")
-        .select("id, account_id, winning_trades, losing_trades"),
+        .from("trade_log_view")
+        .select("account_id, preset_id, pnl_usd"),
     ]);
 
   const error =
     presetsResponse.error ||
     packsResponse.error ||
     accountsResponse.error ||
-    dailyResultsResponse.error;
+    tradeLogResponse.error;
 
   if (error) {
     return (
@@ -111,14 +110,14 @@ export default async function EstadisticasPage() {
   const presets = (presetsResponse.data || []) as Preset[];
   const packs = (packsResponse.data || []) as Pack[];
   const accounts = (accountsResponse.data || []) as AccountRow[];
-  const dailyResults = (dailyResultsResponse.data || []) as DailyResultRow[];
+  const tradeLogRows = (tradeLogResponse.data || []) as TradeLogMetricRow[];
 
   return (
     <PresetsClient
       presets={presets}
       packs={packs}
       accounts={accounts}
-      dailyResults={dailyResults}
+      tradeLogRows={tradeLogRows}
     />
   );
 }
