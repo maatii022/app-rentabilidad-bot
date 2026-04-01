@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -72,6 +73,7 @@ type CalendarDayData = {
     pnlPct: number;
     redDay: boolean;
     numeroTrades: number;
+    presetNombre?: string;
   }[];
   eventDetails: {
     id: number;
@@ -668,37 +670,49 @@ function DayDetailPanel({
                 Sin resultados.
               </div>
             ) : (
-              selectedDay.resultDetails.map((result) => (
-                <div key={result.id} className={`rounded-2xl border p-3 ${getToneByValue(result.pnlUsd)}`}>
-                  <p className="text-sm font-medium text-white">
-                    {result.alias} · {result.numeroCuenta}
-                  </p>
-                  <div className="mt-2 flex items-center justify-between gap-3 text-sm">
-                    <span
-                      className={
-                        result.pnlUsd > 0
-                          ? "text-emerald-300"
-                          : result.pnlUsd < 0
-                          ? "text-rose-300"
-                          : "text-zinc-300"
-                      }
-                    >
-                      {formatUsd(result.pnlUsd)}
-                    </span>
-                    <span
-                      className={
-                        result.pnlPct > 0
-                          ? "text-emerald-300"
-                          : result.pnlPct < 0
-                          ? "text-rose-300"
-                          : "text-zinc-300"
-                      }
-                    >
-                      {formatPct(result.pnlPct)}
-                    </span>
-                  </div>
-                </div>
-              ))
+              selectedDay.resultDetails.map((result) => {
+                const href = `/trade-log?from=${selectedDay.fecha}&to=${selectedDay.fecha}&accountId=${result.accountId}`;
+
+                return (
+                  <Link
+                    key={result.id}
+                    href={href}
+                    className={`block rounded-2xl border p-3 transition-all duration-200 hover:-translate-y-[1px] hover:brightness-105 ${getToneByValue(
+                      result.pnlUsd
+                    )}`}
+                  >
+                    <p className="text-sm font-medium text-white">
+                      {result.alias} · {result.numeroCuenta}
+                    </p>
+
+                    <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+                      <span
+                        className={
+                          result.pnlUsd > 0
+                            ? "text-emerald-300"
+                            : result.pnlUsd < 0
+                            ? "text-rose-300"
+                            : "text-zinc-300"
+                        }
+                      >
+                        {formatUsd(result.pnlUsd)}
+                      </span>
+
+                      <span
+                        className={
+                          result.pnlPct > 0
+                            ? "text-emerald-300"
+                            : result.pnlPct < 0
+                            ? "text-rose-300"
+                            : "text-zinc-300"
+                        }
+                      >
+                        {formatPct(result.pnlPct)}
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })
             )}
           </div>
 
