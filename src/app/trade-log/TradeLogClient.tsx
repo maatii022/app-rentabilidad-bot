@@ -73,11 +73,6 @@ function formatDateTime(value: string) {
   });
 }
 
-function formatPrice(value?: number | null) {
-  if (typeof value !== "number" || Number.isNaN(value)) return "-";
-  return value.toFixed(5);
-}
-
 function formatUsd(value?: number | null) {
   if (typeof value !== "number" || Number.isNaN(value)) return "-";
   const sign = value < 0 ? "-" : "";
@@ -158,14 +153,14 @@ function StatCard({
 }
 
 function FilterLabel({ children }: { children: React.ReactNode }) {
-  return <label className="mb-1 block text-[11px] text-zinc-400">{children}</label>;
+  return <label className="mb-1.5 block text-[10px] uppercase tracking-[0.14em] text-zinc-500">{children}</label>;
 }
 
 function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-white/20 focus:bg-black/30 ${props.className || ""}`}
+      className={`h-11 w-full rounded-xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] px-3 text-sm text-white outline-none transition placeholder:text-zinc-500 focus:border-emerald-300/20 focus:bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] ${props.className || ""}`}
     />
   );
 }
@@ -174,8 +169,16 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
-      className={`h-11 w-full rounded-xl border border-white/10 bg-black/20 px-3 text-sm text-white outline-none transition focus:border-white/20 focus:bg-black/30 ${props.className || ""}`}
+      className={`h-11 w-full rounded-xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] px-3 text-sm text-white outline-none transition focus:border-emerald-300/20 focus:bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] ${props.className || ""}`}
     />
+  );
+}
+
+function FilterShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))] p-3 shadow-[0_14px_30px_rgba(0,0,0,0.16)]">
+      {children}
+    </div>
   );
 }
 
@@ -345,74 +348,132 @@ export default function TradeLogClient() {
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-6">
-          <div>
-            <FilterLabel>Desde</FilterLabel>
-            <Input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setPage(1); }} />
+        <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-12">
+          <div className="xl:col-span-2">
+            <FilterShell>
+              <FilterLabel>Desde</FilterLabel>
+              <Input
+                type="date"
+                value={from}
+                onChange={(e) => {
+                  setFrom(e.target.value);
+                  setPage(1);
+                }}
+              />
+            </FilterShell>
           </div>
 
-          <div>
-            <FilterLabel>Hasta</FilterLabel>
-            <Input type="date" value={to} onChange={(e) => { setTo(e.target.value); setPage(1); }} />
+          <div className="xl:col-span-2">
+            <FilterShell>
+              <FilterLabel>Hasta</FilterLabel>
+              <Input
+                type="date"
+                value={to}
+                onChange={(e) => {
+                  setTo(e.target.value);
+                  setPage(1);
+                }}
+              />
+            </FilterShell>
           </div>
 
-          <div>
-            <FilterLabel>Preset</FilterLabel>
-            <Select value={presetId} onChange={(e) => { setPresetId(e.target.value); setPage(1); }}>
-              <option value="">Todos</option>
-              {options.presets.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.nombre}
-                </option>
-              ))}
-            </Select>
+          <div className="xl:col-span-2">
+            <FilterShell>
+              <FilterLabel>Preset</FilterLabel>
+              <Select
+                value={presetId}
+                onChange={(e) => {
+                  setPresetId(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">Todos</option>
+                {options.presets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.nombre}
+                  </option>
+                ))}
+              </Select>
+            </FilterShell>
           </div>
 
-          <div>
-            <FilterLabel>Cuenta</FilterLabel>
-            <Select value={accountId} onChange={(e) => { setAccountId(e.target.value); setPage(1); }}>
-              <option value="">Todas</option>
-              {options.accounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {account.label}
-                </option>
-              ))}
-            </Select>
+          <div className="xl:col-span-2">
+            <FilterShell>
+              <FilterLabel>Cuenta</FilterLabel>
+              <Select
+                value={accountId}
+                onChange={(e) => {
+                  setAccountId(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">Todas</option>
+                {options.accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.label}
+                  </option>
+                ))}
+              </Select>
+            </FilterShell>
           </div>
 
-          <div>
-            <FilterLabel>Par</FilterLabel>
-            <Select value={symbol} onChange={(e) => { setSymbol(e.target.value); setPage(1); }}>
-              <option value="">Todos</option>
-              {options.symbols.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </Select>
+          <div className="xl:col-span-2">
+            <FilterShell>
+              <FilterLabel>Par</FilterLabel>
+              <Select
+                value={symbol}
+                onChange={(e) => {
+                  setSymbol(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">Todos</option>
+                {options.symbols.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </Select>
+            </FilterShell>
           </div>
 
-          <div>
-            <FilterLabel>Cierre</FilterLabel>
-            <Select value={closeReason} onChange={(e) => { setCloseReason(e.target.value); setPage(1); }}>
-              <option value="">Todos</option>
-              <option value="tp">TP</option>
-              <option value="sl">SL</option>
-              <option value="fin_dia">Fin de día</option>
-              <option value="manual">Manual</option>
-              <option value="unknown">Unknown</option>
-            </Select>
+          <div className="xl:col-span-2">
+            <FilterShell>
+              <FilterLabel>Cierre</FilterLabel>
+              <Select
+                value={closeReason}
+                onChange={(e) => {
+                  setCloseReason(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">Todos</option>
+                <option value="tp">TP</option>
+                <option value="sl">SL</option>
+                <option value="fin_dia">Fin de día</option>
+                <option value="manual">Manual</option>
+                <option value="unknown">Unknown</option>
+              </Select>
+            </FilterShell>
           </div>
         </div>
 
-        <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-4">
-          <div>
-            <FilterLabel>Tipo cuenta</FilterLabel>
-            <Select value={tipoCuenta} onChange={(e) => { setTipoCuenta(e.target.value); setPage(1); }}>
-              <option value="">Todos</option>
-              <option value="prueba">Prueba</option>
-              <option value="fondeada">Fondeada</option>
-            </Select>
+        <div className="mt-3 grid grid-cols-1 gap-3 xl:grid-cols-12">
+          <div className="xl:col-span-3">
+            <FilterShell>
+              <FilterLabel>Tipo cuenta</FilterLabel>
+              <Select
+                value={tipoCuenta}
+                onChange={(e) => {
+                  setTipoCuenta(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">Todos</option>
+                <option value="prueba">Prueba</option>
+                <option value="fondeada">Fondeada</option>
+              </Select>
+            </FilterShell>
           </div>
         </div>
       </section>
@@ -447,7 +508,7 @@ export default function TradeLogClient() {
               No hay trades para los filtros actuales.
             </div>
           ) : (
-            <table className="min-w-[1320px] w-full">
+            <table className="min-w-[1120px] w-full">
               <thead>
                 <tr className="border-b border-white/8 bg-white/[0.02]">
                   <th className="px-4 py-3 text-left text-[10px] uppercase tracking-[0.14em] text-zinc-500">Fecha</th>
@@ -455,10 +516,6 @@ export default function TradeLogClient() {
                   <th className="px-4 py-3 text-left text-[10px] uppercase tracking-[0.14em] text-zinc-500">Cuenta</th>
                   <th className="px-4 py-3 text-left text-[10px] uppercase tracking-[0.14em] text-zinc-500">Par</th>
                   <th className="px-4 py-3 text-left text-[10px] uppercase tracking-[0.14em] text-zinc-500">Dir</th>
-                  <th className="px-4 py-3 text-left text-[10px] uppercase tracking-[0.14em] text-zinc-500">Entrada</th>
-                  <th className="px-4 py-3 text-left text-[10px] uppercase tracking-[0.14em] text-zinc-500">Salida</th>
-                  <th className="px-4 py-3 text-left text-[10px] uppercase tracking-[0.14em] text-zinc-500">SL</th>
-                  <th className="px-4 py-3 text-left text-[10px] uppercase tracking-[0.14em] text-zinc-500">TP</th>
                   <th className="px-4 py-3 text-left text-[10px] uppercase tracking-[0.14em] text-zinc-500">Cierre</th>
                   <th className="px-4 py-3 text-left text-[10px] uppercase tracking-[0.14em] text-zinc-500">PnL $</th>
                   <th className="px-4 py-3 text-left text-[10px] uppercase tracking-[0.14em] text-zinc-500">PnL %</th>
@@ -501,22 +558,6 @@ export default function TradeLogClient() {
                       <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] ${getSideClass(trade.side)}`}>
                         {trade.side === "buy" ? "Buy" : "Sell"}
                       </span>
-                    </td>
-
-                    <td className="px-4 py-3 align-top text-sm text-zinc-200">
-                      {formatPrice(trade.entry_price)}
-                    </td>
-
-                    <td className="px-4 py-3 align-top text-sm text-zinc-200">
-                      {formatPrice(trade.exit_price)}
-                    </td>
-
-                    <td className="px-4 py-3 align-top text-sm">
-                      <span className="text-rose-300">{formatPrice(trade.sl_price)}</span>
-                    </td>
-
-                    <td className="px-4 py-3 align-top text-sm">
-                      <span className="text-emerald-300">{formatPrice(trade.tp_price)}</span>
                     </td>
 
                     <td className="px-4 py-3 align-top text-sm">
