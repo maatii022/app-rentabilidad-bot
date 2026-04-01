@@ -71,13 +71,10 @@ function TradeLogIcon() {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <rect x="4" y="4" width="16" height="16" rx="3" />
-      <path d="M8 8.5h8" />
+      <rect x="4" y="3.5" width="16" height="17" rx="3" />
+      <path d="M8 8h8" />
       <path d="M8 12h8" />
-      <path d="M8 15.5h5" />
-      <circle cx="6.8" cy="8.5" r="0.6" fill="currentColor" stroke="none" />
-      <circle cx="6.8" cy="12" r="0.6" fill="currentColor" stroke="none" />
-      <circle cx="6.8" cy="15.5" r="0.6" fill="currentColor" stroke="none" />
+      <path d="M8 16h5" />
     </svg>
   );
 }
@@ -112,7 +109,7 @@ function SettingsIcon() {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d="M12 3.2l1 1.9a7.9 7.9 0 0 1 1.8.7l2-.7 1.7 1.7-.7 2a7.9 7.9 0 0 1 .7 1.8l1.9 1-0 2.4-1.9 1a7.9 7.9 0 0 1-.7 1.8l.7 2-1.7 1.7-2-.7a7.9 7.9 0 0 1-1.8.7l-1 1.9h-2.4l-1-1.9a7.9 7.9 0 0 1-1.8-.7l-2 .7-1.7-1.7.7-2a7.9 7.9 0 0 1-.7-1.8l-1.9-1v-2.4l1.9-1a7.9 7.9 0 0 1 .7-1.8l-.7-2 1.7-1.7 2 .7a7.9 7.9 0 0 1 1.8-.7l1-1.9z" />
+      <path d="M12 3.2l1 1.9a7.9 7.9 0 0 1 1.8.7l2-.7 1.7 1.7-.7 2a7.9 7.9 0 0 1 .7 1.8l1.9 1v2.4l-1.9 1a7.9 7.9 0 0 1-.7 1.8l.7 2-1.7 1.7-2-.7a7.9 7.9 0 0 1-1.8.7l-1 1.9h-2.4l-1-1.9a7.9 7.9 0 0 1-1.8-.7l-2 .7-1.7-1.7.7-2a7.9 7.9 0 0 1-.7-1.8l-1.9-1v-2.4l1.9-1a7.9 7.9 0 0 1 .7-1.8l-.7-2 1.7-1.7 2 .7a7.9 7.9 0 0 1 1.8-.7l1-1.9z" />
       <circle cx="12" cy="12" r="3.2" />
     </svg>
   );
@@ -122,47 +119,78 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="sticky top-0 h-screen w-[92px] shrink-0 border-r border-white/8 bg-[linear-gradient(180deg,#020814_0%,#040b16_35%,#050d18_68%,#030914_100%)]">
-      <div className="relative flex h-full flex-col items-center px-3 py-5">
-        <div className="pointer-events-none absolute inset-y-0 right-0 w-px bg-[linear-gradient(180deg,transparent,rgba(255,255,255,0.06),transparent)]" />
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.035),transparent_22%),radial-gradient(circle_at_bottom,rgba(16,185,129,0.025),transparent_20%)]" />
+    <>
+      <aside className="sticky top-0 hidden h-screen w-[92px] shrink-0 border-r border-white/8 bg-[linear-gradient(180deg,#020814_0%,#040b16_35%,#050d18_68%,#030914_100%)] md:block">
+        <div className="relative flex h-full flex-col items-center px-3 py-5">
+          <div className="pointer-events-none absolute inset-y-0 right-0 w-px bg-[linear-gradient(180deg,transparent,rgba(255,255,255,0.06),transparent)]" />
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(56,189,248,0.035),transparent_22%),radial-gradient(circle_at_bottom,rgba(16,185,129,0.025),transparent_20%)]" />
 
-        <div className="relative z-10 w-full overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.022),rgba(255,255,255,0.008))] shadow-[0_22px_50px_rgba(0,0,0,0.24)] backdrop-blur-sm">
-          <nav className="p-2.5">
-            <div className="space-y-1.5">
-              {links.map((link) => {
-                const active = isActivePath(pathname, link.href);
-                const Icon = link.icon;
+          <div className="relative z-10 w-full overflow-hidden rounded-[30px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.022),rgba(255,255,255,0.008))] shadow-[0_22px_50px_rgba(0,0,0,0.24)] backdrop-blur-sm">
+            <nav className="p-2.5">
+              <div className="space-y-1.5">
+                {links.map((link) => {
+                  const active = isActivePath(pathname, link.href);
+                  const Icon = link.icon;
 
-                return (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    aria-label={link.label}
-                    title={link.label}
-                    className={`group relative flex items-center justify-center rounded-2xl border px-2 py-3.5 transition-all duration-200 ${
-                      active
-                        ? "border-emerald-400/14 bg-[linear-gradient(180deg,rgba(16,185,129,0.18),rgba(16,185,129,0.08))] text-emerald-300 shadow-[0_10px_24px_rgba(16,185,129,0.08)]"
-                        : "border-transparent text-zinc-400 hover:border-white/6 hover:bg-white/[0.04] hover:text-white"
-                    }`}
-                  >
-                    {active ? (
-                      <>
-                        <span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-emerald-300 shadow-[0_0_14px_rgba(52,211,153,0.7)]" />
-                        <span className="absolute inset-x-3 bottom-0 h-px bg-[linear-gradient(90deg,transparent,rgba(52,211,153,0.35),transparent)]" />
-                      </>
-                    ) : null}
+                  return (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      aria-label={link.label}
+                      title={link.label}
+                      className={`group relative flex items-center justify-center rounded-2xl px-2 py-3.5 transition-all duration-200 ${
+                        active
+                          ? "border border-emerald-400/14 bg-[linear-gradient(180deg,rgba(16,185,129,0.18),rgba(16,185,129,0.08))] text-emerald-300 shadow-[0_10px_24px_rgba(16,185,129,0.08)]"
+                          : "border border-transparent text-zinc-400 hover:border-white/6 hover:bg-white/[0.04] hover:text-white"
+                      }`}
+                    >
+                      {active ? (
+                        <>
+                          <span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-emerald-300 shadow-[0_0_14px_rgba(52,211,153,0.7)]" />
+                          <span className="absolute inset-x-3 bottom-0 h-px bg-[linear-gradient(90deg,transparent,rgba(52,211,153,0.35),transparent)]" />
+                        </>
+                      ) : null}
 
-                    <span className="flex items-center justify-center">
-                      <Icon />
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
-          </nav>
+                      <span className="flex items-center justify-center">
+                        <Icon />
+                      </span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </nav>
+          </div>
         </div>
+      </aside>
+
+      <div className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[linear-gradient(180deg,rgba(3,9,20,0.94),rgba(2,8,20,0.98))] px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-2 backdrop-blur-xl md:hidden">
+        <nav className="mx-auto flex max-w-md items-center justify-between gap-2 rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.012))] p-2 shadow-[0_18px_40px_rgba(0,0,0,0.30)]">
+          {links.map((link) => {
+            const active = isActivePath(pathname, link.href);
+            const Icon = link.icon;
+
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                aria-label={link.label}
+                title={link.label}
+                className={`relative flex min-w-0 flex-1 items-center justify-center rounded-2xl px-2 py-3 transition-all duration-200 ${
+                  active
+                    ? "bg-[linear-gradient(180deg,rgba(16,185,129,0.18),rgba(16,185,129,0.08))] text-emerald-300 shadow-[0_10px_24px_rgba(16,185,129,0.10)]"
+                    : "text-zinc-400 hover:bg-white/[0.04] hover:text-white"
+                }`}
+              >
+                {active ? (
+                  <span className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-emerald-300 shadow-[0_0_14px_rgba(52,211,153,0.7)]" />
+                ) : null}
+
+                <Icon />
+              </Link>
+            );
+          })}
+        </nav>
       </div>
-    </aside>
+    </>
   );
 }
