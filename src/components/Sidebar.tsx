@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const links = [
   { href: "/dashboard", label: "Dashboard", icon: DashboardIcon },
   { href: "/calendario", label: "Calendario", icon: CalendarIcon },
+  { href: "/trade-log", label: "Trade Log", icon: TradeLogIcon },
   { href: "/estadisticas", label: "Estadísticas", icon: AnalyticsIcon },
   { href: "/control", label: "Control", icon: SettingsIcon },
 ];
@@ -54,6 +55,29 @@ function CalendarIcon() {
       <path d="M7 3.8v2.8" />
       <path d="M17 3.8v2.8" />
       <path d="M3.5 9.5h17" />
+    </svg>
+  );
+}
+
+function TradeLogIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      className="h-[18px] w-[18px]"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="4" y="4" width="16" height="16" rx="3" />
+      <path d="M8 8.5h8" />
+      <path d="M8 12h8" />
+      <path d="M8 15.5h5" />
+      <circle cx="6.8" cy="8.5" r="0.6" fill="currentColor" stroke="none" />
+      <circle cx="6.8" cy="12" r="0.6" fill="currentColor" stroke="none" />
+      <circle cx="6.8" cy="15.5" r="0.6" fill="currentColor" stroke="none" />
     </svg>
   );
 }

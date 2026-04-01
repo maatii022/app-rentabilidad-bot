@@ -29,6 +29,12 @@ type AccountEventRow = {
   descripcion: string | null;
 };
 
+type TradeLogRow = {
+  id: number;
+  account_id: number;
+  business_date: string;
+};
+
 type DayBucket = {
   fecha: string;
   pnl_usd: number;
@@ -97,6 +103,30 @@ function getDateRange(year: number | null, month: number | null) {
   const to = end.toISOString().slice(0, 10);
 
   return { from, to };
+}
+
+function ensureDayBucket(byDate: Record<string, DayBucket>, fecha: string) {
+  if (!byDate[fecha]) {
+    byDate[fecha] = {
+      fecha,
+      pnl_usd: 0,
+      pnl_pct: 0,
+      trades: 0,
+      red_day: false,
+      results: [],
+      events: {
+        perdida: 0,
+        fondeada: 0,
+        reemplazo: 0,
+        sord_in: 0,
+        sord_out: 0,
+        otros: 0,
+        items: [],
+      },
+    };
+  }
+
+  return byDate[fecha];
 }
 
 export async function GET(request: NextRequest) {
@@ -199,15 +229,25 @@ export async function GET(request: NextRequest) {
       .in("account_id", accountIds)
       .order("fecha", { ascending: true });
 
+    let tradeLogQuery = supabaseAdmin
+      .from("trade_log")
+      .select("id, account_id, business_date")
+      .in("account_id", accountIds)
+      .order("business_date", { ascending: true });
+
     if (range) {
       dailyResultsQuery = dailyResultsQuery.gte("fecha", range.from).lte("fecha", range.to);
       accountEventsQuery = accountEventsQuery.gte("fecha", range.from).lte("fecha", range.to);
+      tradeLogQuery = tradeLogQuery
+        .gte("business_date", range.from)
+        .lte("business_date", range.to);
     }
 
     const [
       { data: dailyResultsData, error: dailyResultsError },
       { data: accountEventsData, error: accountEventsError },
-    ] = await Promise.all([dailyResultsQuery, accountEventsQuery]);
+      { data: tradeLogData, error: tradeLogError },
+    ] = await Promise.all([dailyResultsQuery, accountEventsQuery, tradeLogQuery]);
 
     if (dailyResultsError) {
       return NextResponse.json(
@@ -223,44 +263,43 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    if (tradeLogError) {
+      return NextResponse.json(
+        { ok: false, error: tradeLogError.message },
+        { status: 500 }
+      );
+    }
+
     const dailyResults = (dailyResultsData ?? []) as DailyResultRow[];
     const accountEvents = (accountEventsData ?? []) as AccountEventRow[];
+    const tradeLogs = (tradeLogData ?? []) as TradeLogRow[];
 
     const byDate: Record<string, DayBucket> = {};
+    const tradesByAccountAndDate = new Map<string, number>();
+
+    for (const trade of tradeLogs) {
+      const fecha = trade.business_date;
+      const bucket = ensureDayBucket(byDate, fecha);
+      bucket.trades += 1;
+
+      const key = `${fecha}__${trade.account_id}`;
+      tradesByAccountAndDate.set(key, (tradesByAccountAndDate.get(key) ?? 0) + 1);
+    }
 
     for (const row of dailyResults) {
       const fecha = row.fecha;
       const account = accountMap.get(row.account_id);
+      const bucket = ensureDayBucket(byDate, fecha);
+      const tradesKey = `${fecha}__${row.account_id}`;
 
-      if (!byDate[fecha]) {
-        byDate[fecha] = {
-          fecha,
-          pnl_usd: 0,
-          pnl_pct: 0,
-          trades: 0,
-          red_day: false,
-          results: [],
-          events: {
-            perdida: 0,
-            fondeada: 0,
-            reemplazo: 0,
-            sord_in: 0,
-            sord_out: 0,
-            otros: 0,
-            items: [],
-          },
-        };
-      }
-
-      byDate[fecha].pnl_usd += toNumber(row.pnl_usd);
-      byDate[fecha].pnl_pct += toNumber(row.pnl_porcentaje);
-      byDate[fecha].trades += toNumber(row.numero_trades);
+      bucket.pnl_usd += toNumber(row.pnl_usd);
+      bucket.pnl_pct += toNumber(row.pnl_porcentaje);
 
       if (row.red_day === true) {
-        byDate[fecha].red_day = true;
+        bucket.red_day = true;
       }
 
-      byDate[fecha].results.push({
+      bucket.results.push({
         id: row.id,
         account_id: row.account_id,
         alias: account?.alias ?? "-",
@@ -268,7 +307,7 @@ export async function GET(request: NextRequest) {
         pnl_usd: toNumber(row.pnl_usd),
         pnl_pct: toNumber(row.pnl_porcentaje),
         red_day: row.red_day === true,
-        numero_trades: toNumber(row.numero_trades),
+        numero_trades: tradesByAccountAndDate.get(tradesKey) ?? 0,
       });
     }
 
@@ -276,29 +315,10 @@ export async function GET(request: NextRequest) {
       const fecha = event.fecha;
       const tipoNormalizado = normalizeEventType(event.tipo_evento);
       const account = accountMap.get(event.account_id);
+      const bucket = ensureDayBucket(byDate, fecha);
 
-      if (!byDate[fecha]) {
-        byDate[fecha] = {
-          fecha,
-          pnl_usd: 0,
-          pnl_pct: 0,
-          trades: 0,
-          red_day: false,
-          results: [],
-          events: {
-            perdida: 0,
-            fondeada: 0,
-            reemplazo: 0,
-            sord_in: 0,
-            sord_out: 0,
-            otros: 0,
-            items: [],
-          },
-        };
-      }
-
-      byDate[fecha].events[tipoNormalizado] += 1;
-      byDate[fecha].events.items.push({
+      bucket.events[tipoNormalizado] += 1;
+      bucket.events.items.push({
         id: event.id,
         tipo: event.tipo_evento ?? "otros",
         descripcion: event.descripcion ?? null,
