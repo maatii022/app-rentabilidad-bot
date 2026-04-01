@@ -426,10 +426,14 @@ export default function TradeLogPage() {
           tone={pnlTone}
         />
         <StatCard
-          label="Profit factor"
-          value={stats?.profitFactor === null ? "-" : stats.profitFactor.toFixed(2)}
-          tone="neutral"
-        />
+  label="Profit factor"
+  value={
+    stats?.profitFactor == null
+      ? "-"
+      : stats.profitFactor.toFixed(2)
+  }
+  tone="neutral"
+/>
       </div>
 
       <section className="overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.018),rgba(255,255,255,0.01))] shadow-[0_18px_38px_rgba(0,0,0,0.20)]">
