@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
 
 type PresetOption = {
   id: number;
@@ -670,36 +671,41 @@ function DayDetailPanel({
               </div>
             ) : (
               selectedDay.resultDetails.map((result) => (
-                <div key={result.id} className={`rounded-2xl border p-3 ${getToneByValue(result.pnlUsd)}`}>
-                  <p className="text-sm font-medium text-white">
-                    {result.alias} · {result.numeroCuenta}
-                  </p>
-                  <div className="mt-2 flex items-center justify-between gap-3 text-sm">
-                    <span
-                      className={
-                        result.pnlUsd > 0
-                          ? "text-emerald-300"
-                          : result.pnlUsd < 0
-                          ? "text-rose-300"
-                          : "text-zinc-300"
-                      }
-                    >
-                      {formatUsd(result.pnlUsd)}
-                    </span>
-                    <span
-                      className={
-                        result.pnlPct > 0
-                          ? "text-emerald-300"
-                          : result.pnlPct < 0
-                          ? "text-rose-300"
-                          : "text-zinc-300"
-                      }
-                    >
-                      {formatPct(result.pnlPct)}
-                    </span>
-                  </div>
-                </div>
-              ))
+  <button
+    key={result.id}
+    type="button"
+    onClick={() => selectedDayKey && goToTradeLog(selectedDayKey, result.accountId)}
+    className={`w-full rounded-2xl border p-3 text-left transition hover:scale-[0.995] ${getToneByValue(result.pnlUsd)}`}
+  >
+    <p className="text-sm font-medium text-white">
+      {result.alias} · {result.numeroCuenta}
+    </p>
+    <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+      <span
+        className={
+          result.pnlUsd > 0
+            ? "text-emerald-300"
+            : result.pnlUsd < 0
+            ? "text-rose-300"
+            : "text-zinc-300"
+        }
+      >
+        {formatUsd(result.pnlUsd)}
+      </span>
+      <span
+        className={
+          result.pnlPct > 0
+            ? "text-emerald-300"
+            : result.pnlPct < 0
+            ? "text-rose-300"
+            : "text-zinc-300"
+        }
+      >
+        {formatPct(result.pnlPct)}
+      </span>
+    </div>
+  </button>
+))
             )}
           </div>
 
@@ -898,6 +904,7 @@ function getDayTone(day: CalendarDayData | undefined, viewMode: TradingMode) {
 }
 
 export default function CalendarioPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [calendarDays, setCalendarDays] = useState<CalendarApiDay[]>([]);
@@ -919,6 +926,7 @@ export default function CalendarioPage() {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
+
 
   async function cargarDatos() {
     setLoading(true);
@@ -1401,6 +1409,21 @@ export default function CalendarioPage() {
   }, [monthAnalytics, monthSummary]);
 
   const selectedDay = selectedDayKey ? dailyMap.get(selectedDayKey) : undefined;
+
+  function goToTradeLog(date: string, pnlUsd: number) {
+  const params = new URLSearchParams();
+
+  params.set("from", date);
+  params.set("to", date);
+
+  if (pnlUsd > 0) {
+    params.set("closeReason", "tp");
+  } else if (pnlUsd < 0) {
+    params.set("closeReason", "sl");
+  }
+
+  router.push(`/trade-log?${params.toString()}`);
+}
 
   function previousMonth() {
     setCurrentMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
