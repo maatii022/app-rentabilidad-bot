@@ -114,22 +114,37 @@ export async function GET(request: NextRequest) {
     const yearRaw = searchParams.get("year");
     const monthRaw = searchParams.get("month");
 
-    const year = yearRaw ? Number(yearRaw) : null;
-    const month = monthRaw ? Number(monthRaw) : null;
+    const parsedYear = yearRaw ? Number(yearRaw) : null;
+    const parsedMonth = monthRaw ? Number(monthRaw) : null;
 
-    if (yearRaw && (!Number.isFinite(year) || year < 2000 || year > 2100)) {
+    if (
+      yearRaw &&
+      (parsedYear === null ||
+        !Number.isFinite(parsedYear) ||
+        parsedYear < 2000 ||
+        parsedYear > 2100)
+    ) {
       return NextResponse.json(
         { ok: false, error: "Parámetro year inválido" },
         { status: 400 }
       );
     }
 
-    if (monthRaw && (!Number.isFinite(month) || month < 1 || month > 12)) {
+    if (
+      monthRaw &&
+      (parsedMonth === null ||
+        !Number.isFinite(parsedMonth) ||
+        parsedMonth < 1 ||
+        parsedMonth > 12)
+    ) {
       return NextResponse.json(
         { ok: false, error: "Parámetro month inválido" },
         { status: 400 }
       );
     }
+
+    const year = parsedYear;
+    const month = parsedMonth;
 
     let presetId: number | null = null;
 
