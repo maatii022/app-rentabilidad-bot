@@ -50,6 +50,16 @@ type PendingSlotOption = {
   label: string;
 };
 
+type AvailableReplaceAccount = {
+  id: number;
+  alias: string;
+  numero_cuenta: string;
+  tipo_cuenta?: string | null;
+  account_size?: string | null;
+  prop_firm_nombre?: string | null;
+  label: string;
+};
+
 type DashboardSummary = {
   fondeadasHistoricas: number;
   perdidasHistoricas: number;
@@ -348,7 +358,9 @@ function buildPendingSlotValue(target: ReplaceTarget) {
 }
 
 function parsePendingSlotValue(value: string): ReplaceTarget | null {
-  if (!value) return null;
+  if (!value) {
+    return null;
+  }
 
   const [packIdRaw, slotRaw, slotIdRaw] = value.split("__");
   const packId = Number(packIdRaw);
@@ -616,6 +628,8 @@ export default function DashboardPage() {
   const [selectedPendingSlotValue, setSelectedPendingSlotValue] = useState("");
   const [numeroCuenta, setNumeroCuenta] = useState("");
   const [alias, setAlias] = useState("");
+  const [availableReplaceAccounts, setAvailableReplaceAccounts] = useState<AvailableReplaceAccount[]>([]);
+  const [selectedAvailableReplaceAccountId, setSelectedAvailableReplaceAccountId] = useState("");
 
   const [presetFilter, setPresetFilter] = useState("todos");
   const [tipoFilter, setTipoFilter] = useState("todos");
@@ -811,6 +825,39 @@ export default function DashboardPage() {
     }
   }
 
+  async function cargarCuentasDisponiblesReemplazo(silent = false) {
+    try {
+      const res = await fetch("/api/cuentas/disponibles-reemplazo", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const json = await res.json();
+
+      if (!res.ok || !json?.ok) {
+        if (!silent) {
+          showAlert(
+            "No se pudieron cargar las cuentas disponibles",
+            json?.error || "Error desconocido",
+            "danger"
+          );
+        }
+        return;
+      }
+
+      setAvailableReplaceAccounts(json.accounts || []);
+    } catch (error) {
+      console.error("Error cargando cuentas disponibles para reemplazo:", error);
+      if (!silent) {
+        showAlert(
+          "No se pudieron cargar las cuentas disponibles",
+          "Se produjo un error al cargar las cuentas libres.",
+          "danger"
+        );
+      }
+    }
+  }
+
   async function recargarEstadoSilencioso() {
     await Promise.all([cargarPerformancePersistida(true), cargarLiveStatus(true)]);
   }
@@ -884,9 +931,12 @@ export default function DashboardPage() {
       }
 
       setResultadosRevision(data.resultados || []);
-      await cargarDatos();
-      await cargarResumenHistorico();
-      await recargarEstadoSilencioso();
+      await Promise.all([
+        cargarDatos(),
+        cargarResumenHistorico(),
+        recargarEstadoSilencioso(),
+        cargarCuentasDisponiblesReemplazo(true),
+      ]);
 
       showAlert(
         "Revisión diaria ejecutada",
@@ -921,9 +971,12 @@ export default function DashboardPage() {
         return;
       }
 
-      await cargarDatos();
-      await cargarResumenHistorico();
-      await recargarEstadoSilencioso();
+      await Promise.all([
+        cargarDatos(),
+        cargarResumenHistorico(),
+        recargarEstadoSilencioso(),
+        cargarCuentasDisponiblesReemplazo(true),
+      ]);
 
       showAlert(
         "Rotación completada",
@@ -968,9 +1021,13 @@ export default function DashboardPage() {
         return;
       }
 
-      await cargarDatos();
-      await cargarResumenHistorico();
-      await recargarEstadoSilencioso();
+      await Promise.all([
+        cargarDatos(),
+        cargarResumenHistorico(),
+        recargarEstadoSilencioso(),
+        cargarCuentasDisponiblesReemplazo(true),
+      ]);
+
       showAlert(
         "Cuenta actualizada",
         "La cuenta se ha marcado como perdida correctamente.",
@@ -1014,9 +1071,13 @@ export default function DashboardPage() {
         return;
       }
 
-      await cargarDatos();
-      await cargarResumenHistorico();
-      await recargarEstadoSilencioso();
+      await Promise.all([
+        cargarDatos(),
+        cargarResumenHistorico(),
+        recargarEstadoSilencioso(),
+        cargarCuentasDisponiblesReemplazo(true),
+      ]);
+
       showAlert(
         "Cuenta actualizada",
         "La cuenta se ha marcado como fondeada correctamente.",
@@ -1070,10 +1131,15 @@ export default function DashboardPage() {
       setSelectedPendingSlotValue("");
       setNumeroCuenta("");
       setAlias("");
+      setSelectedAvailableReplaceAccountId("");
 
-      await cargarDatos();
-      await cargarResumenHistorico();
-      await recargarEstadoSilencioso();
+      await Promise.all([
+        cargarDatos(),
+        cargarResumenHistorico(),
+        recargarEstadoSilencioso(),
+        cargarCuentasDisponiblesReemplazo(true),
+      ]);
+
       showAlert(
         "Reemplazo completado",
         "La cuenta se ha reemplazado correctamente.",
@@ -1219,6 +1285,25 @@ export default function DashboardPage() {
     }, 50);
   }
 
+  function seleccionarCuentaDisponible(accountIdValue: string) {
+    setSelectedAvailableReplaceAccountId(accountIdValue);
+
+    if (!accountIdValue) {
+      return;
+    }
+
+    const selected = availableReplaceAccounts.find(
+      (account) => String(account.id) === accountIdValue
+    );
+
+    if (!selected) {
+      return;
+    }
+
+    setNumeroCuenta(selected.numero_cuenta);
+    setAlias(selected.alias);
+  }
+
   function getLivePnlClass(value?: number | null) {
     if (typeof value !== "number") return "text-zinc-500";
     if (value > 0) return "text-emerald-300";
@@ -1233,6 +1318,7 @@ export default function DashboardPage() {
         cargarResumenHistorico(),
         cargarPerformancePersistida(true),
         cargarLiveStatus(true),
+        cargarCuentasDisponiblesReemplazo(true),
       ]);
     }
 
@@ -1448,12 +1534,35 @@ export default function DashboardPage() {
                         </Select>
                       </div>
 
+                      <div>
+                        <FieldLabel>Cuenta existente libre</FieldLabel>
+                        <Select
+                          value={selectedAvailableReplaceAccountId}
+                          onChange={(e) => seleccionarCuentaDisponible(e.target.value)}
+                        >
+                          <option value="">Selecciona una cuenta ya creada</option>
+                          {availableReplaceAccounts.map((account) => (
+                            <option key={account.id} value={String(account.id)}>
+                              {account.label}
+                            </option>
+                          ))}
+                        </Select>
+                        <p className="mt-1 text-[11px] text-zinc-500">
+                          Aquí salen cuentas activas y sin pack. Si no eliges una, puedes crear o escribir una manualmente abajo.
+                        </p>
+                      </div>
+
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-1">
                         <div>
                           <FieldLabel>Número de cuenta</FieldLabel>
                           <Input
                             value={numeroCuenta}
-                            onChange={(e) => setNumeroCuenta(e.target.value)}
+                            onChange={(e) => {
+                              setNumeroCuenta(e.target.value);
+                              if (selectedAvailableReplaceAccountId) {
+                                setSelectedAvailableReplaceAccountId("");
+                              }
+                            }}
                             placeholder="Ej. 128999"
                           />
                         </div>
@@ -1462,7 +1571,12 @@ export default function DashboardPage() {
                           <FieldLabel>Alias</FieldLabel>
                           <Input
                             value={alias}
-                            onChange={(e) => setAlias(e.target.value)}
+                            onChange={(e) => {
+                              setAlias(e.target.value);
+                              if (selectedAvailableReplaceAccountId) {
+                                setSelectedAvailableReplaceAccountId("");
+                              }
+                            }}
                             placeholder="Ej. Fernet B2"
                           />
                         </div>
