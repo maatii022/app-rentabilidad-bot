@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 type ResultadoError = {
   error: unknown;
@@ -29,6 +29,25 @@ type ReemplazoInput = {
   alias: string;
 };
 
+type DailyResultRow = {
+  id: number;
+  account_id: number;
+  fecha: string;
+  pnl_usd: number | null;
+  pnl_porcentaje: number | null;
+  numero_trades: number | null;
+  winning_trades: number | null;
+  losing_trades: number | null;
+  red_day: boolean | null;
+};
+
+type TradeLogRow = {
+  id: number;
+  account_id: number;
+  business_date: string;
+  pnl_usd: number | null;
+};
+
 function normalizarSlot(slot: string | undefined) {
   return String(slot || "").trim().toUpperCase();
 }
@@ -38,6 +57,19 @@ function getOrdenDesdeSlot(slot: string) {
   if (slot === "B") return 2;
   if (slot === "C") return 3;
   return 999;
+}
+
+function toNumber(value: unknown) {
+  if (typeof value === "number" && !Number.isNaN(value)) return value;
+  return 0;
+}
+
+function getFechaHoyLocal() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = `${now.getMonth() + 1}`.padStart(2, "0");
+  const day = `${now.getDate()}`.padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 async function obtenerOCrearSlotParaReemplazo({
@@ -50,7 +82,7 @@ async function obtenerOCrearSlotParaReemplazo({
   slot?: string;
 }) {
   if (slotId && slotId > 0) {
-    const { data: slotExistente, error: errorSlotExistente } = await supabase
+    const { data: slotExistente, error: errorSlotExistente } = await supabaseAdmin
       .from("pack_slots")
       .select("*")
       .eq("id", slotId)
@@ -79,7 +111,7 @@ async function obtenerOCrearSlotParaReemplazo({
     };
   }
 
-  const { data: slotPorPack, error: errorBusqueda } = await supabase
+  const { data: slotPorPack, error: errorBusqueda } = await supabaseAdmin
     .from("pack_slots")
     .select("*")
     .eq("pack_id", packId)
@@ -97,7 +129,7 @@ async function obtenerOCrearSlotParaReemplazo({
     };
   }
 
-  const { data: nuevoSlot, error: errorCrearSlot } = await supabase
+  const { data: nuevoSlot, error: errorCrearSlot } = await supabaseAdmin
     .from("pack_slots")
     .insert({
       pack_id: packId,
@@ -123,10 +155,77 @@ async function obtenerOCrearSlotParaReemplazo({
   };
 }
 
+async function obtenerResultadoDiarioCuenta(accountId: number, fecha: string) {
+  const { data: resultado, error: errorResultado } = await supabaseAdmin
+    .from("daily_results")
+    .select(
+      "id, account_id, fecha, pnl_usd, pnl_porcentaje, numero_trades, winning_trades, losing_trades, red_day"
+    )
+    .eq("account_id", accountId)
+    .eq("fecha", fecha)
+    .maybeSingle<DailyResultRow>();
+
+  if (!errorResultado && resultado) {
+    return {
+      ok: true as const,
+      source: "daily_results" as const,
+      resultado,
+    };
+  }
+
+  const { data: trades, error: errorTrades } = await supabaseAdmin
+    .from("trade_log")
+    .select("id, account_id, business_date, pnl_usd")
+    .eq("account_id", accountId)
+    .eq("business_date", fecha)
+    .returns<TradeLogRow[]>();
+
+  if (errorTrades) {
+    return {
+      ok: false as const,
+      error: errorTrades,
+    };
+  }
+
+  const rows = trades ?? [];
+
+  if (rows.length === 0) {
+    return {
+      ok: false as const,
+      error: {
+        message: "No hay daily result ni trades para la cuenta activa en esta fecha",
+      },
+    };
+  }
+
+  const pnlUsd = rows.reduce((acc, row) => acc + toNumber(row.pnl_usd), 0);
+  const numeroTrades = rows.length;
+  const winningTrades = rows.filter((row) => toNumber(row.pnl_usd) > 0).length;
+  const losingTrades = rows.filter((row) => toNumber(row.pnl_usd) < 0).length;
+
+  const reconstruido: DailyResultRow = {
+    id: -1,
+    account_id: accountId,
+    fecha,
+    pnl_usd: Number(pnlUsd.toFixed(2)),
+    pnl_porcentaje: null,
+    numero_trades: numeroTrades,
+    winning_trades: winningTrades,
+    losing_trades: losingTrades,
+    red_day: pnlUsd < 0,
+  };
+
+  return {
+    ok: true as const,
+    source: "trade_log" as const,
+    resultado: reconstruido,
+  };
+}
+
 export async function activarSiguienteSlot(
   packId: number
 ): Promise<ResultadoError | ResultadoOk> {
-  const { data: slots, error } = await supabase
+  const { data: slots, error } = await supabaseAdmin
     .from("pack_slots")
     .select("*")
     .eq("pack_id", packId)
@@ -165,7 +264,7 @@ export async function activarSiguienteSlot(
     slotsDisponibles.find((slot) => slot.orden > slotActivo.orden) ??
     slotsDisponibles[0];
 
-  const { error: errorDesactivarPack } = await supabase
+  const { error: errorDesactivarPack } = await supabaseAdmin
     .from("pack_slots")
     .update({ es_activa: false })
     .eq("pack_id", packId);
@@ -174,7 +273,7 @@ export async function activarSiguienteSlot(
     return { error: errorDesactivarPack };
   }
 
-  const { error: errorActivar } = await supabase
+  const { error: errorActivar } = await supabaseAdmin
     .from("pack_slots")
     .update({ es_activa: true })
     .eq("id", siguienteSlot.id);
@@ -183,9 +282,9 @@ export async function activarSiguienteSlot(
     return { error: errorActivar };
   }
 
-  const fechaHoy = new Date().toISOString().split("T")[0];
+  const fechaHoy = getFechaHoyLocal();
 
-  const { error: errorEventoOut } = await supabase
+  const { error: errorEventoOut } = await supabaseAdmin
     .from("account_events")
     .insert({
       account_id: slotActivo.account_id,
@@ -199,7 +298,7 @@ export async function activarSiguienteSlot(
     return { error: errorEventoOut };
   }
 
-  const { error: errorEventoIn } = await supabase
+  const { error: errorEventoIn } = await supabaseAdmin
     .from("account_events")
     .insert({
       account_id: siguienteSlot.account_id,
@@ -224,10 +323,11 @@ export async function evaluarSORD(
   packId: number,
   fecha: string
 ): Promise<ResultadoError | ResultadoOk> {
-  const { data: slots, error: errorSlots } = await supabase
+  const { data: slots, error: errorSlots } = await supabaseAdmin
     .from("pack_slots")
     .select("*")
-    .eq("pack_id", packId);
+    .eq("pack_id", packId)
+    .order("orden", { ascending: true });
 
   if (errorSlots) {
     return { error: errorSlots };
@@ -235,27 +335,29 @@ export async function evaluarSORD(
 
   const slotActivo = slots?.find((s) => s.es_activa);
 
-  if (!slotActivo) {
+  if (!slotActivo || !slotActivo.account_id) {
     return { error: { message: "No hay slot activo" } };
   }
 
-  const { data: resultado, error: errorResultado } = await supabase
-    .from("daily_results")
-    .select("*")
-    .eq("account_id", slotActivo.account_id)
-    .eq("fecha", fecha)
-    .single();
+  const resultadoCuenta = await obtenerResultadoDiarioCuenta(slotActivo.account_id, fecha);
 
-  if (errorResultado) {
+  if (!resultadoCuenta.ok) {
     return {
-      error: {
-        message: "No hay daily result para la cuenta activa en esta fecha",
-      },
+      error:
+        resultadoCuenta.error ??
+        { message: "No hay daily result para la cuenta activa en esta fecha" },
     };
   }
 
+  const resultado = resultadoCuenta.resultado;
+
   if (!resultado.red_day) {
-    return { mensaje: "No hay red day, no se rota" };
+    return {
+      mensaje:
+        resultadoCuenta.source === "trade_log"
+          ? "No hay red day, no se rota, calculado desde trade log"
+          : "No hay red day, no se rota",
+    };
   }
 
   const rotacion = await activarSiguienteSlot(packId);
@@ -265,7 +367,10 @@ export async function evaluarSORD(
   }
 
   return {
-    mensaje: "SORD ejecutado",
+    mensaje:
+      resultadoCuenta.source === "trade_log"
+        ? "SORD ejecutado, calculado desde trade log"
+        : "SORD ejecutado",
     ...rotacion,
   };
 }
@@ -273,9 +378,9 @@ export async function evaluarSORD(
 export async function evaluarTodosLosPacksDelDia(
   fecha: string
 ): Promise<ResultadoEvaluacionPack[]> {
-  const { data: packs, error } = await supabase
+  const { data: packs, error } = await supabaseAdmin
     .from("packs")
-    .select("id, nombre")
+    .select("id, nombre, activo")
     .eq("activo", true)
     .order("id", { ascending: true });
 
@@ -336,9 +441,9 @@ export async function evaluarTodosLosPacksDelDia(
 export async function marcarCuentaPerdida(
   accountId: number
 ): Promise<ResultadoError | ResultadoOk> {
-  const fechaHoy = new Date().toISOString().split("T")[0];
+  const fechaHoy = getFechaHoyLocal();
 
-  const { data: slot, error: errorSlot } = await supabase
+  const { data: slot, error: errorSlot } = await supabaseAdmin
     .from("pack_slots")
     .select("*")
     .eq("account_id", accountId)
@@ -350,7 +455,7 @@ export async function marcarCuentaPerdida(
     };
   }
 
-  const { error: errorCuenta } = await supabase
+  const { error: errorCuenta } = await supabaseAdmin
     .from("accounts")
     .update({
       estado: "perdida",
@@ -363,7 +468,7 @@ export async function marcarCuentaPerdida(
     return { error: errorCuenta };
   }
 
-  const { error: errorSlotUpdate } = await supabase
+  const { error: errorSlotUpdate } = await supabaseAdmin
     .from("pack_slots")
     .update({
       pendiente_reemplazo: true,
@@ -375,7 +480,7 @@ export async function marcarCuentaPerdida(
     return { error: errorSlotUpdate };
   }
 
-  const { error: errorEventoPerdida } = await supabase
+  const { error: errorEventoPerdida } = await supabaseAdmin
     .from("account_events")
     .insert({
       account_id: accountId,
@@ -389,7 +494,7 @@ export async function marcarCuentaPerdida(
     return { error: errorEventoPerdida };
   }
 
-  const { data: slots, error: errorSlots } = await supabase
+  const { data: slots, error: errorSlots } = await supabaseAdmin
     .from("pack_slots")
     .select("*")
     .eq("pack_id", slot.pack_id)
@@ -418,7 +523,7 @@ export async function marcarCuentaPerdida(
     siguiente = candidatos[0];
   }
 
-  const { error: errorDesactivarPack } = await supabase
+  const { error: errorDesactivarPack } = await supabaseAdmin
     .from("pack_slots")
     .update({ es_activa: false })
     .eq("pack_id", slot.pack_id);
@@ -427,7 +532,7 @@ export async function marcarCuentaPerdida(
     return { error: errorDesactivarPack };
   }
 
-  const { error: errorActivar } = await supabase
+  const { error: errorActivar } = await supabaseAdmin
     .from("pack_slots")
     .update({ es_activa: true })
     .eq("id", siguiente.id);
@@ -436,7 +541,7 @@ export async function marcarCuentaPerdida(
     return { error: errorActivar };
   }
 
-  const { error: errorOut } = await supabase
+  const { error: errorOut } = await supabaseAdmin
     .from("account_events")
     .insert({
       account_id: accountId,
@@ -450,7 +555,7 @@ export async function marcarCuentaPerdida(
     return { error: errorOut };
   }
 
-  const { error: errorIn } = await supabase
+  const { error: errorIn } = await supabaseAdmin
     .from("account_events")
     .insert({
       account_id: siguiente.account_id,
@@ -473,9 +578,9 @@ export async function marcarCuentaPerdida(
 export async function marcarCuentaFondeada(
   accountId: number
 ): Promise<ResultadoError | ResultadoOk> {
-  const fechaHoy = new Date().toISOString().split("T")[0];
+  const fechaHoy = getFechaHoyLocal();
 
-  const { data: slot, error: errorSlot } = await supabase
+  const { data: slot, error: errorSlot } = await supabaseAdmin
     .from("pack_slots")
     .select("*")
     .eq("account_id", accountId)
@@ -485,7 +590,7 @@ export async function marcarCuentaFondeada(
     return { error: errorSlot ?? { message: "No se encontró slot" } };
   }
 
-  const { error: errorCuenta } = await supabase
+  const { error: errorCuenta } = await supabaseAdmin
     .from("accounts")
     .update({
       estado: "fondeada",
@@ -498,7 +603,7 @@ export async function marcarCuentaFondeada(
     return { error: errorCuenta };
   }
 
-  const { error: errorSlotUpdate } = await supabase
+  const { error: errorSlotUpdate } = await supabaseAdmin
     .from("pack_slots")
     .update({
       pendiente_reemplazo: true,
@@ -510,7 +615,7 @@ export async function marcarCuentaFondeada(
     return { error: errorSlotUpdate };
   }
 
-  const { error: errorEventoFondeo } = await supabase
+  const { error: errorEventoFondeo } = await supabaseAdmin
     .from("account_events")
     .insert({
       account_id: accountId,
@@ -524,7 +629,7 @@ export async function marcarCuentaFondeada(
     return { error: errorEventoFondeo };
   }
 
-  const { data: slots, error: errorSlots } = await supabase
+  const { data: slots, error: errorSlots } = await supabaseAdmin
     .from("pack_slots")
     .select("*")
     .eq("pack_id", slot.pack_id)
@@ -553,7 +658,7 @@ export async function marcarCuentaFondeada(
     siguiente = candidatos[0];
   }
 
-  const { error: errorDesactivarPack } = await supabase
+  const { error: errorDesactivarPack } = await supabaseAdmin
     .from("pack_slots")
     .update({ es_activa: false })
     .eq("pack_id", slot.pack_id);
@@ -562,7 +667,7 @@ export async function marcarCuentaFondeada(
     return { error: errorDesactivarPack };
   }
 
-  const { error: errorActivar } = await supabase
+  const { error: errorActivar } = await supabaseAdmin
     .from("pack_slots")
     .update({ es_activa: true })
     .eq("id", siguiente.id);
@@ -571,7 +676,7 @@ export async function marcarCuentaFondeada(
     return { error: errorActivar };
   }
 
-  const { error: errorOut } = await supabase
+  const { error: errorOut } = await supabaseAdmin
     .from("account_events")
     .insert({
       account_id: accountId,
@@ -585,7 +690,7 @@ export async function marcarCuentaFondeada(
     return { error: errorOut };
   }
 
-  const { error: errorIn } = await supabase
+  const { error: errorIn } = await supabaseAdmin
     .from("account_events")
     .insert({
       account_id: siguiente.account_id,
@@ -609,7 +714,7 @@ export async function reemplazarCuentaEnSlot({
   numeroCuenta,
   alias,
 }: ReemplazoInput): Promise<ResultadoError | ResultadoOk> {
-  const fechaHoy = new Date().toISOString().split("T")[0];
+  const fechaHoy = getFechaHoyLocal();
 
   const slotResuelto = await obtenerOCrearSlotParaReemplazo({
     slotId,
@@ -624,7 +729,7 @@ export async function reemplazarCuentaEnSlot({
   const slotObjetivo = slotResuelto.slot;
   const slotCreado = slotResuelto.slotCreado;
 
-  const { data: pack, error: errorPack } = await supabase
+  const { data: pack, error: errorPack } = await supabaseAdmin
     .from("packs")
     .select("*")
     .eq("id", slotObjetivo.pack_id)
@@ -636,31 +741,109 @@ export async function reemplazarCuentaEnSlot({
     };
   }
 
-  const { data: nuevaCuenta, error: errorNuevaCuenta } = await supabase
-    .from("accounts")
-    .insert({
-      preset_id: pack.preset_id,
-      numero_cuenta: numeroCuenta,
-      alias,
-      tipo_cuenta: pack.tipo_pack,
-      estado: "activa",
-      fecha_inicio: fechaHoy,
-      activa_en_filtros: true,
-    })
-    .select()
-    .single();
+  const numeroCuentaNormalizado = String(numeroCuenta || "").trim();
+  const aliasNormalizado = String(alias || "").trim();
 
-  if (errorNuevaCuenta || !nuevaCuenta) {
+  if (!numeroCuentaNormalizado || !aliasNormalizado) {
     return {
-      error:
-        errorNuevaCuenta ?? { message: "No se pudo crear la nueva cuenta" },
+      error: { message: "Número de cuenta y alias son obligatorios" },
     };
   }
 
-  const { error: errorUpdateSlot } = await supabase
+  const { data: cuentaExistente, error: errorCuentaExistente } = await supabaseAdmin
+    .from("accounts")
+    .select("id, numero_cuenta, alias, estado")
+    .eq("numero_cuenta", numeroCuentaNormalizado)
+    .maybeSingle();
+
+  if (errorCuentaExistente) {
+    return { error: errorCuentaExistente };
+  }
+
+  let cuentaAsignada:
+    | {
+        id: number;
+        numero_cuenta: string;
+        alias: string;
+        estado: string;
+      }
+    | null = null;
+
+  if (cuentaExistente) {
+    const { data: slotsCuentaExistente, error: errorSlotsCuentaExistente } =
+      await supabaseAdmin
+        .from("pack_slots")
+        .select("id")
+        .eq("account_id", cuentaExistente.id);
+
+    if (errorSlotsCuentaExistente) {
+      return { error: errorSlotsCuentaExistente };
+    }
+
+    const estaEnPack = (slotsCuentaExistente ?? []).length > 0;
+
+    if (estaEnPack) {
+      return {
+        error: {
+          message: "La cuenta seleccionada ya está asignada a un pack",
+        },
+      };
+    }
+
+    const { data: cuentaActualizada, error: errorActualizarCuenta } =
+      await supabaseAdmin
+        .from("accounts")
+        .update({
+          preset_id: pack.preset_id,
+          numero_cuenta: numeroCuentaNormalizado,
+          alias: aliasNormalizado,
+          tipo_cuenta: pack.tipo_pack,
+          estado: "activa",
+          fecha_inicio: fechaHoy,
+          activa_en_filtros: true,
+        })
+        .eq("id", cuentaExistente.id)
+        .select("id, numero_cuenta, alias, estado")
+        .single();
+
+    if (errorActualizarCuenta || !cuentaActualizada) {
+      return {
+        error:
+          errorActualizarCuenta ??
+          { message: "No se pudo actualizar la cuenta existente" },
+      };
+    }
+
+    cuentaAsignada = cuentaActualizada;
+  } else {
+    const { data: nuevaCuenta, error: errorNuevaCuenta } = await supabaseAdmin
+      .from("accounts")
+      .insert({
+        preset_id: pack.preset_id,
+        numero_cuenta: numeroCuentaNormalizado,
+        alias: aliasNormalizado,
+        tipo_cuenta: pack.tipo_pack,
+        estado: "activa",
+        fecha_inicio: fechaHoy,
+        activa_en_filtros: true,
+      })
+      .select("id, numero_cuenta, alias, estado")
+      .single();
+
+    if (errorNuevaCuenta || !nuevaCuenta) {
+      return {
+        error:
+          errorNuevaCuenta ?? { message: "No se pudo crear la nueva cuenta" },
+      };
+    }
+
+    cuentaAsignada = nuevaCuenta;
+  }
+
+  const { error: errorUpdateSlot } = await supabaseAdmin
     .from("pack_slots")
     .update({
-      account_id: nuevaCuenta.id,
+      account_id: cuentaAsignada.id,
       pendiente_reemplazo: false,
     })
     .eq("id", slotObjetivo.id);
@@ -669,10 +852,10 @@ export async function reemplazarCuentaEnSlot({
     return { error: errorUpdateSlot };
   }
 
-  const { error: errorEvento } = await supabase
+  const { error: errorEvento } = await supabaseAdmin
     .from("account_events")
     .insert({
-      account_id: nuevaCuenta.id,
+      account_id: cuentaAsignada.id,
       pack_id: slotObjetivo.pack_id,
       fecha: fechaHoy,
       tipo_evento: "reemplazo asignado",
@@ -685,11 +868,11 @@ export async function reemplazarCuentaEnSlot({
 
   return {
     success: true,
-    cuenta: nuevaCuenta,
+    cuenta: cuentaAsignada,
     slot: slotObjetivo,
     slotCreado,
     mensaje: slotCreado
-      ? `Se creó el slot ${slotObjetivo.slot} y se asignó la nueva cuenta`
-      : `Se asignó la nueva cuenta al slot ${slotObjetivo.slot}`,
+      ? `Se creó el slot ${slotObjetivo.slot} y se asignó la cuenta`
+      : `Se asignó la cuenta al slot ${slotObjetivo.slot}`,
   };
 }
