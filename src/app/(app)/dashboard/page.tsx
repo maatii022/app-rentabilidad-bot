@@ -50,16 +50,6 @@ type PendingSlotOption = {
   label: string;
 };
 
-type AvailableReplaceAccount = {
-  id: number;
-  alias: string;
-  numero_cuenta: string;
-  tipo_cuenta?: string | null;
-  account_size?: string | null;
-  prop_firm_nombre?: string | null;
-  label: string;
-};
-
 type DashboardSummary = {
   fondeadasHistoricas: number;
   perdidasHistoricas: number;
@@ -120,6 +110,7 @@ type NoticeState = {
 type RefreshState = "idle" | "loading" | "success";
 
 const REQUIRED_SLOTS = ["A", "B", "C"];
+const LIVE_STATUS_STORAGE_KEY = "dashboard_live_status_cache_v1";
 
 function SectionCard({
   title,
@@ -420,6 +411,143 @@ function isValidNumber(value: unknown): value is number {
   return typeof value === "number" && !Number.isNaN(value);
 }
 
+function sanitizeLiveItem(item: LiveStatusItem | undefined): LiveStatusItem | undefined {
+  if (!item || typeof item !== "object") {
+    return undefined;
+  }
+
+  const next: LiveStatusItem = {};
+
+  if (typeof item.preset === "string" && item.preset.trim()) {
+    next.preset = item.preset;
+  }
+
+  if (typeof item.error === "string" && item.error.trim()) {
+    next.error = item.error;
+  }
+
+  if (typeof item.balance === "number" && !Number.isNaN(item.balance)) {
+    next.balance = item.balance;
+  }
+
+  if (typeof item.equity === "number" && !Number.isNaN(item.equity)) {
+    next.equity = item.equity;
+  }
+
+  if (
+    typeof item.account_size_inferred === "number" &&
+    !Number.isNaN(item.account_size_inferred)
+  ) {
+    next.account_size_inferred = item.account_size_inferred;
+  }
+
+  if (
+    typeof item.pnl_realizado_hoy === "number" &&
+    !Number.isNaN(item.pnl_realizado_hoy)
+  ) {
+    next.pnl_realizado_hoy = item.pnl_realizado_hoy;
+  }
+
+  if (typeof item.pnl_abierto === "number" && !Number.isNaN(item.pnl_abierto)) {
+    next.pnl_abierto = item.pnl_abierto;
+  }
+
+  if (typeof item.pnl_actual === "number" && !Number.isNaN(item.pnl_actual)) {
+    next.pnl_actual = item.pnl_actual;
+  }
+
+  if (typeof item.pnl_hoy_usd === "number" && !Number.isNaN(item.pnl_hoy_usd)) {
+    next.pnl_hoy_usd = item.pnl_hoy_usd;
+  }
+
+  if (
+    typeof item.pnl_pct_actual === "number" &&
+    !Number.isNaN(item.pnl_pct_actual)
+  ) {
+    next.pnl_pct_actual = item.pnl_pct_actual;
+  }
+
+  if (typeof item.pnl_hoy_pct === "number" && !Number.isNaN(item.pnl_hoy_pct)) {
+    next.pnl_hoy_pct = item.pnl_hoy_pct;
+  }
+
+  if (
+    typeof item.profit_total_pct === "number" &&
+    !Number.isNaN(item.profit_total_pct)
+  ) {
+    next.profit_total_pct = item.profit_total_pct;
+  }
+
+  if (
+    typeof item.profit_total_pct_current === "number" &&
+    !Number.isNaN(item.profit_total_pct_current)
+  ) {
+    next.profit_total_pct_current = item.profit_total_pct_current;
+  }
+
+  if (
+    typeof item.trades_abiertos === "number" &&
+    !Number.isNaN(item.trades_abiertos)
+  ) {
+    next.trades_abiertos = item.trades_abiertos;
+  }
+
+  return next;
+}
+
+function mergeLiveStatusMaps(
+  previous: LiveStatusMap,
+  incoming: LiveStatusMap
+): LiveStatusMap {
+  const merged: LiveStatusMap = { ...previous };
+
+  for (const [accountNumber, incomingItem] of Object.entries(incoming)) {
+    const safeIncoming = sanitizeLiveItem(incomingItem);
+    if (!safeIncoming) continue;
+
+    const prevItem = merged[accountNumber] ?? {};
+    merged[accountNumber] = {
+      ...prevItem,
+      ...safeIncoming,
+    };
+  }
+
+  return merged;
+}
+
+function loadCachedLiveStatus(): LiveStatusMap {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = window.localStorage.getItem(LIVE_STATUS_STORAGE_KEY);
+    if (!raw) return {};
+
+    const parsed = JSON.parse(raw) as LiveStatusMap;
+    if (!parsed || typeof parsed !== "object") return {};
+
+    const cleaned: LiveStatusMap = {};
+
+    for (const [account, item] of Object.entries(parsed)) {
+      const safe = sanitizeLiveItem(item);
+      if (safe) cleaned[account] = safe;
+    }
+
+    return cleaned;
+  } catch {
+    return {};
+  }
+}
+
+function saveCachedLiveStatus(data: LiveStatusMap) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(LIVE_STATUS_STORAGE_KEY, JSON.stringify(data));
+  } catch {
+    //
+  }
+}
+
 function resolveDisplayDayPct(
   numeroCuenta: string,
   persistedPerformance: PersistedPerformanceMap,
@@ -626,10 +754,9 @@ export default function DashboardPage() {
   const [loadingLive, setLoadingLive] = useState(false);
 
   const [selectedPendingSlotValue, setSelectedPendingSlotValue] = useState("");
+  const [selectedExistingAccountId, setSelectedExistingAccountId] = useState("");
   const [numeroCuenta, setNumeroCuenta] = useState("");
   const [alias, setAlias] = useState("");
-  const [availableReplaceAccounts, setAvailableReplaceAccounts] = useState<AvailableReplaceAccount[]>([]);
-  const [selectedAvailableReplaceAccountId, setSelectedAvailableReplaceAccountId] = useState("");
 
   const [presetFilter, setPresetFilter] = useState("todos");
   const [tipoFilter, setTipoFilter] = useState("todos");
@@ -805,14 +932,19 @@ export default function DashboardPage() {
       const json = await res.json();
 
       if (!res.ok || !json?.ok) {
-        setLiveStatus({});
+        setLiveStatus((prev) => prev);
         return;
       }
 
-      setLiveStatus(json.data || {});
+      const incoming = (json.data || {}) as LiveStatusMap;
+
+      setLiveStatus((prev) => {
+        const merged = mergeLiveStatusMaps(prev, incoming);
+        saveCachedLiveStatus(merged);
+        return merged;
+      });
     } catch (error) {
       console.error("Error cargando live status:", error);
-      setLiveStatus({});
       if (!silent) {
         showAlert(
           "No se pudo cargar el estado live",
@@ -822,39 +954,6 @@ export default function DashboardPage() {
       }
     } finally {
       setLoadingLive(false);
-    }
-  }
-
-  async function cargarCuentasDisponiblesReemplazo(silent = false) {
-    try {
-      const res = await fetch("/api/cuentas/disponibles-reemplazo", {
-        method: "GET",
-        cache: "no-store",
-      });
-
-      const json = await res.json();
-
-      if (!res.ok || !json?.ok) {
-        if (!silent) {
-          showAlert(
-            "No se pudieron cargar las cuentas disponibles",
-            json?.error || "Error desconocido",
-            "danger"
-          );
-        }
-        return;
-      }
-
-      setAvailableReplaceAccounts(json.accounts || []);
-    } catch (error) {
-      console.error("Error cargando cuentas disponibles para reemplazo:", error);
-      if (!silent) {
-        showAlert(
-          "No se pudieron cargar las cuentas disponibles",
-          "Se produjo un error al cargar las cuentas libres.",
-          "danger"
-        );
-      }
     }
   }
 
@@ -931,12 +1030,9 @@ export default function DashboardPage() {
       }
 
       setResultadosRevision(data.resultados || []);
-      await Promise.all([
-        cargarDatos(),
-        cargarResumenHistorico(),
-        recargarEstadoSilencioso(),
-        cargarCuentasDisponiblesReemplazo(true),
-      ]);
+      await cargarDatos();
+      await cargarResumenHistorico();
+      await recargarEstadoSilencioso();
 
       showAlert(
         "Revisión diaria ejecutada",
@@ -971,12 +1067,9 @@ export default function DashboardPage() {
         return;
       }
 
-      await Promise.all([
-        cargarDatos(),
-        cargarResumenHistorico(),
-        recargarEstadoSilencioso(),
-        cargarCuentasDisponiblesReemplazo(true),
-      ]);
+      await cargarDatos();
+      await cargarResumenHistorico();
+      await recargarEstadoSilencioso();
 
       showAlert(
         "Rotación completada",
@@ -1021,13 +1114,9 @@ export default function DashboardPage() {
         return;
       }
 
-      await Promise.all([
-        cargarDatos(),
-        cargarResumenHistorico(),
-        recargarEstadoSilencioso(),
-        cargarCuentasDisponiblesReemplazo(true),
-      ]);
-
+      await cargarDatos();
+      await cargarResumenHistorico();
+      await recargarEstadoSilencioso();
       showAlert(
         "Cuenta actualizada",
         "La cuenta se ha marcado como perdida correctamente.",
@@ -1071,13 +1160,9 @@ export default function DashboardPage() {
         return;
       }
 
-      await Promise.all([
-        cargarDatos(),
-        cargarResumenHistorico(),
-        recargarEstadoSilencioso(),
-        cargarCuentasDisponiblesReemplazo(true),
-      ]);
-
+      await cargarDatos();
+      await cargarResumenHistorico();
+      await recargarEstadoSilencioso();
       showAlert(
         "Cuenta actualizada",
         "La cuenta se ha marcado como fondeada correctamente.",
@@ -1103,18 +1188,25 @@ export default function DashboardPage() {
     setLoading(true);
 
     try {
+      const body: Record<string, unknown> = {
+        slotId: target.slotId,
+        packId: target.packId,
+        slot: target.slot,
+      };
+
+      if (selectedExistingAccountId) {
+        body.accountId = Number(selectedExistingAccountId);
+      } else {
+        body.numeroCuenta = numeroCuenta;
+        body.alias = alias;
+      }
+
       const res = await fetch("/api/cuentas/reemplazar", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          slotId: target.slotId,
-          packId: target.packId,
-          slot: target.slot,
-          numeroCuenta,
-          alias,
-        }),
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();
@@ -1122,24 +1214,20 @@ export default function DashboardPage() {
       if (!res.ok) {
         showAlert(
           "Error al reemplazar cuenta",
-          data?.error?.message || JSON.stringify(data?.error) || "Error desconocido",
+          data?.error?.message || JSON.stringify(data?.error) || data?.error || "Error desconocido",
           "danger"
         );
         return;
       }
 
       setSelectedPendingSlotValue("");
+      setSelectedExistingAccountId("");
       setNumeroCuenta("");
       setAlias("");
-      setSelectedAvailableReplaceAccountId("");
 
-      await Promise.all([
-        cargarDatos(),
-        cargarResumenHistorico(),
-        recargarEstadoSilencioso(),
-        cargarCuentasDisponiblesReemplazo(true),
-      ]);
-
+      await cargarDatos();
+      await cargarResumenHistorico();
+      await recargarEstadoSilencioso();
       showAlert(
         "Reemplazo completado",
         "La cuenta se ha reemplazado correctamente.",
@@ -1192,6 +1280,67 @@ export default function DashboardPage() {
     );
 
     return nombres.sort((a, b) => a.localeCompare(b));
+  }, [packs]);
+
+  const existingFreeAccounts = useMemo(() => {
+    const assignedAccountIds = new Set<number>();
+
+    packs.forEach((pack) => {
+      buildDisplaySlots(pack).forEach((slot) => {
+        if (slot.accounts?.id) {
+          assignedAccountIds.add(slot.accounts.id);
+        }
+      });
+    });
+
+    return packs
+      .flatMap((pack) => buildDisplaySlots(pack))
+      .flatMap(() => [])
+      .concat(
+        [] as never[]
+      );
+
+  }, [packs]);
+
+  const freeAccountsForReplacement = useMemo(() => {
+    const assignedAccountIds = new Set<number>();
+
+    packs.forEach((pack) => {
+      buildDisplaySlots(pack).forEach((slot) => {
+        if (slot.accounts?.id) {
+          assignedAccountIds.add(slot.accounts.id);
+        }
+      });
+    });
+
+    const allKnownAccounts = packs
+      .flatMap((pack) => buildDisplaySlots(pack))
+      .map((slot) => slot.accounts)
+      .filter(Boolean);
+
+    const accountsFromPacks = new Map<number, { id: number; alias: string; numero_cuenta: string; estado: string; tipo_cuenta: string }>();
+
+    for (const account of allKnownAccounts) {
+      if (!account?.id) continue;
+      accountsFromPacks.set(account.id, {
+        id: account.id,
+        alias: account.alias,
+        numero_cuenta: account.numero_cuenta,
+        estado: account.estado,
+        tipo_cuenta: account.tipo_cuenta,
+      });
+    }
+
+    const mergedAccounts = Array.from(accountsFromPacks.values());
+
+    return mergedAccounts
+      .filter((account) => !assignedAccountIds.has(account.id))
+      .filter((account) => String(account.estado || "").trim().toLowerCase() === "activa")
+      .sort((a, b) =>
+        `${a.alias || ""}${a.numero_cuenta || ""}`.localeCompare(
+          `${b.alias || ""}${b.numero_cuenta || ""}`
+        )
+      );
   }, [packs]);
 
   const packsFiltrados = useMemo(() => {
@@ -1285,25 +1434,6 @@ export default function DashboardPage() {
     }, 50);
   }
 
-  function seleccionarCuentaDisponible(accountIdValue: string) {
-    setSelectedAvailableReplaceAccountId(accountIdValue);
-
-    if (!accountIdValue) {
-      return;
-    }
-
-    const selected = availableReplaceAccounts.find(
-      (account) => String(account.id) === accountIdValue
-    );
-
-    if (!selected) {
-      return;
-    }
-
-    setNumeroCuenta(selected.numero_cuenta);
-    setAlias(selected.alias);
-  }
-
   function getLivePnlClass(value?: number | null) {
     if (typeof value !== "number") return "text-zinc-500";
     if (value > 0) return "text-emerald-300";
@@ -1312,13 +1442,19 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
+    const cached = loadCachedLiveStatus();
+    if (Object.keys(cached).length > 0) {
+      setLiveStatus(cached);
+    }
+  }, []);
+
+  useEffect(() => {
     async function init() {
       await Promise.all([
         cargarDatos(),
         cargarResumenHistorico(),
         cargarPerformancePersistida(true),
         cargarLiveStatus(true),
-        cargarCuentasDisponiblesReemplazo(true),
       ]);
     }
 
@@ -1537,18 +1673,18 @@ export default function DashboardPage() {
                       <div>
                         <FieldLabel>Cuenta existente libre</FieldLabel>
                         <Select
-                          value={selectedAvailableReplaceAccountId}
-                          onChange={(e) => seleccionarCuentaDisponible(e.target.value)}
+                          value={selectedExistingAccountId}
+                          onChange={(e) => setSelectedExistingAccountId(e.target.value)}
                         >
                           <option value="">Selecciona una cuenta ya creada</option>
-                          {availableReplaceAccounts.map((account) => (
+                          {freeAccountsForReplacement.map((account) => (
                             <option key={account.id} value={String(account.id)}>
-                              {account.label}
+                              {account.alias || "Sin alias"} · {account.numero_cuenta || "-"}
                             </option>
                           ))}
                         </Select>
                         <p className="mt-1 text-[11px] text-zinc-500">
-                          Aquí salen cuentas activas y sin pack. Si no eliges una, puedes crear o escribir una manualmente abajo.
+                          Aquí salen cuentas activas y sin pack. Si no eliges una, puedes crear una nueva manualmente abajo.
                         </p>
                       </div>
 
@@ -1557,13 +1693,9 @@ export default function DashboardPage() {
                           <FieldLabel>Número de cuenta</FieldLabel>
                           <Input
                             value={numeroCuenta}
-                            onChange={(e) => {
-                              setNumeroCuenta(e.target.value);
-                              if (selectedAvailableReplaceAccountId) {
-                                setSelectedAvailableReplaceAccountId("");
-                              }
-                            }}
+                            onChange={(e) => setNumeroCuenta(e.target.value)}
                             placeholder="Ej. 128999"
+                            disabled={Boolean(selectedExistingAccountId)}
                           />
                         </div>
 
@@ -1571,20 +1703,20 @@ export default function DashboardPage() {
                           <FieldLabel>Alias</FieldLabel>
                           <Input
                             value={alias}
-                            onChange={(e) => {
-                              setAlias(e.target.value);
-                              if (selectedAvailableReplaceAccountId) {
-                                setSelectedAvailableReplaceAccountId("");
-                              }
-                            }}
+                            onChange={(e) => setAlias(e.target.value)}
                             placeholder="Ej. Fernet B2"
+                            disabled={Boolean(selectedExistingAccountId)}
                           />
                         </div>
                       </div>
 
                       <ActionButton
                         onClick={reemplazarCuenta}
-                        disabled={loading || !selectedPendingSlotValue || !numeroCuenta || !alias}
+                        disabled={
+                          loading ||
+                          !selectedPendingSlotValue ||
+                          (!selectedExistingAccountId && (!numeroCuenta || !alias))
+                        }
                         variant="primary"
                         className="w-full justify-center py-2"
                       >
