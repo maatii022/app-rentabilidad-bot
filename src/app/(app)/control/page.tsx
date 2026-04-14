@@ -41,6 +41,36 @@ type AccountSizeOption = "5K" | "10K" | "25K" | "50K" | "100K";
 type SlotKey = "A" | "B" | "C";
 type AccountEstado = "activa" | "fondeada" | "perdida";
 
+type ControlPackSlotAccount = {
+  id: number;
+  alias: string | null;
+  numero_cuenta: string | null;
+  estado: string | null;
+  tipo_cuenta: string | null;
+  account_size: string | null;
+};
+
+type ControlPackSlot = {
+  id: number;
+  slot: string;
+  es_activa: boolean;
+  pendiente_reemplazo: boolean;
+  orden: number;
+  account_id: number | null;
+  accounts: ControlPackSlotAccount | null;
+};
+
+type ControlPack = {
+  id: number;
+  nombre: string;
+  tipo_pack: TypeOption;
+  preset_id: number | null;
+  presets: {
+    nombre: string | null;
+  } | null;
+  pack_slots: ControlPackSlot[];
+};
+
 const ACCOUNT_SIZES: AccountSizeOption[] = ["5K", "10K", "25K", "50K", "100K"];
 const SLOT_KEYS: SlotKey[] = ["A", "B", "C"];
 
@@ -156,6 +186,26 @@ function CompactInput({
       placeholder={placeholder}
       className="h-11 w-full rounded-[16px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] px-4 text-sm text-white outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_10px_24px_rgba(0,0,0,0.14)] transition-all duration-200 placeholder:text-zinc-500 focus:border-sky-300/20 focus:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
     />
+  );
+}
+
+function CompactSelect({
+  value,
+  onChange,
+  children,
+}: {
+  value: string | number;
+  onChange: (value: string) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="h-11 w-full rounded-[16px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(255,255,255,0.02))] px-4 text-sm text-white outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_10px_24px_rgba(0,0,0,0.14)] transition-all duration-200 focus:border-sky-300/20 focus:bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))]"
+    >
+      {children}
+    </select>
   );
 }
 
@@ -421,7 +471,6 @@ function SlotAssignmentPicker({
   );
 }
 
-
 function SummaryCard({
   items,
 }: {
@@ -489,6 +538,27 @@ function PrimaryButton({
   );
 }
 
+function SecondaryButton({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="h-10 rounded-[14px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-4 text-xs font-medium text-zinc-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] transition-all duration-200 hover:border-white/14 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
+}
+
 function normalizeTipoCuenta(value: string | null | undefined): TypeOption | null {
   const normalized = String(value || "").trim().toLowerCase();
   if (normalized === "prueba") return "prueba";
@@ -507,6 +577,10 @@ function buildAccountLabel(account: AvailableAccountOption) {
   const alias = account.alias || "Sin alias";
   const numero = account.numero_cuenta || "-";
   return `${alias} · ${numero}`;
+}
+
+function getSlotKey(packId: number, slotId: number) {
+  return `${packId}-${slotId}`;
 }
 
 export default function ControlPage() {
@@ -542,10 +616,14 @@ export default function ControlPage() {
   const [propFirms, setPropFirms] = useState<PropFirmOption[]>([]);
   const [availableAccounts, setAvailableAccounts] = useState<AvailableAccountOption[]>([]);
   const [editableAccounts, setEditableAccounts] = useState<EditableAccount[]>([]);
+  const [controlPacks, setControlPacks] = useState<ControlPack[]>([]);
+  const [slotAccountSelections, setSlotAccountSelections] = useState<Record<string, string>>({});
 
   const [saving, setSaving] = useState(false);
   const [savingPack, setSavingPack] = useState(false);
   const [savingEditor, setSavingEditor] = useState(false);
+  const [loadingPacks, setLoadingPacks] = useState(false);
+  const [actingSlotKey, setActingSlotKey] = useState<string | null>(null);
 
   const [feedback, setFeedback] = useState<{ type: "ok" | "error"; message: string } | null>(
     null
@@ -556,6 +634,10 @@ export default function ControlPage() {
   const [editorFeedback, setEditorFeedback] = useState<{ type: "ok" | "error"; message: string } | null>(
     null
   );
+  const [packsEditorFeedback, setPacksEditorFeedback] = useState<{
+    type: "ok" | "error";
+    message: string;
+  } | null>(null);
 
   const [openControls, setOpenControls] = useState<Record<string, boolean>>({
     preset: false,
@@ -571,29 +653,47 @@ export default function ControlPage() {
     editorPropFirm: false,
   });
 
-  useEffect(() => {
-    async function cargarDatos() {
-      try {
-        const res = await fetch("/api/control-data", {
-          method: "GET",
-          cache: "no-store",
-        });
+  async function cargarDatosControl() {
+    const res = await fetch("/api/control-data", {
+      method: "GET",
+      cache: "no-store",
+    });
 
-        const data = await res.json();
+    const data = await res.json();
 
-        setPresets(data.presets || []);
-        setPropFirms(data.propFirms || []);
-        setAvailableAccounts(data.availableAccounts || []);
-        setEditableAccounts(data.editableAccounts || []);
-      } catch {
-        setPresets([]);
-        setPropFirms([]);
-        setAvailableAccounts([]);
-        setEditableAccounts([]);
+    setPresets(data.presets || []);
+    setPropFirms(data.propFirms || []);
+    setAvailableAccounts(data.availableAccounts || []);
+    setEditableAccounts(data.editableAccounts || []);
+  }
+
+  async function cargarPacksControl() {
+    setLoadingPacks(true);
+    try {
+      const res = await fetch("/api/control/packs", {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setControlPacks([]);
+        return;
       }
-    }
 
-    void cargarDatos();
+      setControlPacks(data.packs || []);
+    } finally {
+      setLoadingPacks(false);
+    }
+  }
+
+  async function recargarTodoControl() {
+    await Promise.all([cargarDatosControl(), cargarPacksControl()]);
+  }
+
+  useEffect(() => {
+    void recargarTodoControl();
   }, []);
 
   const presetItems = useMemo(
@@ -766,6 +866,74 @@ export default function ControlPage() {
     if (nextValue !== null) {
       const account = getAccountById(nextValue);
       applyPackAutofillFromAccount(account);
+    }
+  }
+
+  function getAssignableAccountsForPack(pack: ControlPack) {
+    return availableAccounts
+      .filter((account) => {
+        const estado = normalizeEstado(account.estado);
+        const sameType = normalizeTipoCuenta(account.tipo_cuenta) === pack.tipo_pack;
+        return estado !== "perdida" && sameType;
+      })
+      .sort((a, b) =>
+        `${a.alias || ""}${a.numero_cuenta || ""}`.localeCompare(
+          `${b.alias || ""}${b.numero_cuenta || ""}`
+        )
+      );
+  }
+
+  async function ejecutarAccionSlot(
+    body: {
+      action: "assign" | "remove" | "set_active" | "toggle_pending";
+      slotId: number;
+      packId: number;
+      accountId?: number;
+      pendiente?: boolean;
+    },
+    successMessage: string
+  ) {
+    const slotKey = getSlotKey(body.packId, body.slotId);
+    setActingSlotKey(slotKey);
+    setPacksEditorFeedback(null);
+
+    try {
+      const res = await fetch("/api/control/packs/slot-action", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setPacksEditorFeedback({
+          type: "error",
+          message: data?.error || "No se pudo actualizar el slot.",
+        });
+        return;
+      }
+
+      setSlotAccountSelections((prev) => ({
+        ...prev,
+        [slotKey]: "",
+      }));
+
+      await recargarTodoControl();
+
+      setPacksEditorFeedback({
+        type: "ok",
+        message: successMessage,
+      });
+    } catch {
+      setPacksEditorFeedback({
+        type: "error",
+        message: "No se pudo actualizar el slot.",
+      });
+    } finally {
+      setActingSlotKey(null);
     }
   }
 
@@ -947,6 +1115,8 @@ export default function ControlPage() {
         B: null,
         C: null,
       });
+
+      await recargarTodoControl();
     } catch {
       setPackFeedback({
         type: "error",
@@ -1025,6 +1195,8 @@ export default function ControlPage() {
         type: "ok",
         message: "Cuenta actualizada correctamente.",
       });
+
+      await recargarTodoControl();
     } catch {
       setEditorFeedback({
         type: "error",
@@ -1248,6 +1420,200 @@ export default function ControlPage() {
               </PrimaryButton>
             </div>
           </div>
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Editar packs"
+        subtitle="Quita cuentas de slots, asigna cuentas libres, cambia el slot activo y controla pendientes de reemplazo."
+      >
+        <div className="space-y-4">
+          <FeedbackBox feedback={packsEditorFeedback} />
+
+          {loadingPacks ? (
+            <div className="rounded-[18px] border border-white/10 bg-black/20 px-4 py-4 text-sm text-zinc-400">
+              Cargando packs...
+            </div>
+          ) : controlPacks.length === 0 ? (
+            <div className="rounded-[18px] border border-white/10 bg-black/20 px-4 py-4 text-sm text-zinc-400">
+              No hay packs disponibles.
+            </div>
+          ) : (
+            controlPacks.map((pack) => (
+              <div
+                key={pack.id}
+                className="rounded-[22px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_14px_34px_rgba(0,0,0,0.18)]"
+              >
+                <div className="mb-4 flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">{pack.nombre}</h3>
+                    <div className="mt-1 flex flex-wrap gap-2 text-xs text-zinc-400">
+                      <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+                        Preset: {pack.presets?.nombre || "-"}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1">
+                        Tipo: {pack.tipo_pack}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+                  {pack.pack_slots
+                    .slice()
+                    .sort((a, b) => a.orden - b.orden)
+                    .map((slot) => {
+                      const slotKey = getSlotKey(pack.id, slot.id);
+                      const availableForThisPack = getAssignableAccountsForPack(pack);
+                      const selectedFreeAccount = slotAccountSelections[slotKey] || "";
+                      const isActing = actingSlotKey === slotKey;
+
+                      return (
+                        <div
+                          key={slot.id}
+                          className={`rounded-[18px] border p-3 ${
+                            slot.es_activa
+                              ? "border-sky-300/20 bg-[linear-gradient(180deg,rgba(56,189,248,0.10),rgba(56,189,248,0.03))]"
+                              : slot.pendiente_reemplazo
+                              ? "border-amber-300/20 bg-[linear-gradient(180deg,rgba(251,191,36,0.10),rgba(251,191,36,0.03))]"
+                              : "border-white/10 bg-black/20"
+                          }`}
+                        >
+                          <div className="mb-3 flex items-center justify-between gap-2">
+                            <div>
+                              <p className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
+                                Slot {slot.slot}
+                              </p>
+                              <p className="mt-1 text-sm font-medium text-white">
+                                {slot.accounts?.alias || "Vacío"}
+                              </p>
+                              <p className="mt-1 text-xs text-zinc-400">
+                                {slot.accounts?.numero_cuenta || "-"}
+                              </p>
+                            </div>
+
+                            <div className="flex flex-col items-end gap-1">
+                              <span
+                                className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] ${
+                                  slot.es_activa
+                                    ? "border-sky-300/20 bg-sky-300/[0.10] text-sky-100"
+                                    : "border-white/10 bg-white/[0.04] text-zinc-300"
+                                }`}
+                              >
+                                {slot.es_activa ? "Activa" : "Inactiva"}
+                              </span>
+
+                              {slot.pendiente_reemplazo ? (
+                                <span className="rounded-full border border-amber-300/20 bg-amber-300/[0.10] px-2.5 py-1 text-[10px] uppercase tracking-[0.12em] text-amber-100">
+                                  Pendiente
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div className="rounded-[14px] border border-white/8 bg-black/20 p-3">
+                              <MiniLabel>Asignar cuenta libre</MiniLabel>
+
+                              <CompactSelect
+                                value={selectedFreeAccount}
+                                onChange={(value) =>
+                                  setSlotAccountSelections((prev) => ({
+                                    ...prev,
+                                    [slotKey]: value,
+                                  }))
+                                }
+                              >
+                                <option value="">Selecciona una cuenta libre</option>
+                                {availableForThisPack.map((account) => (
+                                  <option key={account.id} value={String(account.id)}>
+                                    {buildAccountLabel(account)}
+                                  </option>
+                                ))}
+                              </CompactSelect>
+
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <SecondaryButton
+                                  disabled={!selectedFreeAccount || isActing}
+                                  onClick={() =>
+                                    void ejecutarAccionSlot(
+                                      {
+                                        action: "assign",
+                                        packId: pack.id,
+                                        slotId: slot.id,
+                                        accountId: Number(selectedFreeAccount),
+                                      },
+                                      `Cuenta asignada al slot ${slot.slot} de ${pack.nombre}.`
+                                    )
+                                  }
+                                >
+                                  Asignar al slot
+                                </SecondaryButton>
+
+                                <SecondaryButton
+                                  disabled={!slot.accounts?.id || isActing}
+                                  onClick={() =>
+                                    void ejecutarAccionSlot(
+                                      {
+                                        action: "remove",
+                                        packId: pack.id,
+                                        slotId: slot.id,
+                                      },
+                                      `Cuenta quitada del slot ${slot.slot} de ${pack.nombre}.`
+                                    )
+                                  }
+                                >
+                                  Quitar cuenta
+                                </SecondaryButton>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                              <SecondaryButton
+                                disabled={!slot.accounts?.id || slot.es_activa || isActing}
+                                onClick={() =>
+                                  void ejecutarAccionSlot(
+                                    {
+                                      action: "set_active",
+                                      packId: pack.id,
+                                      slotId: slot.id,
+                                    },
+                                    `Slot ${slot.slot} marcado como activo en ${pack.nombre}.`
+                                  )
+                                }
+                              >
+                                Marcar activa
+                              </SecondaryButton>
+
+                              <SecondaryButton
+                                disabled={isActing}
+                                onClick={() =>
+                                  void ejecutarAccionSlot(
+                                    {
+                                      action: "toggle_pending",
+                                      packId: pack.id,
+                                      slotId: slot.id,
+                                      pendiente: !slot.pendiente_reemplazo,
+                                    },
+                                    slot.pendiente_reemplazo
+                                      ? `Pendiente de reemplazo quitado en ${pack.nombre}, slot ${slot.slot}.`
+                                      : `Pendiente de reemplazo activado en ${pack.nombre}, slot ${slot.slot}.`
+                                  )
+                                }
+                              >
+                                {slot.pendiente_reemplazo
+                                  ? "Quitar pendiente"
+                                  : "Marcar pendiente"}
+                              </SecondaryButton>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </SectionCard>
 
