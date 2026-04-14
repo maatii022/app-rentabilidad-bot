@@ -551,7 +551,8 @@ function saveCachedLiveStatus(data: LiveStatusMap) {
 function resolveDisplayDayPct(
   numeroCuenta: string,
   persistedPerformance: PersistedPerformanceMap,
-  liveStatus: LiveStatusMap
+  liveStatus: LiveStatusMap,
+  accountSize?: string | null
 ) {
   const live = liveStatus[numeroCuenta];
   const persisted = persistedPerformance[numeroCuenta];
@@ -562,6 +563,30 @@ function resolveDisplayDayPct(
 
   if (isValidNumber(live?.pnl_pct_actual)) {
     return live.pnl_pct_actual;
+  }
+
+  const persistedAccountSize = parseAccountSizeToNumber(accountSize);
+  const inferredAccountSize =
+    typeof live?.account_size_inferred === "number" && !Number.isNaN(live.account_size_inferred)
+      ? live.account_size_inferred
+      : null;
+
+  const baseAccountSize = persistedAccountSize || inferredAccountSize;
+
+  if (
+    isValidNumber(live?.pnl_hoy_usd) &&
+    isValidNumber(baseAccountSize) &&
+    baseAccountSize > 0
+  ) {
+    return (live.pnl_hoy_usd / baseAccountSize) * 100;
+  }
+
+  if (
+    isValidNumber(live?.pnl_realizado_hoy) &&
+    isValidNumber(baseAccountSize) &&
+    baseAccountSize > 0
+  ) {
+    return (live.pnl_realizado_hoy / baseAccountSize) * 100;
   }
 
   if (isValidNumber(persisted?.today_pct)) {
@@ -1916,8 +1941,13 @@ function PackCard({
           const propFirmName = slot.accounts?.prop_firms?.nombre ?? "";
 
           const displayHoyPct = numeroCuenta
-            ? resolveDisplayDayPct(numeroCuenta, persistedPerformance, liveStatus)
-            : null;
+  ? resolveDisplayDayPct(
+      numeroCuenta,
+      persistedPerformance,
+      liveStatus,
+      slot.accounts?.account_size ?? null
+    )
+  : null;
 
           const displayTotalPct = numeroCuenta
             ? resolveDisplayTotalPct(numeroCuenta, persistedPerformance, liveStatus)
