@@ -538,7 +538,7 @@ function PrimaryButton({
   );
 }
 
-function SecondaryButton({
+function DangerButton({
   children,
   onClick,
   disabled,
@@ -552,7 +552,7 @@ function SecondaryButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="h-10 rounded-[14px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-4 text-xs font-medium text-zinc-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_10px_22px_rgba(0,0,0,0.12)] transition-all duration-200 hover:border-white/14 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+      className="h-11 rounded-[16px] border border-rose-300/20 bg-[linear-gradient(180deg,rgba(244,63,94,0.18),rgba(244,63,94,0.08))] px-5 text-sm font-medium text-rose-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_14px_30px_rgba(244,63,94,0.12)] transition-all duration-200 hover:-translate-y-[1px] hover:border-rose-300/30 hover:bg-[linear-gradient(180deg,rgba(244,63,94,0.22),rgba(244,63,94,0.10))] disabled:cursor-not-allowed disabled:opacity-50"
     >
       {children}
     </button>
@@ -622,6 +622,7 @@ export default function ControlPage() {
   const [saving, setSaving] = useState(false);
   const [savingPack, setSavingPack] = useState(false);
   const [savingEditor, setSavingEditor] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [loadingPacks, setLoadingPacks] = useState(false);
   const [actingSlotKey, setActingSlotKey] = useState<string | null>(null);
 
@@ -893,7 +894,7 @@ export default function ControlPage() {
     },
     successMessage: string
   ) {
-    const slotKey = getSlotKey(body.packId, body.slotId);
+    const slotKey = `${body.packId}-${body.slotId}`;
     setActingSlotKey(slotKey);
     setPacksEditorFeedback(null);
 
@@ -1204,6 +1205,69 @@ export default function ControlPage() {
       });
     } finally {
       setSavingEditor(false);
+    }
+  }
+
+  async function eliminarCuenta() {
+    setEditorFeedback(null);
+
+    if (!editorAccountId) {
+      setEditorFeedback({ type: "error", message: "Selecciona una cuenta." });
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "¿Seguro que quieres eliminar esta cuenta? Solo se podrá eliminar si no está asignada a ningún pack."
+    );
+
+    if (!confirmed) return;
+
+    setDeletingAccount(true);
+
+    try {
+      const res = await fetch("/api/accounts/delete", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          accountId: editorAccountId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setEditorFeedback({
+          type: "error",
+          message: data?.error || "No se pudo eliminar la cuenta.",
+        });
+        return;
+      }
+
+      setEditorFeedback({
+        type: "ok",
+        message: data?.message || "Cuenta eliminada correctamente.",
+      });
+
+      setEditorAccountId(null);
+      setEditorAlias("");
+      setEditorNumeroCuenta("");
+      setEditorPresetId(null);
+      setEditorTipoCuenta("prueba");
+      setEditorEstado("activa");
+      setEditorAccountSize("10K");
+      setEditorPropFirmId(null);
+      setEditorActivaEnFiltros(true);
+
+      await recargarTodoControl();
+    } catch {
+      setEditorFeedback({
+        type: "error",
+        message: "No se pudo eliminar la cuenta.",
+      });
+    } finally {
+      setDeletingAccount(false);
     }
   }
 
@@ -1533,7 +1597,7 @@ export default function ControlPage() {
                               </CompactSelect>
 
                               <div className="mt-3 flex flex-wrap gap-2">
-                                <SecondaryButton
+                                <PrimaryButton
                                   disabled={!selectedFreeAccount || isActing}
                                   onClick={() =>
                                     void ejecutarAccionSlot(
@@ -1548,9 +1612,9 @@ export default function ControlPage() {
                                   }
                                 >
                                   Asignar al slot
-                                </SecondaryButton>
+                                </PrimaryButton>
 
-                                <SecondaryButton
+                                <DangerButton
                                   disabled={!slot.accounts?.id || isActing}
                                   onClick={() =>
                                     void ejecutarAccionSlot(
@@ -1564,12 +1628,12 @@ export default function ControlPage() {
                                   }
                                 >
                                   Quitar cuenta
-                                </SecondaryButton>
+                                </DangerButton>
                               </div>
                             </div>
 
                             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                              <SecondaryButton
+                              <PrimaryButton
                                 disabled={!slot.accounts?.id || slot.es_activa || isActing}
                                 onClick={() =>
                                   void ejecutarAccionSlot(
@@ -1583,9 +1647,9 @@ export default function ControlPage() {
                                 }
                               >
                                 Marcar activa
-                              </SecondaryButton>
+                              </PrimaryButton>
 
-                              <SecondaryButton
+                              <PrimaryButton
                                 disabled={isActing}
                                 onClick={() =>
                                   void ejecutarAccionSlot(
@@ -1604,7 +1668,7 @@ export default function ControlPage() {
                                 {slot.pendiente_reemplazo
                                   ? "Quitar pendiente"
                                   : "Marcar pendiente"}
-                              </SecondaryButton>
+                              </PrimaryButton>
                             </div>
                           </div>
                         </div>
@@ -1619,7 +1683,7 @@ export default function ControlPage() {
 
       <SectionCard
         title="Editor de cuentas"
-        subtitle="Edición rápida de cuenta, estado operativo y visibilidad en filtros."
+        subtitle="Edición rápida de cuenta, estado operativo, visibilidad en filtros y borrado seguro."
       >
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
           <div className="space-y-4">
@@ -1774,10 +1838,17 @@ export default function ControlPage() {
 
             <FeedbackBox feedback={editorFeedback} />
 
-            <div className="flex justify-end">
+            <div className="flex flex-wrap justify-end gap-2">
+              <DangerButton
+                onClick={eliminarCuenta}
+                disabled={deletingAccount || savingEditor || !editorAccountId}
+              >
+                {deletingAccount ? "Eliminando..." : "Eliminar cuenta"}
+              </DangerButton>
+
               <PrimaryButton
                 onClick={guardarEdicionCuenta}
-                disabled={savingEditor || !editorAccountId}
+                disabled={savingEditor || deletingAccount || !editorAccountId}
               >
                 {savingEditor ? "Guardando..." : "Guardar cambios"}
               </PrimaryButton>
